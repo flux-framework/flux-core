@@ -7,6 +7,7 @@
 #
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
+import copy
 import math
 
 try:
@@ -16,7 +17,7 @@ except ModuleNotFoundError:
 
 from flux.resource import resource_list
 from flux.rpc import RPC
-from flux.util import parse_fsd
+from flux.util import dict_merge, parse_fsd
 
 """Simple access to information about Flux queues from Python.
 
@@ -149,25 +150,11 @@ class QueueResources:
             allocated to jobs
     """
 
-    def __init__(self, name, resources, config, parent=""):
-        # A virtual queue (RFC 33) has no "requires" of its own (enforced
-        # at config validation), so it takes its parent's resource slice
-        # instead of the full instance resource set. 'parent' comes from
-        # the queue-status RPC while 'config' comes from a separate
-        # config.get RPC, so a config reload can race the two: a parent
-        # that is no longer in config is an error (fail closed), since
-        # falling through would silently report the vqueue as covering
-        # the full instance resource set.
-        requires = None
-        queues = config.get("queues", {})
-        if name and name in queues:
-            requires = queues[name].get("requires")
-        if requires is None and parent:
-            if parent not in queues:
-                raise ValueError(
-                    f"queue '{name}': parent queue '{parent}' is not configured"
-                )
-            requires = queues[parent].get("requires")
+    def __init__(self, resources, requires):
+        # 'requires' is the queue's effective required-properties array (an
+        # RFC 33 virtual queue's is resolved from its parent by the
+        # job-manager), or None. A queue with no requires covers the full
+        # instance resource set.
         if requires is not None:
             self._resource_list = resources.copy_constraint({"properties": requires})
         else:
@@ -185,9 +172,14 @@ def queue_conf_from_config(config):
     the job-manager is from an older version of Flux that does not provide
     the queue config directly.
 
-    Returns ``{"queues": [{"name": str, "requires"?: list, "parent"?: str},
-    ...]}``. A virtual queue (RFC 33) has no "requires" of its own, so its
-    effective "requires" is resolved from its parent.
+    Returns ``{"queues": [{"name": str, "requires"?: list, "parent"?: str,
+    "policy"?: dict}, ...], "policy"?: dict, "default_queue"?: str}``. A
+    virtual queue (RFC 33) has no "requires" of its own, so its effective
+    "requires" is resolved from its parent. Each queue's "policy" is its
+    fully effective policy (the global [policy], the parent's policy for a
+    virtual queue, and its own, merged per key). The top-level "policy" is
+    the global [policy] (the effective policy for the anonymous queue or a
+    job with no queue) and "default_queue" is the default queue name.
 
     Args:
         config (dict): a broker config, e.g. from the ``config.get`` RPC.
@@ -196,35 +188,63 @@ def queue_conf_from_config(config):
         ValueError: a virtual queue names a parent that is not configured.
     """
     queues = config.get("queues", {})
+    global_policy = config.get("policy") or {}
     entries = []
     for name, entry in queues.items():
         conf = {"name": name}
         parent = entry.get("parent")
+        # A virtual queue (RFC 33) inherits its parent's requires and layers
+        # its own policy over the parent's, so resolve both against the
+        # parent entry. An unresolvable parent is fatal (fail closed):
+        # falling through would report the vqueue as unconstrained.
         if parent is not None:
-            # Virtual queue: inherit the parent's requires. An unresolvable
-            # parent is fatal (fail closed) - falling through would report
-            # the vqueue as covering the full instance resource set.
             if parent not in queues:
                 raise ValueError(
                     f"queue '{name}': parent queue '{parent}' is not configured"
                 )
             conf["parent"] = parent
             requires = queues[parent].get("requires")
+            base_policy = queues[parent].get("policy")
         else:
             requires = entry.get("requires")
+            base_policy = None
         if requires is not None:
             conf["requires"] = requires
+        # Effective per-queue policy: the global [policy], then the parent's
+        # policy (for a virtual queue), then the queue's own, merged per key
+        # from the bottom up (mirrors the job-manager's queue_policy()). Each
+        # layer is deep-copied before merging: dict_merge() shares nested
+        # dicts from its second argument, so a later merge could otherwise
+        # mutate the parent's or global's stored config. An empty result is
+        # omitted (empty == absent).
+        policy = copy.deepcopy(global_policy)
+        if base_policy:
+            dict_merge(policy, copy.deepcopy(base_policy))
+        dict_merge(policy, copy.deepcopy(entry.get("policy") or {}))
+        if policy:
+            conf["policy"] = policy
         entries.append(conf)
-    return {"queues": entries}
+    result = {"queues": entries}
+    if global_policy:
+        result["policy"] = global_policy
+    try:
+        result["default_queue"] = global_policy["jobspec"]["defaults"]["system"][
+            "queue"
+        ]
+    except KeyError:
+        # No default queue, return result as is
+        pass
+    return result
 
 
 class QueueConf:
     """The job-manager's authoritative queue configuration.
 
-    Wraps a job-manager.queue-list "conf" object (``{"queues": [...]}``) and
-    exposes per-queue effective configuration. RFC 33 virtual-queue
-    inheritance is already resolved by the job-manager, so a queue's
-    ``requires`` is an effective value.
+    Wraps a job-manager.queue-list "conf" object (``{"queues": [...],
+    "policy"?: {...}, "default_queue"?: str}``) and exposes per-queue
+    effective configuration. The job-manager resolves everything, so a
+    queue's ``requires`` and ``policy`` are effective values (RFC 33
+    virtual-queue inheritance and the global policy are already merged in).
 
     Fetch from a live instance with :func:`queue_config_fetch`. Build from a
     raw broker config with :meth:`from_config` (the ``--config-file`` /
@@ -234,6 +254,11 @@ class QueueConf:
 
     def __init__(self, conf):
         self._entries = {entry["name"]: entry for entry in conf.get("queues", [])}
+        # The global policy is the effective policy for the anonymous queue
+        # or a job with no queue (a named queue's effective policy is in its
+        # own entry).
+        self._global_policy = conf.get("policy") or {}
+        self._default_queue = conf.get("default_queue", "")
 
     @classmethod
     def from_config(cls, config):
@@ -279,6 +304,33 @@ class QueueConf:
         The job-manager's authoritative view of the resolved parent.
         """
         return (self._entries.get(name) or {}).get("parent", "")
+
+    def policy(self, name=None):
+        """The queue's effective policy dict (empty if none).
+
+        The job-manager has already merged the global policy, RFC 33
+        virtual-queue inheritance, and the queue's own policy, so this is a
+        direct lookup. ``name`` None or an unconfigured queue (the
+        anonymous-queue case) -> the global policy.
+        """
+        entry = self._entries.get(name)
+        if entry is None:
+            return self._global_policy
+        return entry.get("policy") or {}
+
+    def defaults(self, name=None):
+        """The queue's effective job defaults
+        (``policy.jobspec.defaults.system``), an empty dict if none.
+        """
+        try:
+            return self.policy(name)["jobspec"]["defaults"]["system"]
+        except KeyError:
+            return {}
+
+    @property
+    def default_queue(self):
+        """The configured default queue name, or "" if none."""
+        return self._default_queue
 
 
 class QueueConfRPC(RPC):
@@ -342,26 +394,27 @@ class QueueInfo:
     def __init__(
         self,
         name,
-        config,
+        queue_conf,
         resources,
         enabled,
         started,
         default,
-        parent="",
         blocked=None,
     ):
+        # 'queue_conf' is a QueueConf (the job-manager's authoritative queue
+        # configuration). It provides this queue's effective requires, its
+        # resolved parent, and its effective policy (the global policy and
+        # RFC 33 virtual-queue inheritance already merged in). 'name' is
+        # None for the anonymous queue.
         self.name = name or ""
-        self.config = config
         self.is_default = default
         self.enabled = enabled
         self.started = started
-        # RFC 33 virtual queues: parent is sourced from the queue-status
-        # RPC response rather than config, since that is the job-manager's
-        # authoritative view of the resolved parent (config is also in
-        # hand here, but a single source avoids the two ever disagreeing).
-        self.parent = parent or ""
+        # RFC 33 virtual queues: parent is the job-manager's resolved parent.
+        self.parent = queue_conf.parent(name)
         self.blocked = blocked
-        self.resources = QueueResources(name, resources, config, self.parent)
+        self.resources = QueueResources(resources, queue_conf.requires(name))
+        self._policy = queue_conf.policy(name)
         self.defaults = QueueDefaults(
             duration=parse_fsd(self._policy_default("duration"))
         )
@@ -379,57 +432,25 @@ class QueueInfo:
             duration=parse_fsd(self._policy_system_limit("duration")),
         )
 
-    def _config_entries(self):
-        """
-        Yield config entries to search for a policy/limit/default key, in
-        RFC 33 virtual queue inheritance order: this queue's own config
-        entry, its parent's config entry (if this is a virtual queue),
-        then the global config. Each key is looked up independently in
-        this order (per-key inheritance), so a vqueue setting only one
-        key still inherits its parent's other keys. A parent missing
-        from config (a config reload racing the queue-status RPC, see
-        QueueResources) is an error: silently skipping the parent layer
-        would report the wrong effective limits and defaults.
-        """
-        queues = self.config.get("queues", {})
-        if self.name in queues:
-            yield queues[self.name]
-        if self.parent:
-            if self.parent not in queues:
-                raise ValueError(
-                    f"queue '{self.name}': parent queue '{self.parent}'"
-                    " is not configured"
-                )
-            yield queues[self.parent]
-        yield self.config
-
     def _size_limit(self, key, maximum=True):
-        limit = maximum and "max" or "min"
-        for entry in self._config_entries():
-            try:
-                val = entry["policy"]["limits"]["job-size"][limit][key]
-            except KeyError:
-                continue
-            if val < 0:
-                val = math.inf
-            return val
-        return math.inf if maximum else 0
+        limit = "max" if maximum else "min"
+        try:
+            val = self._policy["limits"]["job-size"][limit][key]
+        except KeyError:
+            return math.inf if maximum else 0
+        return math.inf if val < 0 else val
 
     def _policy_default(self, key, default="inf"):
-        for entry in self._config_entries():
-            try:
-                return entry["policy"]["jobspec"]["defaults"]["system"][key]
-            except KeyError:
-                continue
-        return default
+        try:
+            return self._policy["jobspec"]["defaults"]["system"][key]
+        except KeyError:
+            return default
 
     def _policy_system_limit(self, key, default="inf"):
-        for entry in self._config_entries():
-            try:
-                return entry["policy"]["limits"][key]
-            except KeyError:
-                continue
-        return default
+        try:
+            return self._policy["limits"][key]
+        except KeyError:
+            return default
 
 
 class QueueList:
@@ -444,46 +465,44 @@ class QueueList:
 
     def __init__(self, handle, queues=None):
 
-        # Gather resource list and current full config in parallel:
-        resources, config = map(
+        # Gather the resource list and the queue configuration in parallel:
+        resources, conf = map(
             lambda x: x.get(),
-            [resource_list(handle), handle.rpc("config.get")],
+            [resource_list(handle), queue_config_fetch(handle)],
         )
 
-        self.default_queue = self.__default_queue(config)
-        queue_config = self.__queue_config(config, queues)
-        status = self.__fetch_queue_status(handle, queue_config.keys())
+        self.default_queue = conf.default_queue
+        selected = self.__select_queues(conf, queues)
+        status = self.__fetch_queue_status(handle, selected)
 
         # If there's a single anonymous queue, self.__queue will not be None
         self.__queue = None
 
-        if not queue_config:
-            # single anonymous queue:
+        if not selected:
+            # single anonymous queue (no named queues configured):
             self.__queue = QueueInfo(
                 None,
-                config,
+                conf,
                 resources,
                 status["enable"],
                 status["start"],
                 True,
-                status.get("parent", ""),
                 status.get("blocked"),
             )
             self.__queues = {"": self.__queue}
         else:
             # multiple configured queues, keyed by name
             self.__queues = {
-                x: QueueInfo(
-                    x,
-                    config,
+                name: QueueInfo(
+                    name,
+                    conf,
                     resources,
-                    status[x]["enable"],
-                    status[x]["start"],
-                    x == self.default_queue,
-                    status[x].get("parent", ""),
-                    status[x].get("blocked"),
+                    status[name]["enable"],
+                    status[name]["start"],
+                    name == self.default_queue,
+                    status[name].get("blocked"),
                 )
-                for x in queue_config.keys()
+                for name in selected
             }
 
     def __getattr__(self, attr):
@@ -502,33 +521,21 @@ class QueueList:
         return iter([None])
 
     @staticmethod
-    def __default_queue(config):
+    def __select_queues(conf, queues):
         """
-        Return configured default queue name or an empty string if
-        there's a single anonymous queue
-        """
-        try:
-            return config["policy"]["jobspec"]["defaults"]["system"]["queue"]
-        except KeyError:
-            return ""
-
-    @staticmethod
-    def __queue_config(config, queues):
-        """
-        Return a subset of the queue config in ``config`` given ``queues``.
-        If ``queues`` is None or an empty list or set, return the whole config,
-        which may be empty if there are no configured queues.
+        Return the list of queue names in ``conf`` (a QueueConf) selected by
+        ``queues``. If ``queues`` is None or an empty list or set, return all
+        configured queue names, which may be empty if there are none.
         """
         if not queues:
-            return config.get("queues", {})
+            return list(conf)
 
-        # Otherwise, return subset of queue config only for selected queues:
-        result = {}
+        # Otherwise, return the selected queues only:
+        result = []
         for queue in queues:
-            try:
-                result[queue] = config["queues"][queue]
-            except KeyError:
+            if queue not in conf:
                 raise ValueError(f"No such queue: {queue}")
+            result.append(queue)
         return result
 
     @staticmethod

@@ -205,5 +205,26 @@ test_expect_success 'defaults plugin requires queue if configured' '
 	    > nodefaultnojob.out &&
 	jq -e ".errstr == \"no queue specified\"" <nodefaultnojob.out
 '
+test_expect_success 'configure a virtual queue' '
+	cat <<-EOF >conf.d/conf.toml &&
+	[queues.batch]
+	requires = [ "batch" ]
+	policy.jobspec.defaults.system.duration = "8h"
+	[queues.expedite]
+	parent = "batch"
+	policy.jobspec.defaults.system.duration = "1h"
+	EOF
+	flux config reload
+'
+test_expect_success 'frobnicator resolves virtual queue defaults and constraints' '
+	flux run --env=-* --dry-run --queue=expedite hostname \
+	   | flux job-frobnicator --jobspec-only \
+	> vqueue.out &&
+	# effective duration is the vqueue own override:
+	jq -e ".data.attributes.system.duration == 3600" <vqueue.out &&
+	# effective constraint is the parent requires (RFC 33 inheritance):
+	jq -e ".data.attributes.system.constraints.properties == [ \"batch\" ]" \
+	    <vqueue.out
+'
 
 test_done

@@ -33,6 +33,7 @@
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libutil/errno_safe.h"
+#include "src/common/libmissing/json_object_update_recursive.h"
 #include "ccan/str/str.h"
 
 #include "queues.h"
@@ -48,6 +49,12 @@ struct queue {
                                  * virtual queue's is always NULL - see
                                  * queue_root() for the effective value)
                                  */
+    json_t *policy;             /* this queue's own [queues.NAME.policy]
+                                 * table (own only; NULL if unset). See
+                                 * queue_policy() for the vqueue-resolved
+                                 * value. The global [policy] is not merged
+                                 * in here.
+                                 */
     struct queue *parent;       /* resolved parent queue (RFC 33 virtual
                                  * queues), or NULL if not virtual. Not
                                  * owned; borrowed from the same queues
@@ -61,6 +68,11 @@ struct queue {
 struct queues {
     struct queue *anon;         /* live when named == NULL */
     zhashx_t *named;            /* non-NULL selects named mode */
+    json_t *global_policy;      /* the global [policy] table (own ref) or
+                                 * NULL. The per-key base merged beneath
+                                 * each queue's own policy to form its
+                                 * effective policy (see queue_policy()).
+                                 */
     json_t *list_cache;         /* cached queue-list response, built
                                  * lazily by queues_list_response() and
                                  * invalidated by notify() on any
@@ -102,6 +114,7 @@ static void queue_free (struct queue *q)
     if (q) {
         int saved_errno = errno;
         json_decref (q->requires);
+        json_decref (q->policy);
         free (q->name);
         free (q->disable_reason);
         free (q->stop_reason);
@@ -254,13 +267,19 @@ static int lookup_parent (struct queues *queues,
 static int queue_parse_config (struct queue *q, json_t *config)
 {
     json_t *requires = NULL;
+    json_t *policy = NULL;
 
-    if (config && json_unpack (config, "{s?O}", "requires", &requires) < 0) {
+    if (config && json_unpack (config,
+                               "{s?O s?O}",
+                               "requires", &requires,
+                               "policy", &policy) < 0) {
         errno = EINVAL;
         return -1;
     }
     json_decref (q->requires);
     q->requires = requires;   /* may be NULL */
+    json_decref (q->policy);
+    q->policy = policy;        /* may be NULL */
     return 0;
 }
 
@@ -315,6 +334,7 @@ void queues_destroy (struct queues *queues)
             zhashx_destroy (&queues->named);
         else
             queue_free (queues->anon);
+        json_decref (queues->global_policy);
         json_decref (queues->list_cache);
         free (queues);
         errno = saved_errno;
@@ -751,6 +771,15 @@ static int queues_config_validate (json_t *config, flux_error_t *error)
     return 0;
 }
 
+void queues_set_global_policy (struct queues *queues, json_t *policy)
+{
+    if (queues->global_policy != policy) {
+        json_decref (queues->global_policy);
+        queues->global_policy = json_incref (policy);
+        cache_invalidate (queues);
+    }
+}
+
 int queues_configure (struct queues *queues,
                       json_t *config,
                       flux_error_t *error)
@@ -956,15 +985,18 @@ error:
 }
 
 /* Encode one queue's effective configuration for the conf object:
- * {"name":s, "requires"?:[...], "parent"?:s}. 'requires' is the
- * effective required-properties array (a virtual queue inherits its
+ * {"name":s, "requires"?:[...], "parent"?:s, "policy"?:{...}}. 'requires'
+ * is the effective required-properties array (a virtual queue inherits its
  * parent's - see queue_requires()), omitted when the queue has none.
- * 'parent' is present only for a virtual queue (RFC 33).
+ * 'parent' is present only for a virtual queue (RFC 33). 'policy' is the
+ * queue's effective policy (global + virtual-queue inheritance + own,
+ * fully merged - see queue_policy()), omitted when empty.
  */
 static json_t *queue_conf_encode (struct queue *q)
 {
     json_t *o;
     json_t *requires;
+    json_t *policy;
 
     if (!(o = json_pack ("{s:s}", "name", q->name)))
         goto nomem;
@@ -976,6 +1008,14 @@ static json_t *queue_conf_encode (struct queue *q)
         if (set_string (o, "parent", queue_name (queue_parent (q))) < 0)
             goto error;
     }
+    /* queue_policy() sets 'policy' to a new reference with the global
+     * policy merged in, or NULL when the effective policy is empty
+     * (empty == absent, matching the Python queue_conf_from_config()).
+     */
+    if (queue_policy (q, &policy) < 0)
+        goto error;
+    if (policy && json_object_set_new (o, "policy", policy) < 0)
+        goto nomem;
     return o;
 nomem:
     errno = ENOMEM;
@@ -985,15 +1025,21 @@ error:
 }
 
 /* Encode the effective queue configuration object returned by the
- * queue-list RPC: {"queues":[{name,requires?,parent?}, ...]}. The
- * anonymous queue is omitted (empty array in anon mode). Future global
- * fields (default queue, merged policy) attach here as siblings of
- * "queues".
+ * queue-list RPC:
+ *   {"queues":[{name,requires?,parent?,policy?}, ...],
+ *    "policy"?:{...}, "default_queue"?:s}
+ * Each queue entry's "policy" is its fully effective policy. The
+ * anonymous queue is omitted from "queues" (empty array in anon mode); the
+ * top-level "policy" is the global policy (the effective policy for the
+ * anonymous queue / a job with no queue) and "default_queue" is the
+ * configured default queue name. Both top-level fields are omitted when
+ * unset.
  */
 static json_t *queues_conf_encode (struct queues *queues)
 {
-    json_t *conf;
+    json_t *conf = NULL;
     json_t *a;
+    const char *default_queue = NULL;
 
     if (!(a = json_array ()))
         goto nomem;
@@ -1011,10 +1057,31 @@ static json_t *queues_conf_encode (struct queues *queues)
     }
     if (!(conf = json_pack ("{s:O}", "queues", a)))
         goto nomem;
+    /* Top-level "policy" is the global [policy] table, which is the
+     * effective policy for the anonymous queue / a job with no queue (a
+     * named queue's effective policy is merged into its own entry). Omitted
+     * when unset. "default_queue" is the configured default queue name,
+     * from the global policy only (never a per-queue entry).
+     */
+    if (queues->global_policy) {
+        if (json_object_set (conf, "policy", queues->global_policy) < 0)
+            goto nomem;
+        (void)json_unpack (queues->global_policy,
+                           "{s:{s:{s:{s:s}}}}",
+                           "jobspec",
+                             "defaults",
+                               "system",
+                                 "queue", &default_queue);
+    }
+    if (default_queue) {
+        if (set_string (conf, "default_queue", default_queue) < 0)
+            goto nomem;
+    }
     json_decref (a);
     return conf;
 nomem:
     errno = ENOMEM;
+    ERRNO_SAFE_WRAP (json_decref, conf);
     ERRNO_SAFE_WRAP (json_decref, a);
     return NULL;
 }
@@ -1026,19 +1093,16 @@ static json_t *list_response_build (struct queues *queues)
 {
     json_t *names = NULL;
     json_t *conf = NULL;
-    json_t *resp;
-
+    json_t *resp = NULL;
     if (!(names = queues_list_encode (queues))
-        || !(conf = queues_conf_encode (queues)))
+        || !(conf = queues_conf_encode (queues))
+        || !(resp = json_pack ("{s:O s:O}", "queues", names, "conf", conf)))
         goto error;
-    if (!(resp = json_pack ("{s:O s:O}", "queues", names, "conf", conf)))
-        goto nomem;
     json_decref (names);
     json_decref (conf);
     return resp;
-nomem:
-    errno = ENOMEM;
 error:
+    errno = ENOMEM;
     ERRNO_SAFE_WRAP (json_decref, names);
     ERRNO_SAFE_WRAP (json_decref, conf);
     return NULL;
@@ -1223,6 +1287,60 @@ json_t *queue_requires (struct queue *q)
      * non-virtual queue, so this is the queue's own requires there.
      */
     return queue_root (q)->requires;
+}
+
+/* Merge policy 'layer' into 'policy' (a no-op if 'layer' is NULL).
+ * json_object_update_recursive() shares sub-objects that the target does
+ * not already have, so deep-copy 'layer' first: merging a stored policy
+ * table in directly could alias it, and a later merge could then mutate
+ * the queue's stored config. Returns -1 with errno set on failure.
+ */
+static int merge_policy_layer (json_t *policy, json_t *layer)
+{
+    json_t *copy;
+    int rc;
+
+    if (!layer)
+        return 0;
+    if (!(copy = json_deep_copy (layer)))
+        return -1;
+    rc = json_object_update_recursive (policy, copy);
+    json_decref (copy);
+    return rc;
+}
+
+int queue_policy (struct queue *q, json_t **policyp)
+{
+    json_t *parent_policy = queue_is_virtual (q) ? queue_parent (q)->policy
+                                                 : NULL;
+    json_t *policy;
+
+    /* Effective policy, merged per key from the bottom up: the global
+     * [policy], then (for a virtual queue) the parent's own policy, then
+     * this queue's own policy. The parent (if any) is an already-resolved
+     * live pointer, so there is no unresolvable-parent case here (unlike
+     * the raw-config parsers).
+     *
+     * An empty result (no policy at any layer, or only empty policy tables)
+     * is reported as *policyp == NULL - empty == absent - so callers need
+     * not special-case it.
+     */
+    if (!(policy = json_object ()))
+        goto nomem;
+    if (merge_policy_layer (policy, q->queues->global_policy) < 0
+        || merge_policy_layer (policy, parent_policy) < 0
+        || merge_policy_layer (policy, q->policy) < 0)
+        goto nomem;
+    if (json_object_size (policy) == 0) {
+        json_decref (policy);
+        policy = NULL;
+    }
+    *policyp = policy;
+    return 0;
+nomem:
+    errno = ENOMEM;
+    ERRNO_SAFE_WRAP (json_decref, policy);
+    return -1;
 }
 
 bool queue_is_enabled (struct queue *q)

@@ -2210,6 +2210,476 @@ static void test_vqueue_root_and_requires (void)
     queues_destroy (qs);
 }
 
+/* queue_policy() returns the effective policy: the global [policy], the
+ * parent's policy (for a virtual queue), and the queue's own policy,
+ * merged per key from the bottom up.
+ */
+static void test_queue_policy (void)
+{
+    struct queues *qs;
+    struct queue *batch;
+    struct queue *expedite;
+    struct queue *inherit;
+    struct queue *plain;
+    struct queue *empty;
+    flux_error_t error;
+    json_t *config;
+    json_t *global;
+    json_t *policy;
+    json_t *policy2;
+    const char *duration = NULL;
+    int nnodes = -1;
+
+    qs = queues_create ();
+    if (!qs)
+        BAIL_OUT ("queues_create failed");
+
+    /* batch: own duration + job-size limits.
+     * expedite: virtual (parent batch), overrides only duration.
+     * inherit: virtual (parent batch), no own policy.
+     * plain: no policy at all.
+     * empty: an explicitly empty policy table.
+     */
+    config = json_pack ("{s:{s:{s:{s:s s:{s:{s:i}}}}} s:{s:s s:{s:{s:s}}}"
+                        " s:{s:s} s:{} s:{s:{}}}",
+                        "batch",
+                          "policy",
+                            "limits",
+                              "duration", "1h",
+                              "job-size",
+                                "max",
+                                  "nnodes", 16,
+                        "expedite",
+                          "parent", "batch",
+                          "policy",
+                            "limits",
+                              "duration", "30m",
+                        "inherit",
+                          "parent", "batch",
+                        "plain",
+                        "empty",
+                          "policy");
+    if (!config)
+        BAIL_OUT ("json_pack failed");
+    if (queues_configure (qs, config, &error) < 0)
+        BAIL_OUT ("queues_configure failed: %s", error.text);
+    json_decref (config);
+
+    /* Global policy: a default duration limit and a global default that
+     * merges beneath every queue's effective policy.
+     */
+    global = json_pack ("{s:{s:s s:{s:{s:i}}}}",
+                        "limits",
+                          "duration", "24h",
+                          "job-size",
+                            "min",
+                              "nnodes", 1);
+    if (!global)
+        BAIL_OUT ("json_pack failed");
+    queues_set_global_policy (qs, global);
+    json_decref (global);
+
+    batch = queues_lookup (qs, "batch", &error);
+    expedite = queues_lookup (qs, "expedite", &error);
+    inherit = queues_lookup (qs, "inherit", &error);
+    plain = queues_lookup (qs, "plain", &error);
+    empty = queues_lookup (qs, "empty", &error);
+    ok (batch && expedite && inherit && plain && empty,
+        "all five queues found");
+
+    /* non-virtual queue: own policy overriding the global, plus the
+     * global's job-size.min inherited. New reference each call.
+     */
+    ok (queue_policy (batch, &policy) == 0
+        && policy != NULL
+        && json_unpack (policy,
+                        "{s:{s:s s:{s:{s:i}}}}",
+                        "limits",
+                          "duration", &duration,
+                          "job-size",
+                            "max",
+                              "nnodes", &nnodes) == 0
+        && streq (duration, "1h")
+        && nnodes == 16,
+        "queue_policy of non-virtual queue overrides the global duration");
+    ok (policy
+        && json_unpack (policy,
+                        "{s:{s:{s:{s:i}}}}",
+                        "limits",
+                          "job-size",
+                            "min",
+                              "nnodes", &nnodes) == 0
+        && nnodes == 1,
+        "queue_policy merges the global job-size.min beneath the queue");
+    /* a second call returns a distinct object (new reference each call) */
+    ok (queue_policy (batch, &policy2) == 0 && policy2 != NULL
+        && policy2 != policy,
+        "queue_policy returns a new reference on each call");
+    json_decref (policy2);
+    json_decref (policy);
+
+    /* virtual queue: own policy over parent's over global - duration
+     * overridden to 30m, parent's job-size.max and global's job-size.min
+     * both inherited.
+     */
+    duration = NULL;
+    nnodes = -1;
+    ok (queue_policy (expedite, &policy) == 0
+        && policy != NULL
+        && json_unpack (policy,
+                        "{s:{s:s s:{s:{s:i}}}}",
+                        "limits",
+                          "duration", &duration,
+                          "job-size",
+                            "max",
+                              "nnodes", &nnodes) == 0
+        && streq (duration, "30m")
+        && nnodes == 16,
+        "queue_policy of vqueue overrides duration and inherits job-size");
+    json_decref (policy);
+
+    /* virtual queue with no own policy: parent's over global */
+    duration = NULL;
+    ok (queue_policy (inherit, &policy) == 0
+        && policy != NULL
+        && json_unpack (policy,
+                        "{s:{s:s}}",
+                        "limits",
+                          "duration", &duration) == 0
+        && streq (duration, "1h"),
+        "queue_policy of vqueue with no own policy inherits the parent's");
+    json_decref (policy);
+
+    /* queue with no own policy: effective policy is the global alone */
+    duration = NULL;
+    ok (queue_policy (plain, &policy) == 0
+        && policy != NULL
+        && json_unpack (policy,
+                        "{s:{s:s}}",
+                        "limits",
+                          "duration", &duration) == 0
+        && streq (duration, "24h"),
+        "queue_policy of a policy-less queue is the global policy");
+    json_decref (policy);
+
+    /* queue with an explicitly empty policy table: still just the global */
+    duration = NULL;
+    ok (queue_policy (empty, &policy) == 0
+        && policy != NULL
+        && json_unpack (policy, "{s:{s:s}}", "limits", "duration", &duration)
+               == 0
+        && streq (duration, "24h"),
+        "queue_policy of an empty policy table is the global policy");
+    json_decref (policy);
+
+    queues_destroy (qs);
+}
+
+/* queue_policy() with no global policy set yields the per-queue layer
+ * alone, and NULL when a queue has no policy at any layer.
+ */
+static void test_queue_policy_no_global (void)
+{
+    struct queues *qs;
+    flux_error_t error;
+    json_t *config;
+    json_t *policy;
+
+    qs = queues_create ();
+    if (!qs)
+        BAIL_OUT ("queues_create failed");
+
+    config = json_pack ("{s:{s:{s:{s:s}}} s:{}}",
+                        "batch",
+                          "policy",
+                            "limits",
+                              "duration", "8h",
+                        "plain");
+    if (!config)
+        BAIL_OUT ("json_pack failed");
+    if (queues_configure (qs, config, &error) < 0)
+        BAIL_OUT ("queues_configure failed: %s", error.text);
+    json_decref (config);
+
+    ok (queue_policy (queues_lookup (qs, "batch", NULL), &policy) == 0
+        && policy != NULL,
+        "queue_policy with no global returns the queue's own policy");
+    json_decref (policy);
+
+    /* no policy at any layer and no global: NULL (empty == absent) */
+    ok (queue_policy (queues_lookup (qs, "plain", NULL), &policy) == 0
+        && policy == NULL,
+        "queue_policy of a policy-less queue with no global yields NULL");
+
+    queues_destroy (qs);
+}
+
+/* The encoded conf carries each queue's effective "policy" and, at the top
+ * level, the global policy and default queue name.
+ */
+static void test_conf_policy_encode (void)
+{
+    struct queues *qs;
+    flux_error_t error;
+    json_t *config;
+    json_t *global;
+    json_t *resp;
+    json_t *cq = NULL;
+    json_t *gpol = NULL;
+    const char *dur_batch = NULL;
+    const char *dur_expedite = NULL;
+    const char *dur_global = NULL;
+    const char *defq = NULL;
+
+    qs = queues_create ();
+    if (!qs)
+        BAIL_OUT ("queues_create failed");
+
+    config = json_pack ("{s:{s:{s:{s:s}}} s:{s:s s:{s:{s:s}}}}",
+                        "batch",
+                          "policy",
+                            "limits",
+                              "duration", "8h",
+                        "expedite",
+                          "parent", "batch",
+                          "policy",
+                            "limits",
+                              "duration", "1h");
+    if (!config)
+        BAIL_OUT ("json_pack failed");
+    if (queues_configure (qs, config, &error) < 0)
+        BAIL_OUT ("queues_configure failed: %s", error.text);
+    json_decref (config);
+
+    /* Global policy: a default duration limit and a default queue. */
+    global = json_pack ("{s:{s:s} s:{s:{s:{s:s}}}}",
+                        "limits",
+                          "duration", "24h",
+                        "jobspec",
+                          "defaults",
+                            "system",
+                              "queue", "batch");
+    if (!global)
+        BAIL_OUT ("json_pack failed");
+    queues_set_global_policy (qs, global);
+    json_decref (global);
+
+    resp = queues_list_response (qs);
+    ok (resp != NULL
+        && json_unpack (resp,
+                        "{s:{s:o s:o}}",
+                        "conf",
+                          "queues", &cq,
+                          "policy", &gpol) == 0,
+        "conf has queues array and top-level policy");
+
+    /* Per-queue effective policy: batch's own 8h overrides the global 24h;
+     * expedite resolves to its own 1h.
+     */
+    ok (cq && json_array_size (cq) == 2
+        && json_unpack (conf_entry (cq, "batch"),
+                        "{s:{s:{s:s}}}",
+                        "policy",
+                          "limits",
+                            "duration", &dur_batch) == 0
+        && streq (dur_batch, "8h"),
+        "conf per-queue effective policy for batch overrides the global");
+    ok (json_unpack (conf_entry (cq, "expedite"),
+                     "{s:{s:{s:s}}}",
+                     "policy",
+                       "limits",
+                         "duration", &dur_expedite) == 0
+        && streq (dur_expedite, "1h"),
+        "conf per-queue effective policy for expedite is vqueue-resolved");
+
+    /* Top-level policy is the global table; default_queue is at top level. */
+    ok (gpol
+        && json_unpack (gpol, "{s:{s:s}}", "limits", "duration", &dur_global)
+               == 0
+        && streq (dur_global, "24h"),
+        "conf top-level policy is the global policy");
+    ok (json_unpack (resp,
+                     "{s:{s:s}}",
+                     "conf",
+                       "default_queue", &defq) == 0
+        && streq (defq, "batch"),
+        "conf top-level default_queue is the configured default");
+
+    /* resp is a borrowed reference owned by the queues cache; not decref'd. */
+    queues_destroy (qs);
+}
+
+/* queue_policy() must never alias or mutate the queues' stored policy
+ * tables (the per-queue q->policy or the global policy). It merges by
+ * deep-copying each layer; a regression to a shallow merge would let one
+ * queue's resolution corrupt a sibling, its parent, or the global policy.
+ * Exercise every layer and every corruption path.
+ */
+static void test_queue_policy_no_aliasing (void)
+{
+    struct queues *qs;
+    flux_error_t error;
+    json_t *config;
+    json_t *global;
+    json_t *p_batch = NULL;
+    json_t *p_expedite = NULL;
+    json_t *p_urgent = NULL;
+    json_t *p_plain = NULL;
+    const char *s;
+    int n;
+
+    qs = queues_create ();
+    if (!qs)
+        BAIL_OUT ("queues_create failed");
+
+    /* batch: own duration 8h + job-size.max.nnodes 16.
+     * expedite (vqueue of batch): overrides duration to 1h.
+     * urgent   (vqueue of batch): overrides job-size.max.nnodes to 4.
+     * plain: no own policy.
+     * Two siblings overriding different keys of the same parent is the
+     * case most likely to expose aliasing.
+     */
+    config = json_pack ("{s:{s:{s:{s:s s:{s:{s:i}}}}}"
+                        " s:{s:s s:{s:{s:s}}}"
+                        " s:{s:s s:{s:{s:{s:{s:i}}}}}"
+                        " s:{}}",
+                        "batch",
+                          "policy", "limits",
+                            "duration", "8h",
+                            "job-size", "max", "nnodes", 16,
+                        "expedite",
+                          "parent", "batch",
+                          "policy", "limits", "duration", "1h",
+                        "urgent",
+                          "parent", "batch",
+                          "policy", "limits", "job-size", "max", "nnodes", 4,
+                        "plain");
+    if (!config)
+        BAIL_OUT ("json_pack failed");
+    if (queues_configure (qs, config, &error) < 0)
+        BAIL_OUT ("queues_configure failed: %s", error.text);
+    json_decref (config);
+
+    global = json_pack ("{s:{s:s s:{s:{s:i}}}}",
+                        "limits",
+                          "duration", "24h",
+                          "job-size",
+                            "min",
+                              "nnodes", 1);
+    if (!global)
+        BAIL_OUT ("json_pack failed");
+    queues_set_global_policy (qs, global);
+
+    /* Resolve every queue's effective policy up front, holding all the
+     * results live at once - a shallow merge would have them share (and
+     * then clobber) each other's sub-objects.
+     */
+    if (queue_policy (queues_lookup (qs, "batch", NULL), &p_batch) < 0
+        || queue_policy (queues_lookup (qs, "expedite", NULL), &p_expedite) < 0
+        || queue_policy (queues_lookup (qs, "urgent", NULL), &p_urgent) < 0
+        || queue_policy (queues_lookup (qs, "plain", NULL), &p_plain) < 0)
+        BAIL_OUT ("queue_policy failed");
+
+    /* batch: own 8h + own job-size.max 16 + global job-size.min 1 */
+    ok (json_unpack (p_batch,
+                     "{s:{s:s s:{s:{s:i} s:{s:i}}}}",
+                     "limits",
+                       "duration", &s,
+                       "job-size",
+                         "max",
+                           "nnodes", &n,
+                         "min",
+                           "nnodes", &n) == 0,
+        "batch effective policy unpacks");
+    ok (json_unpack (p_batch, "{s:{s:s}}", "limits", "duration", &s) == 0
+        && streq (s, "8h"),
+        "batch duration is its own 8h");
+    n = -1;
+    (void)json_unpack (p_batch,
+                       "{s:{s:{s:{s:i}}}}",
+                       "limits",
+                         "job-size",
+                           "max",
+                             "nnodes", &n);
+    ok (n == 16, "batch keeps its own job-size.max 16 (not aliased away)");
+
+    /* expedite: own 1h, parent's job-size.max 16, global job-size.min 1 */
+    n = -1;
+    ok (json_unpack (p_expedite, "{s:{s:s}}", "limits", "duration", &s) == 0
+        && streq (s, "1h"),
+        "expedite duration is its own 1h");
+    (void)json_unpack (p_expedite,
+                       "{s:{s:{s:{s:i}}}}",
+                       "limits",
+                         "job-size",
+                           "max",
+                             "nnodes", &n);
+    ok (n == 16, "expedite inherits parent's job-size.max 16");
+
+    /* urgent: own job-size.max 4, parent's duration 8h, global min 1 */
+    n = -1;
+    ok (json_unpack (p_urgent, "{s:{s:s}}", "limits", "duration", &s) == 0
+        && streq (s, "8h"),
+        "urgent inherits parent's duration 8h");
+    (void)json_unpack (p_urgent,
+                       "{s:{s:{s:{s:i}}}}",
+                       "limits",
+                         "job-size",
+                           "max",
+                             "nnodes", &n);
+    ok (n == 4, "urgent keeps its own job-size.max 4 (sibling did not leak)");
+    n = -1;
+    (void)json_unpack (p_urgent,
+                       "{s:{s:{s:{s:i}}}}",
+                       "limits",
+                         "job-size",
+                           "min",
+                             "nnodes", &n);
+    ok (n == 1, "urgent inherits global job-size.min 1");
+
+    /* plain: just the global */
+    ok (json_unpack (p_plain, "{s:{s:s}}", "limits", "duration", &s) == 0
+        && streq (s, "24h"),
+        "plain effective policy is the global 24h");
+
+    json_decref (p_batch);
+    json_decref (p_expedite);
+    json_decref (p_urgent);
+    json_decref (p_plain);
+
+    /* The stored per-queue and global policy tables must be untouched by
+     * all that resolution: re-resolve batch and re-check the global.
+     */
+    if (queue_policy (queues_lookup (qs, "batch", NULL), &p_batch) < 0)
+        BAIL_OUT ("queue_policy failed");
+    ok (json_unpack (p_batch, "{s:{s:s}}", "limits", "duration", &s) == 0
+        && streq (s, "8h"),
+        "re-resolved batch is still 8h (stored policy not corrupted)");
+    json_decref (p_batch);
+
+    ok (json_unpack (global, "{s:{s:s}}", "limits", "duration", &s) == 0
+        && streq (s, "24h"),
+        "stored global policy is unchanged after resolution");
+    n = -1;
+    (void)json_unpack (global,
+                       "{s:{s:{s:{s:i}}}}",
+                       "limits",
+                         "job-size",
+                           "min",
+                             "nnodes", &n);
+    ok (n == 1
+        && json_object_get (json_object_get (global, "limits"),
+                            "job-size")
+        && !json_object_get (json_object_get (json_object_get (global,
+                                                               "limits"),
+                                              "job-size"),
+                             "max"),
+        "global policy did not gain a queue's job-size.max (no reverse alias)");
+
+    json_decref (global);
+    queues_destroy (qs);
+}
+
 /* Effective-started 4-state matrix: parent x vqueue, started x stopped. */
 static void test_vqueue_effective_started (void)
 {
@@ -2533,6 +3003,10 @@ int main (int argc, char *argv[])
     test_vqueue_remove_parent_busy ();
     test_vqueue_remove_parent_truncated ();
     test_vqueue_root_and_requires ();
+    test_queue_policy ();
+    test_queue_policy_no_global ();
+    test_queue_policy_no_aliasing ();
+    test_conf_policy_encode ();
     test_vqueue_effective_started ();
     test_vqueue_status_encode ();
     test_vqueue_notify ();

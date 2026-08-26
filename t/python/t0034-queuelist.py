@@ -26,6 +26,7 @@ from flux.queue import (
     queue_config_fetch,
 )
 from flux.resource import resource_list
+from flux.util import parse_fsd
 from subflux import rerun_under_flux
 
 
@@ -158,27 +159,44 @@ class TestQueueList(unittest.TestCase):
     def test_0035_conf_matches_helper(self):
         # The queue_conf_from_config() helper (used as the fallback for
         # older brokers and by the hidden --config-file/--from-stdin
-        # options) must reproduce the live job-manager 'conf' object
-        # exactly, so the two implementations do not drift. Queue order is
-        # not guaranteed, so compare with the queues list sorted by name.
+        # options) must reproduce the live job-manager 'conf' object, so the
+        # two implementations do not drift. Include a global [policy] and
+        # per-queue policy (including a virtual queue that overrides one key
+        # and inherits another) so the conf's effective-policy and
+        # default_queue fields are exercised, not just requires/parent.
+        # Queue order is not guaranteed, so compare with queues sorted by
+        # name.
         testconf = """
+        [policy.limits]
+        duration = "24h"
+
+        [policy.jobspec.defaults.system]
+        queue = "batch"
+
         [queues.debug]
         requires = ["debug"]
 
         [queues.batch]
         requires = ["batch"]
+        policy.limits.duration = "8h"
+        policy.limits.job-size.max.nnodes = 16
 
         [queues.expedite]
         parent = "batch"
+        policy.limits.duration = "1h"
         """
         config = tomllib.loads(testconf)
         self.fh.rpc("config.load", config).get()
 
-        def by_name(conf):
-            return sorted(conf["queues"], key=lambda q: q["name"])
+        def normalize(conf):
+            conf = dict(conf)
+            conf["queues"] = sorted(conf["queues"], key=lambda q: q["name"])
+            return conf
 
         resp = self.fh.rpc("job-manager.queue-list").get()
-        self.assertEqual(by_name(resp["conf"]), by_name(queue_conf_from_config(config)))
+        self.assertEqual(
+            normalize(resp["conf"]), normalize(queue_conf_from_config(config))
+        )
 
     def test_0036_queue_config_fetch(self):
         # queue_config_fetch() sends the request and its get() returns a
@@ -203,43 +221,53 @@ class TestQueueList(unittest.TestCase):
         self.assertEqual(sorted(conf2), sorted(conf))
         self.assertEqual(conf2.entries, conf.entries)
 
-    def test_004_vqueue_stale_parent(self):
-        # A QueueInfo parent (sourced from the queue-status RPC) missing
-        # from the config (a separate RPC, so a config reload can race
-        # the two) must raise, not fall back to the full instance
-        # resource set or drop the parent's limits layer.
+    def test_004_queueinfo_from_conf(self):
+        # QueueInfo builds from a QueueConf, which supplies each queue's
+        # effective requires, resolved parent, and effective policy (RFC 33
+        # inheritance and the global policy already merged by the
+        # job-manager). Building from one snapshot means status and config
+        # cannot disagree, so there is no stale-parent race.
         resources = resource_list(self.fh).get()
-        config = {
-            "queues": {
-                "batch": {"requires": ["batch"]},
+        # Conf entries are effective, as the job-manager emits them: batch's
+        # own 8h duration merged over the global 24h; expedite (vqueue)
+        # inherits batch's effective policy and requires.
+        conf = QueueConf(
+            {
+                "policy": {"limits": {"duration": "24h"}},
+                "queues": [
+                    {
+                        "name": "batch",
+                        "requires": ["batch"],
+                        "policy": {"limits": {"duration": "8h"}},
+                    },
+                    {
+                        "name": "expedite",
+                        "parent": "batch",
+                        "requires": ["batch"],
+                        "policy": {"limits": {"duration": "1h"}},
+                    },
+                ],
             }
-        }
-        with self.assertRaises(ValueError) as ctx:
-            QueueInfo(
-                "expedite",
-                config,
-                resources,
-                enabled=True,
-                started=True,
-                default=False,
-                parent="gone",
-            )
-        self.assertIn("parent queue 'gone' is not configured", str(ctx.exception))
-
-        # The limits/defaults lookup path fails the same way even when
-        # constructed with a then-valid parent that a raced config lost:
-        qinfo = QueueInfo(
-            "expedite",
-            config,
-            resources,
-            enabled=True,
-            started=True,
-            default=False,
-            parent="batch",
         )
-        qinfo.config = {"queues": {}}
-        with self.assertRaises(ValueError):
-            list(qinfo._config_entries())
+        expedite = QueueInfo(
+            "expedite", conf, resources, enabled=True, started=True, default=False
+        )
+        self.assertEqual(expedite.parent, "batch")
+        # effective per-queue policy: own duration override
+        self.assertEqual(expedite.limits.duration, parse_fsd("1h"))
+        # no job-size configured anywhere -> unlimited
+        self.assertEqual(expedite.limits.max.nnodes, math.inf)
+
+        batch = QueueInfo(
+            "batch", conf, resources, enabled=True, started=True, default=False
+        )
+        self.assertEqual(batch.limits.duration, parse_fsd("8h"))
+
+        # The anonymous queue (name None) uses the global effective policy.
+        anon = QueueInfo(
+            None, conf, resources, enabled=True, started=True, default=True
+        )
+        self.assertEqual(anon.limits.duration, parse_fsd("24h"))
 
 
 if __name__ == "__main__":

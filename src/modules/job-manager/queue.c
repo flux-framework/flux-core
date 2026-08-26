@@ -121,20 +121,27 @@ static int queue_configure (const flux_conf_t *conf,
 {
     struct queue_ctx *qctx = arg;
     json_t *config = NULL;
+    json_t *policy = NULL;
 
-    /* N.B. both keys are optional, so unpack fails only on an internal
+    /* N.B. all keys are optional, so unpack fails only on an internal
      * error such as out of memory.
      */
     if (flux_conf_unpack (conf,
                           error,
-                          "{s?{s?b} s?o}",
+                          "{s?{s?b} s?o s?o}",
                           "job-manager",
                             "stop-queues-on-restart",
                               &qctx->stop_on_restart,
-                          "queues", &config) < 0)
+                          "queues", &config,
+                          "policy", &policy) < 0)
         return -1;
     if (queues_configure (qctx->queues, config, error) < 0)
         return -1;
+    /* Set after queues_configure() so a config that fails validation does
+     * not update the global policy. Borrowed from 'conf'; the queues object
+     * increfs it.
+     */
+    queues_set_global_policy (qctx->queues, policy);
     return 1;
 }
 
