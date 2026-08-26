@@ -147,6 +147,14 @@ static int queue_configure (const flux_conf_t *conf,
      * increfs it.
      */
     queues_set_global_policy (qctx->queues, policy);
+    /* Now that all queue mutations are settled, deliver the resolved
+     * effective queue configuration to jobtap plugins. A plugin that rejects
+     * the new configuration fails the config reload.
+     */
+    if (jobtap_notify_queues_update (qctx->ctx->jobtap,
+                                     queue_ctx_get_conf (qctx),
+                                     error) < 0)
+        return -1;
     return 1;
 }
 

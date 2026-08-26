@@ -43,6 +43,7 @@
 #include "raise.h"
 #include "jobtap.h"
 #include "jobtap-internal.h"
+#include "queue.h"
 
 /*  Size of the buffer used to build a "job.event.<name>" topic string in
  *  jobtap_notify_subscribers(), and the resulting maximum length of an
@@ -567,25 +568,31 @@ static int jobtap_conf_entry (struct jobtap *jobtap,
     return 0;
 }
 
-static int jobtap_call_conf_update (flux_plugin_t *p,
-                                    const flux_conf_t *conf,
-                                    flux_error_t *errp)
+/*  Deliver configuration object 'o' to a single plugin under input argument
+ *  'key' via callback 'topic'. 'o' is borrowed: "O" increfs it for the args,
+ *  so it is not consumed here.
+ *
+ *  On rejection the plugin's own errmsg is used if it set one, otherwise a
+ *  generic message naming the plugin.
+ */
+static int jobtap_call_update (flux_plugin_t *p,
+                               const char *topic,
+                               const char *key,
+                               json_t *o,
+                               flux_error_t *errp)
 {
     const char *name = flux_plugin_get_name (p);
     flux_plugin_arg_t *args;
-    json_t *o;
 
-    if (flux_conf_unpack (conf, errp, "o", &o) < 0)
-        return -1;
     if (!(args = flux_plugin_arg_create ())
         || flux_plugin_arg_pack (args,
                                  FLUX_PLUGIN_ARG_IN,
                                  "{s:O}",
-                                 "conf", o) < 0) {
+                                 key, o) < 0) {
         errprintf (errp, "error preparing args for %s jobtap plugin", name);
         goto error;
     }
-    if (flux_plugin_call (p, "conf.update", args) < 0) {
+    if (flux_plugin_call (p, topic, args) < 0) {
         const char *errmsg;
         if (flux_plugin_arg_unpack (args,
                                     FLUX_PLUGIN_ARG_OUT,
@@ -604,6 +611,17 @@ error:
     return -1;
 }
 
+static int jobtap_call_conf_update (flux_plugin_t *p,
+                                    const flux_conf_t *conf,
+                                    flux_error_t *errp)
+{
+    json_t *o;
+
+    if (flux_conf_unpack (conf, errp, "o", &o) < 0)
+        return -1;
+    return jobtap_call_update (p, "conf.update", "conf", o, errp);
+}
+
 static int jobtap_stack_call_conf_update (struct jobtap *jobtap,
                                           const flux_conf_t *conf,
                                           flux_error_t *errp)
@@ -613,6 +631,41 @@ static int jobtap_stack_call_conf_update (struct jobtap *jobtap,
     p = zlistx_first (jobtap->plugins);
     while (p) {
         if (jobtap_call_conf_update (p, conf, errp) < 0)
+            return -1;
+        p = zlistx_next (jobtap->plugins);
+    }
+    return 0;
+}
+
+/*  Deliver the resolved effective queue configuration `conf` to a single
+ *  plugin via the `queues.update` callback. `conf` must be non-NULL: a
+ *  plugin cannot parse a JSON null as a configuration object, so callers
+ *  treat a failure to encode the configuration as an error rather than
+ *  delivering one. "No queues configured" is an object with an empty
+ *  "queues" array, not a null.
+ */
+static int jobtap_call_queues_update (flux_plugin_t *p,
+                                      json_t *conf,
+                                      flux_error_t *errp)
+{
+    return jobtap_call_update (p, "queues.update", "queues", conf, errp);
+}
+
+int jobtap_notify_queues_update (struct jobtap *jobtap,
+                                 json_t *conf,
+                                 flux_error_t *errp)
+{
+    flux_plugin_t *p;
+
+    if (!conf) {
+        errprintf (errp,
+                   "error encoding queue configuration: %s",
+                   strerror (errno));
+        return -1;
+    }
+    p = zlistx_first (jobtap->plugins);
+    while (p) {
+        if (jobtap_call_queues_update (p, conf, errp) < 0)
             return -1;
         p = zlistx_next (jobtap->plugins);
     }
@@ -1612,6 +1665,29 @@ flux_plugin_t * jobtap_load (struct jobtap *jobtap,
      */
     if (jobtap_call_conf_update (p, flux_get_conf (jobtap->ctx->h), errp) < 0)
         goto error;
+
+    /* Prime the plugin with the resolved effective queue configuration for
+     * the same reasons. ctx->queue is NULL for builtins loaded before the
+     * queue subsystem is created; those are primed instead by the first
+     * queue_configure() fire.
+     */
+    if (jobtap->ctx->queue) {
+        json_t *qconf;
+
+        /* A NULL here means the configuration could not be encoded (ENOMEM),
+         * not that there is nothing to deliver. Fail the load rather than
+         * hand the plugin a JSON null it cannot parse.
+         */
+        if (!(qconf = queue_ctx_get_conf (jobtap->ctx->queue))) {
+            errprintf (errp,
+                       "error encoding queue configuration for %s: %s",
+                       path,
+                       strerror (errno));
+            goto error;
+        }
+        if (jobtap_call_queues_update (p, qconf, errp) < 0)
+            goto error;
+    }
 
     char *uuid = (char *)flux_plugin_get_uuid (p);
     if (zhashx_insert (jobtap->plugins_byuuid, uuid, p) < 0) {
