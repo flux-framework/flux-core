@@ -1115,6 +1115,15 @@ json_t *queues_list_response (struct queues *queues)
     return queues->list_cache;
 }
 
+json_t *queues_get_conf (struct queues *queues)
+{
+    json_t *resp;
+
+    if (!(resp = queues_list_response (queues)))
+        return NULL;
+    return json_object_get (resp, "conf");
+}
+
 static int save_one (json_t *a, struct queue *q)
 {
     json_t *entry;

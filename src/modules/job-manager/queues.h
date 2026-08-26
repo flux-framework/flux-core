@@ -151,6 +151,13 @@ json_t *queues_list_encode (struct queues *queues);
  */
 json_t *queues_list_response (struct queues *queues);
 
+/* Return the resolved effective queue configuration object (the "conf"
+ * member of the queue-list response) for delivery to jobtap plugins.
+ * Returns a BORROWED reference owned by the queues object (do not destroy
+ * it; incref if it must outlive the next mutation), or NULL on error.
+ */
+json_t *queues_get_conf (struct queues *queues);
+
 /* Per-queue accessors
  * If q == NULL, assume anonymous queue.
  */

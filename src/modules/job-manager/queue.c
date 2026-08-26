@@ -111,6 +111,11 @@ static void on_queue_change (struct queues *queues,
         dequeue_jobs (qctx, queue_name (q));
 }
 
+json_t *queue_ctx_get_conf (struct queue_ctx *qctx)
+{
+    return queues_get_conf (qctx->queues);
+}
+
 /* N.B. the basic queue configuration should have already been validated by
  * policy_validate() so we shouldn't need to produce detailed configuration
  * errors for users here.
