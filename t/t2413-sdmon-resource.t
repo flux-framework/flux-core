@@ -64,7 +64,7 @@ wait_for_none() {
 # Usage: wait_for_some MAXSEC
 wait_for_some() {
 	local retry=$(($1*10))
-	while flux module stats sdmon | jq -e ".units == []"; do
+	while ! flux module stats sdmon | jq -e ".units != []"; do
 	    sleep 0.1
 	    retry=$(($retry-1))
 	    test $retry -gt 0 || exit 1
