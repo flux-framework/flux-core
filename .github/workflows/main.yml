@@ -41,6 +41,29 @@ jobs:
         done
         exit $rc
 
+  c-lint:
+    name: c-lint
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v7.0.1
+      with:
+        ref: ${{ github.event.pull_request.head.sha }}
+        fetch-depth: 0
+    - run: git fetch --tags || true
+    - name: install dependencies
+      run: |
+        sudo apt update
+        sudo apt install -y clang bear
+        yes | sudo scripts/install-deps-deb.sh
+    - name: autogen, configure
+      run: ./autogen.sh && ./configure --disable-docs
+    - name: generate compile_commands.json
+      # Ubuntu ships bear 3.x, whose CLI differs from the 2.x form used by
+      # scripts/generate_compile_commands, so invoke bear directly here.
+      run: bear --output compile_commands.json -- make -j$(nproc)
+    - name: run check-json-pack
+      run: ./scripts/check-json-pack --clang clang -p compile_commands.json
+
   python-lint:
     name: python linting
     runs-on: ubuntu-latest
@@ -209,7 +232,7 @@ jobs:
       if: matrix.coverage
       uses: actions/setup-python@v7.0.0
       with:
-        # Use python3.12 to ensure compatbility with coverage tool:
+        # Use python3.12 to ensure compatibility with coverage tool:
         python-version: '3.12'
 
     - name: coverage setup

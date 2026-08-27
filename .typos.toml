@@ -25,6 +25,8 @@ extend-exclude = [
 
 [default.extend-identifiers]
 gl_pathc = "gl_pathc"
+# clang AST node kind matched by scripts/check-json-pack
+ParmVarDecl = "ParmVarDecl"
 infp = "infp"
 anc = "anc"
 

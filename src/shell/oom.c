@@ -220,7 +220,7 @@ static int oom_adjust (flux_plugin_t *p,
 
     if (!(shell = flux_plugin_get_shell (p))
         || !(task = flux_shell_current_task (shell))
-        || flux_shell_task_info_unpack (task, "{s:I}", "pid", &pid) < 0)
+        || flux_shell_task_info_unpack (task, "{s:i}", "pid", &pid) < 0)
         return shell_log_errno ("failed to get current task pid");
 
     (void)peek_int (pid, "oom_score_adj", &old_adjust);

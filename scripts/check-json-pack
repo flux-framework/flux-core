@@ -1,0 +1,803 @@
+#!/usr/bin/env python3
+# check-json-pack - verify jansson pack/unpack format specifiers match the
+# types of the variadic arguments passed to them.
+#
+# jansson's json_pack()/json_unpack() families (and the many flux wrappers
+# such as flux_rpc_pack(), flux_request_unpack(), flux_respond_pack(), ...)
+# take a printf-like format string whose conversion specifiers imply the C
+# type of each following variadic argument.  Unlike printf, the C compiler
+# does not type-check these, so a mismatch (e.g. an 'int' where 'I' expects
+# a 64-bit json_int_t, or a non-json_t* where 'o'/'O' is expected) compiles
+# cleanly yet corrupts the varargs at runtime.
+#
+# This script drives clang in JSON AST-dump mode (no libclang bindings or
+# C++ plugin required), parses the format strings, and compares the implied
+# types against the actual argument types found in the AST.
+#
+# Usage:
+#   scripts/check-json-pack [options] [FILE ...]
+#
+# Requires a compile_commands.json (see scripts/generate_compile_commands)
+# and a clang binary.  FILE arguments, if given, restrict the check to
+# matching translation units.
+#
+# Portability note: flux-core targets both LP64 and 32-bit (ILP32).  Integer
+# arguments are therefore classified by promotion width, not host byte size:
+#   - 'i'/'b' require int-width (int, int32_t, ...)
+#   - 'I'     requires a guaranteed-64-bit type (json_int_t, int64_t, ...)
+#   - 'long', 'size_t', ... have platform-dependent width and are flagged for
+#     both 'i' and 'I' as non-portable.
+
+import argparse
+import codecs
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+from concurrent.futures import ProcessPoolExecutor, as_completed
+
+# jansson core functions: name -> (num_fixed_params, direction).  These are
+# also auto-discovered from headers, but seeding them guarantees coverage
+# even if a header spells the format parameter unusually.
+JANSSON_CORE = {
+    "json_pack": (1, "pack"),
+    "json_pack_ex": (3, "pack"),
+    "json_vpack_ex": None,          # va_list variant: no inline args to check
+    "json_unpack": (2, "unpack"),
+    "json_unpack_ex": (4, "unpack"),
+    "json_vunpack_ex": None,
+}
+
+# Integer base-type classification by promotion / guaranteed width.
+INT_BASES = {
+    "int", "signed int", "unsigned int", "unsigned", "signed",
+    "int32_t", "uint32_t", "short", "short int", "signed short",
+    "unsigned short", "unsigned short int", "char", "signed char",
+    "unsigned char", "_Bool", "bool", "int16_t", "uint16_t",
+    "int8_t", "uint8_t",
+    # POSIX types that are int-width on flux's supported platforms
+    "pid_t", "__pid_t", "uid_t", "__uid_t", "gid_t", "__gid_t",
+    "mode_t", "__mode_t",
+}
+LLONG_BASES = {
+    "long long", "long long int", "signed long long", "unsigned long long",
+    "unsigned long long int", "int64_t", "uint64_t", "json_int_t",
+    # flux typedefs that are guaranteed 64-bit (uint64_t)
+    "flux_jobid_t", "fluid_t",
+}
+# Platform-dependent width (4 bytes on ILP32, 8 on LP64): never portable for
+# a fixed-width jansson specifier.
+PLATFORM_BASES = {
+    "long", "long int", "signed long", "unsigned long", "unsigned long int",
+    "size_t", "ssize_t", "intptr_t", "uintptr_t", "ptrdiff_t", "off_t",
+    "intmax_t", "uintmax_t", "time_t",
+}
+DOUBLE_BASES = {"double", "float"}
+
+QUAL_RE = re.compile(
+    r"\b(const|volatile|restrict|__restrict|__restrict__"
+    r"|_Nonnull|_Nullable|_Null_unspecified)\b"
+)
+
+# Match 'pack'/'unpack' as a whole word component of a function name so that
+# unrelated names (e.g. containing 'packet') are not treated as wrappers.
+PACK_NAME_RE = re.compile(r"(?:^|_)v?(?:un)?pack(?:_|$)")
+
+# JSON_VALIDATE_ONLY (jansson.h): in this mode json_unpack_ex() consumes only
+# object keys, not values.
+JSON_VALIDATE_ONLY = 0x1
+
+
+def strip_quals(t):
+    t = QUAL_RE.sub(" ", t)
+    t = t.replace("struct ", "")
+    t = re.sub(r"\s+", " ", t).strip()
+    return t
+
+
+def type_base_depth(t):
+    """Return (base_type, pointer_depth, is_array) for a qualType string."""
+    t = strip_quals(t)
+    depth = t.count("*")
+    is_array = "[" in t
+    base = t.split("[")[0].replace("*", " ")
+    base = re.sub(r"\s+", " ", base).strip()
+    return base, depth, is_array
+
+
+def int_class(base, enum_types=None):
+    if base in INT_BASES or base.startswith("enum "):
+        return "int"
+    if enum_types and base in enum_types:
+        return "int"                  # typedef'd enum: int-width
+    if base in LLONG_BASES:
+        return "llong"
+    if base in PLATFORM_BASES:
+        return "platform"
+    return None
+
+
+# ---------------------------------------------------------------------------
+# jansson format-string parser
+# ---------------------------------------------------------------------------
+
+# Each returned expectation is (kind, spec, role) and consumes one argument.
+# kind selects the type predicate below.
+
+def parse_format(fmt, direction):
+    """Parse a jansson format string into a list of argument expectations.
+
+    Returns (expectations, error).  On a structural parse problem error is a
+    string and expectations is what was parsed so far.
+    """
+    exps = []
+    err = None
+    # container stack: each frame is [type, expecting] where type is 'obj',
+    # 'arr' or 'top'; expecting is 'key'/'value' (obj only).  parent_obj_value
+    # marks a frame opened as the value of an enclosing object.
+    stack = [["top", None, False]]
+    i = 0
+    n = len(fmt)
+
+    def cur():
+        return stack[-1]
+
+    def is_key_position():
+        f = cur()
+        return f[0] == "obj" and f[1] == "key"
+
+    def after_value():
+        f = cur()
+        if f[0] == "obj":
+            f[1] = "key"
+
+    while i < n:
+        c = fmt[i]
+        if c in " \t\n\r,":
+            i += 1
+            continue
+        if c == ":":
+            # separator between key and value inside an object
+            if cur()[0] == "obj":
+                cur()[1] = "value"
+            i += 1
+            continue
+        if c == "{":
+            parent_obj_value = cur()[0] == "obj" and cur()[1] == "value"
+            if is_key_position():
+                err = "object opened in key position"
+            stack.append(["obj", "key", parent_obj_value])
+            i += 1
+            continue
+        if c == "[":
+            parent_obj_value = cur()[0] == "obj" and cur()[1] == "value"
+            if is_key_position():
+                err = "array opened in key position"
+            stack.append(["arr", None, parent_obj_value])
+            i += 1
+            continue
+        if c in "}]":
+            if len(stack) <= 1:
+                err = "unbalanced '%s'" % c
+                i += 1
+                continue
+            frame = stack.pop()
+            if frame[2]:            # was a value of an enclosing object
+                after_value()
+            i += 1
+            continue
+        if c in "!*":
+            # '!' strict-mode flag; '*' ignore-value (unpack).  '*' occupies a
+            # value slot but consumes no argument.
+            if c == "*" and not is_key_position():
+                after_value()
+            i += 1
+            continue
+        if c == "?":
+            # optionality modifier for the following value; no argument.
+            i += 1
+            continue
+
+        role = "key" if is_key_position() else "value"
+
+        if c in "sS+":
+            # string (or '+' concatenation in pack); optional length modifier.
+            i += 1
+            length = None
+            if i < n and fmt[i] in "#%":
+                length = fmt[i]
+                i += 1
+            if role == "key":
+                exps.append(("STR_IN", c, role))
+            elif direction == "pack":
+                exps.append(("STR_IN", c, role))
+                if length == "#":
+                    exps.append(("LEN_INT", c, role))
+                elif length == "%":
+                    exps.append(("LEN_SIZE", c, role))
+            else:  # unpack value
+                exps.append(("STR_OUT", c, role))
+                if length == "#":
+                    exps.append(("LEN_INT_PTR", c, role))
+                elif length == "%":
+                    exps.append(("LEN_SIZE_PTR", c, role))
+            if role == "value":
+                after_value()
+            else:
+                cur()[1] = "value"
+            continue
+
+        # single-argument (or no-argument) value specifiers
+        consumed = True
+        if c == "n":
+            consumed = False
+        elif c == "b" or c == "i":
+            exps.append(("INT" if direction == "pack" else "INT_PTR", c, role))
+        elif c == "I":
+            exps.append(("LLONG" if direction == "pack" else "LLONG_PTR",
+                         c, role))
+        elif c == "f":
+            exps.append(("DOUBLE" if direction == "pack" else "DOUBLE_PTR",
+                         c, role))
+        elif c == "F":
+            exps.append(("DOUBLE_PTR", c, role))   # unpack real-or-integer
+        elif c in "oO":
+            exps.append(("JSON_IN" if direction == "pack" else "JSON_OUT",
+                         c, role))
+        else:
+            err = "unknown format specifier '%s'" % c
+            consumed = False
+
+        if role == "key" and c != "n":
+            # a non-string key is invalid, but track state anyway
+            cur()[1] = "value"
+        elif role == "value" and consumed:
+            after_value()
+        i += 1
+
+    if len(stack) > 1 and not err:
+        err = "unterminated container"
+    return exps, err
+
+
+# ---------------------------------------------------------------------------
+# type predicates
+# ---------------------------------------------------------------------------
+
+EXPECTED_DESC = {
+    "INT": "int", "LLONG": "json_int_t (64-bit)", "DOUBLE": "double",
+    "STR_IN": "const char *", "STR_OUT": "const char **",
+    "JSON_IN": "json_t *", "JSON_OUT": "json_t **",
+    "INT_PTR": "int *", "LLONG_PTR": "json_int_t *", "DOUBLE_PTR": "double *",
+    "LEN_INT": "int (length)", "LEN_SIZE": "size_t (length)",
+    "LEN_INT_PTR": "int * (length)", "LEN_SIZE_PTR": "size_t * (length)",
+}
+SIZE_BASES = {"size_t", "unsigned long", "long", "ssize_t"}
+
+
+def check_arg(kind, t, enum_types=None, const_val=None):
+    """Return (ok, note) for argument type string t against expectation kind.
+
+    const_val, if not None, is the value of a compile-time integer constant
+    argument; such arguments are judged by value, not host type spelling.
+    """
+    base, depth, arr = type_base_depth(t)
+    isnull = base == "void" and depth == 1        # NULL / (void*)0
+    note = ""
+
+    if kind in ("INT", "LEN_INT"):
+        if const_val is not None:
+            # a literal fits an int slot unless it exceeds 32-bit range
+            if -(2 ** 31) <= const_val <= (2 ** 32 - 1):
+                return True, ""
+            return False, "integer constant does not fit in int"
+        c = int_class(base, enum_types) if depth == 0 and not arr else None
+        if c == "int":
+            return True, ""
+        if c == "llong":
+            note = "64-bit value where int is expected (truncates)"
+        elif c == "platform":
+            note = "platform-dependent width; not portable"
+        return False, note
+
+    if kind == "LLONG":
+        if const_val is not None:
+            return True, ""           # any integer literal fits a 64-bit slot
+        c = int_class(base, enum_types) if depth == 0 else None
+        if c == "llong":
+            return True, ""
+        if c == "int":
+            note = "int where 64-bit json_int_t is expected"
+        elif c == "platform":
+            note = ("platform-dependent width ('long'/'size_t' is 32-bit on "
+                    "ILP32); use int64_t/json_int_t")
+        return False, note
+
+    if kind == "LEN_SIZE":
+        if depth == 0 and base in SIZE_BASES:
+            return True, ""
+        if depth == 0 and int_class(base, enum_types) == "int":
+            note = "int where size_t is expected"
+        return False, note
+
+    if kind == "DOUBLE":
+        return (depth == 0 and base in DOUBLE_BASES), ""
+
+    if kind in ("INT_PTR", "LEN_INT_PTR"):
+        return (isnull
+                or (depth == 1 and int_class(base, enum_types) == "int")), ""
+
+    if kind == "LLONG_PTR":
+        return (isnull
+                or (depth == 1
+                    and int_class(base, enum_types) == "llong")), note
+
+    if kind == "DOUBLE_PTR":
+        return (isnull or (depth == 1 and base in DOUBLE_BASES)), ""
+
+    if kind == "LEN_SIZE_PTR":
+        return (isnull or (depth == 1 and base in SIZE_BASES)), ""
+
+    if kind == "STR_IN":
+        # void* is a deliberate, representation-safe pun for a byte buffer
+        return (isnull
+                or (base == "char" and (depth == 1 or arr))
+                or (base == "void" and depth == 1)), ""
+
+    if kind == "STR_OUT":
+        # void** likewise (e.g. binary pty data unpacked with 's%')
+        return (isnull
+                or (base == "char" and depth == 2)
+                or (base == "void" and depth == 2)), ""
+
+    if kind == "JSON_IN":
+        return (isnull or (base == "json_t" and depth == 1)), ""
+
+    if kind == "JSON_OUT":
+        return (isnull or (base == "json_t" and depth == 2)), ""
+
+    return True, ""
+
+
+# ---------------------------------------------------------------------------
+# clang AST handling
+# ---------------------------------------------------------------------------
+
+STRLIT_RE = re.compile(r'"((?:[^"\\]|\\.)*)"')
+
+
+def decode_string_literal(value):
+    """Decode a clang StringLiteral 'value' (token spelling) to its text."""
+    parts = STRLIT_RE.findall(value)
+    if not parts:
+        return None
+    out = []
+    for p in parts:
+        try:
+            out.append(codecs.decode(p, "unicode_escape"))
+        except Exception:
+            out.append(p)
+    return "".join(out)
+
+
+def find_string_literal(node):
+    """Descend through casts/parens to find a StringLiteral value."""
+    if not isinstance(node, dict):
+        return None
+    if node.get("kind") == "StringLiteral":
+        return decode_string_literal(node.get("value", ""))
+    kind = node.get("kind")
+    if kind in ("ImplicitCastExpr", "CStyleCastExpr", "ParenExpr",
+                "ConstantExpr", "PredefinedExpr"):
+        for c in node.get("inner", []) or []:
+            r = find_string_literal(c)
+            if r is not None:
+                return r
+    return None
+
+
+def eval_int_flags(node):
+    """OR together every integer literal in a flags expression subtree.
+
+    Returns the OR of all IntegerLiteral values found (handling A|B|C and
+    cast/paren wrappers), or None if no literal is present (e.g. the flags
+    are a runtime variable), in which case the value is unknown.
+    """
+    if not isinstance(node, dict):
+        return None
+    acc = None
+    if node.get("kind") == "IntegerLiteral":
+        try:
+            return int(node.get("value", ""), 0)
+        except (TypeError, ValueError):
+            return None
+    for c in node.get("inner", []) or []:
+        v = eval_int_flags(c)
+        if v is not None:
+            acc = v if acc is None else (acc | v)
+    return acc
+
+
+def eval_int_const(node):
+    """If node is a compile-time integer constant, return its value, else None.
+
+    Integer literals are classified by value rather than by their host type
+    spelling: a constant like INT64_C(-2) or 0xFFFFFFFFFFFFFFFF is a portable
+    64-bit constant even though its LP64 type prints as 'long'/'unsigned
+    long'.  Handles unary +/-/~ and cast/paren wrappers.
+    """
+    if not isinstance(node, dict):
+        return None
+    k = node.get("kind")
+    if k == "IntegerLiteral":
+        try:
+            return int(node.get("value", ""), 0)
+        except (TypeError, ValueError):
+            return None
+    if k == "CharacterLiteral":
+        v = node.get("value")
+        return v if isinstance(v, int) else None
+    if k == "UnaryOperator" and node.get("opcode") in ("-", "+", "~"):
+        inner = node.get("inner", []) or []
+        if inner:
+            v = eval_int_const(inner[0])
+            if v is None:
+                return None
+            op = node.get("opcode")
+            return -v if op == "-" else (~v if op == "~" else v)
+        return None
+    if k in ("ImplicitCastExpr", "CStyleCastExpr", "ParenExpr",
+             "ConstantExpr"):
+        for c in node.get("inner", []) or []:
+            v = eval_int_const(c)
+            if v is not None:
+                return v
+    return None
+
+
+def find_callee_name(node):
+    if not isinstance(node, dict):
+        return None
+    rd = node.get("referencedDecl")
+    if isinstance(rd, dict) and rd.get("kind") == "FunctionDecl":
+        if rd.get("name"):
+            return rd["name"]
+    for c in node.get("inner", []) or []:
+        r = find_callee_name(c)
+        if r:
+            return r
+    return None
+
+
+def arg_type(node):
+    return (node.get("type", {}) or {}).get("qualType", "?")
+
+
+def analyze_ast(root, main_file, repo_root, directory):
+    """Walk one translation unit AST; return list of finding dicts."""
+    # merged function table (auto-discovered wrappers + jansson core)
+    table = {}
+    for name, spec in JANSSON_CORE.items():
+        if spec is not None:
+            table[name] = spec
+
+    calls = []
+    enum_types = set()          # typedef names whose underlying type is an enum
+    state = {"file": main_file, "line": 0, "col": 0}
+
+    def update_loc(node):
+        loc = node.get("loc")
+        if isinstance(loc, dict):
+            if loc.get("file"):
+                state["file"] = loc["file"]
+            if "line" in loc:
+                state["line"] = loc["line"]
+            if "col" in loc:
+                state["col"] = loc["col"]
+        rng = node.get("range")
+        if isinstance(rng, dict):
+            b = rng.get("begin")
+            if isinstance(b, dict):
+                if b.get("file"):
+                    state["file"] = b["file"]
+                if "line" in b:
+                    state["line"] = b["line"]
+                if "col" in b:
+                    state["col"] = b["col"]
+
+    def record_funcdecl(node):
+        name = node.get("name")
+        if not name:
+            return
+        low = name.lower()
+        if not PACK_NAME_RE.search(low):
+            return
+        qual = (node.get("type", {}) or {}).get("qualType", "")
+        variadic = node.get("variadic") is True or "...)" in qual
+        if not variadic:
+            return
+        params = [c for c in node.get("inner", []) or []
+                  if c.get("kind") == "ParmVarDecl"]
+        if not params:
+            return
+        last = (params[-1].get("type", {}) or {}).get("qualType", "")
+        b, d, _ = type_base_depth(last)
+        if not (b == "char" and d == 1):
+            return
+        direction = "unpack" if "unpack" in low else "pack"
+        table.setdefault(name, (len(params), direction))
+
+    def walk(node):
+        if not isinstance(node, dict):
+            return
+        update_loc(node)
+        kind = node.get("kind")
+        if kind == "FunctionDecl":
+            record_funcdecl(node)
+        elif kind == "TypedefDecl":
+            nm = node.get("name")
+            q = (node.get("type", {}) or {}).get("qualType", "")
+            if nm and "*" not in q and strip_quals(q).startswith("enum "):
+                enum_types.add(nm)
+        elif kind == "CallExpr":
+            calls.append((node, state["file"], state["line"], state["col"]))
+        for c in node.get("inner", []) or []:
+            walk(c)
+
+    walk(root)
+
+    findings = []
+    for node, cfile, cline, ccol in calls:
+        inner = node.get("inner", []) or []
+        if not inner:
+            continue
+        name = find_callee_name(inner[0])
+        if not name or name not in table:
+            continue
+        num_params, direction = table[name]
+        fmt_index = num_params - 1
+        call_args = inner[1:]
+        if fmt_index >= len(call_args):
+            continue
+        fmt = find_string_literal(call_args[fmt_index])
+        if fmt is None:
+            continue                      # non-literal format: cannot check
+        var_args = call_args[num_params:]
+        exps, perr = parse_format(fmt, direction)
+
+        # In JSON_VALIDATE_ONLY mode, json_unpack_ex() consumes only object
+        # keys (to navigate), never value outputs.  Detect via the flags
+        # argument (the parameter just before the format) and drop value
+        # expectations so validate-only calls do not look under-supplied.
+        if direction == "unpack" and name.endswith("_ex") and fmt_index >= 1:
+            flags = eval_int_flags(call_args[fmt_index - 1])
+            if flags is not None and (flags & JSON_VALIDATE_ONLY):
+                exps = [e for e in exps if e[2] == "key"]
+
+        # clang may report the file relative to its cwd (the entry
+        # directory), so resolve against that, not the checker's cwd.
+        if not cfile:
+            cfile_abs = main_file
+        elif os.path.isabs(cfile):
+            cfile_abs = cfile
+        else:
+            cfile_abs = os.path.abspath(os.path.join(directory, cfile))
+        if not cfile_abs.startswith(repo_root):
+            continue
+        loc = "%s:%s:%s" % (os.path.relpath(cfile_abs, repo_root),
+                            cline, ccol)
+
+        if perr:
+            findings.append({
+                "loc": loc, "abs": cfile_abs, "line": cline, "col": ccol,
+                "sev": "warning",
+                "msg": "%s() format %r: %s" % (name, fmt, perr),
+            })
+
+        if len(exps) != len(var_args):
+            findings.append({
+                "loc": loc, "abs": cfile_abs, "line": cline, "col": ccol,
+                "sev": "error",
+                "msg": "%s() format %r implies %d argument(s) but %d passed"
+                       % (name, fmt, len(exps), len(var_args)),
+            })
+
+        argno = 0
+        for k, (kind_, spec, role) in enumerate(exps):
+            argno += 1
+            if k >= len(var_args):
+                break
+            t = arg_type(var_args[k])
+            cval = eval_int_const(var_args[k]) if direction == "pack" else None
+            ok, note = check_arg(kind_, t, enum_types, cval)
+            if ok:
+                continue
+            rolestr = " key" if role == "key" else ""
+            extra = "; " + note if note else ""
+            findings.append({
+                "loc": loc, "abs": cfile_abs, "line": cline, "col": ccol,
+                "sev": "error",
+                "msg": "%s() arg %d for '%s'%s expects %s but got %r%s"
+                       % (name, argno, spec, rolestr,
+                          EXPECTED_DESC.get(kind_, kind_), t, extra),
+            })
+
+    return findings
+
+
+# ---------------------------------------------------------------------------
+# compile_commands / clang driver
+# ---------------------------------------------------------------------------
+
+# flags that take a following separate argument and must be kept together
+SEP_FLAGS = {"-isystem", "-iquote", "-include", "-isysroot", "-idirafter",
+             "-imacros", "-I", "-D", "-U"}
+# joined-prefix flags to keep
+KEEP_PREFIX = ("-I", "-D", "-U", "-std=", "-isystem", "-iquote",
+               "-idirafter", "-nostdinc")
+
+
+def clang_args_for(entry):
+    """Build a clang AST-dump command from a compile_commands.json entry."""
+    if "arguments" in entry:
+        toks = list(entry["arguments"])
+    else:
+        import shlex
+        toks = shlex.split(entry["command"])
+    keep = []
+    it = iter(toks[1:])           # drop the compiler
+    for tok in it:
+        if tok in SEP_FLAGS:
+            keep.append(tok)
+            nxt = next(it, None)
+            if nxt is not None:
+                keep.append(nxt)
+        elif tok.startswith(KEEP_PREFIX):
+            keep.append(tok)
+        elif tok in ("-pthread", "-nostdinc", "-nostdinc++"):
+            keep.append(tok)
+        # everything else (input file, -c, -o, -M*, -W*, -f*, -m*, -g, -O)
+        # is dropped
+    return keep
+
+
+def process_entry(args_tuple):
+    entry, repo_root, clang = args_tuple
+    directory = entry.get("directory", repo_root)
+    src = entry["file"]
+    main_file = os.path.abspath(os.path.join(directory, src))
+    cmd = [clang, "-w", "-ferror-limit=0", "-fsyntax-only",
+           "-Xclang", "-ast-dump=json"]
+    cmd += clang_args_for(entry)
+    cmd.append(src)
+    try:
+        proc = subprocess.run(cmd, cwd=directory,
+                              stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                              universal_newlines=True, timeout=300)
+    except subprocess.TimeoutExpired:
+        return ([], "%s: clang timed out" % src)
+    except Exception as e:
+        return ([], "%s: clang failed: %s" % (src, e))
+    out = proc.stdout
+    if not out.strip():
+        return ([], "%s: clang produced no AST (%s)"
+                % (src, proc.stderr.strip().splitlines()[-1:] or ""))
+    try:
+        root = json.loads(out)
+    except Exception as e:
+        return ([], "%s: could not parse AST JSON: %s" % (src, e))
+    try:
+        findings = analyze_ast(root, main_file, repo_root, directory)
+    except Exception as e:
+        return ([], "%s: analysis error: %s" % (src, e))
+    return (findings, None)
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("files", nargs="*",
+                    help="restrict check to translation units matching these "
+                         "paths (substring match)")
+    ap.add_argument("-p", "--compile-commands", default="compile_commands.json",
+                    help="path to compile_commands.json")
+    ap.add_argument("--clang", default=None, help="path to clang binary")
+    ap.add_argument("-j", "--jobs", type=int, default=os.cpu_count() or 4)
+    ap.add_argument("-v", "--verbose", action="store_true")
+    ap.add_argument("-Wwarn-as-error", dest="werror", action="store_true",
+                    help="treat parser warnings as errors too")
+    args = ap.parse_args()
+
+    clang = args.clang or shutil.which("clang")
+    if not clang:
+        for cand in ("clang-19", "clang-18", "clang-17", "clang-16"):
+            clang = shutil.which(cand)
+            if clang:
+                break
+    if not clang:
+        sys.exit("error: no clang binary found (try --clang)")
+
+    cc_path = os.path.abspath(args.compile_commands)
+    if not os.path.exists(cc_path):
+        sys.exit("error: %s not found; run scripts/generate_compile_commands"
+                 % args.compile_commands)
+    repo_root = os.path.dirname(cc_path)
+    with open(cc_path) as f:
+        entries = json.load(f)
+
+    # dedupe by output/file, and apply the optional file filter
+    seen_files = set()
+    work = []
+    for e in entries:
+        if "file" not in e:
+            continue
+        key = os.path.abspath(os.path.join(e.get("directory", repo_root),
+                                           e["file"]))
+        if key in seen_files:
+            continue
+        seen_files.add(key)
+        if args.files and not any(s in key for s in args.files):
+            continue
+        work.append((e, repo_root, clang))
+
+    if not work:
+        sys.exit("error: no matching translation units")
+
+    if args.verbose:
+        print("checking %d translation units with %s (-j %d)"
+              % (len(work), clang, args.jobs), file=sys.stderr)
+
+    all_findings = {}
+    errors = []
+    done = 0
+    with ProcessPoolExecutor(max_workers=args.jobs) as ex:
+        futs = [ex.submit(process_entry, w) for w in work]
+        for fut in as_completed(futs):
+            findings, err = fut.result()
+            done += 1
+            if err:
+                errors.append(err)
+            for finding in findings:
+                key = (finding["abs"], finding["line"],
+                       finding["col"], finding["msg"])
+                all_findings[key] = finding
+            if args.verbose and done % 50 == 0:
+                print("  %d/%d" % (done, len(work)), file=sys.stderr)
+
+    ordered = sorted(all_findings.values(),
+                     key=lambda d: (d["abs"], d["line"], d["col"]))
+    n_err = n_warn = 0
+    for f in ordered:
+        sev = f["sev"]
+        if sev == "warning" and not args.werror:
+            n_warn += 1
+        else:
+            n_err += 1
+        print("%s: %s: %s" % (f["loc"], f["sev"], f["msg"]))
+
+    # Always note when translation units could not be analyzed so a broken
+    # clang or environment cannot masquerade as a clean result.  Show the
+    # per-unit detail with -v, or unconditionally when every unit failed.
+    all_failed = bool(errors) and len(errors) == len(work)
+    if errors:
+        print("\n%d of %d translation unit(s) could not be analyzed%s:"
+              % (len(errors), len(work),
+                 "" if (args.verbose or all_failed) else " (use -v for detail)"),
+              file=sys.stderr)
+        if args.verbose or all_failed:
+            for e in errors[:50]:
+                print("  " + e, file=sys.stderr)
+
+    print("\n%d error(s), %d warning(s) across %d translation unit(s)"
+          % (n_err, n_warn, len(work)), file=sys.stderr)
+    # A run in which nothing could be analyzed is a failure, not a pass:
+    # otherwise a missing or incompatible clang would look like "0 errors".
+    if all_failed:
+        sys.exit(1)
+    sys.exit(1 if n_err else 0)
+
+
+if __name__ == "__main__":
+    main()

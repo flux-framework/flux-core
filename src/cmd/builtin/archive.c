@@ -93,7 +93,7 @@ static void mmap_fileref_data (struct create_ctx *ctx, const char *path)
                              0,
                              "{s:s s:i s:s}",
                              "path", fullpath,
-                             "chunksize", ctx->param.chunksize,
+                             "chunksize", (int)ctx->param.chunksize,
                              "tag", ctx->name))
         || flux_rpc_get (f, NULL))
         log_msg_exit ("%s: %s", path, future_strerror (f, errno));
