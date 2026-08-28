@@ -71,7 +71,9 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <string.h>
+#include <stdbool.h>
 #include <sys/param.h>
+#include <flux/idset.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "ccan/str/str.h"
@@ -87,6 +89,18 @@ struct client {
     bool mcmd_started;  // client started multi-line spawn command
 };
 
+/* One in-flight barrier, keyed in pmi->barriers by group string ("" for
+ * the legacy whole-job barrier).
+ */
+struct barrier {
+    char *name;         // group string key ("" == legacy, no group)
+    int tag;            // PMI-1.2 barrier tag (echoed in barrier_out)
+    bool has_tag;       // true if this is a group barrier with a tag
+    struct idset *members; // explicit group members (NULL = all local ranks)
+    int expected;       // number of local members that must enter
+    zlistx_t *clients;  // entered client handles (void *) to respond to
+};
+
 struct pmi_simple_server {
     void *arg;
     struct pmi_simple_ops ops;
@@ -95,9 +109,10 @@ struct pmi_simple_server {
     int universe_size;
 
     int local_size;
-    int local_barrier_count;
+    struct idset *local_ranks;  // global ranks served locally (may be NULL)
 
     zhashx_t *clients;  // struct client hashed by rank
+    zhashx_t *barriers; // struct barrier hashed by group string
 
     int flags;
 };
@@ -147,10 +162,92 @@ static void warn (struct pmi_simple_server *pmi,
         pmi->ops.warn (client, buf);
 }
 
+static void barrier_destroy (struct barrier *b)
+{
+    if (b) {
+        int saved_errno = errno;
+        zlistx_destroy (&b->clients);
+        idset_destroy (b->members);
+        free (b->name);
+        free (b);
+        errno = saved_errno;
+    }
+}
+
+/* zhashx_destructor_fn footprint */
+static void barrier_destructor (void **item)
+{
+    if (item) {
+        barrier_destroy (*item);
+        *item = NULL;
+    }
+}
+
+/* Create a barrier from a barrier_in group string: NULL for the legacy
+ * whole-job barrier, or WORLD:tag, NODE:tag, or ranklist:tag.  For a
+ * rank list, expect only the members served locally.  Returns NULL with
+ * errno=EINVAL if the string is malformed.
+ */
+static struct barrier *barrier_create (struct pmi_simple_server *pmi,
+                                       const char *group)
+{
+    struct barrier *b;
+    const char *colon;
+    char *endptr;
+    long tag;
+    char *prefix;
+    unsigned int id;
+
+    if (!(b = calloc (1, sizeof (*b))))
+        return NULL;
+    if (!(b->name = strdup (group ? group : ""))
+        || !(b->clients = zlistx_new ())) {
+        errno = ENOMEM;
+        goto error;
+    }
+    if (!group) {
+        b->expected = pmi->local_size;
+        return b;
+    }
+    if (!(colon = strrchr (group, ':')))
+        goto inval;
+    errno = 0;
+    tag = strtol (colon + 1, &endptr, 10);
+    if (errno != 0 || endptr == colon + 1 || *endptr != '\0')
+        goto inval;
+    b->tag = (int)tag;
+    b->has_tag = true;
+    if (!(prefix = strndup (group, colon - group)))
+        goto error;
+    if (streq (prefix, "WORLD") || streq (prefix, "NODE")) {
+        free (prefix);
+        b->expected = pmi->local_size;
+        return b;
+    }
+    /* explicit rank list: count the members served locally */
+    b->members = pmi->local_ranks ? idset_decode (prefix) : NULL;
+    free (prefix);
+    if (!b->members)
+        goto inval;
+    id = idset_first (b->members);
+    while (id != IDSET_INVALID_ID) {
+        if (idset_test (pmi->local_ranks, id))
+            b->expected++;
+        id = idset_next (b->members, id);
+    }
+    return b;
+inval:
+    errno = EINVAL;
+error:
+    barrier_destroy (b);
+    return NULL;
+}
+
 struct pmi_simple_server *pmi_simple_server_create (struct pmi_simple_ops ops,
                                                     int appnum,
                                                     int universe_size,
                                                     int local_size,
+                                                    const struct idset *ranks,
                                                     const char *kvsname,
                                                     int flags,
                                                     void *arg)
@@ -167,6 +264,13 @@ struct pmi_simple_server *pmi_simple_server_create (struct pmi_simple_ops ops,
     pmi->flags = flags;
     pmi->kvsname = strdup (kvsname);
     pmi->clients = client_hash_create ();
+    if (!(pmi->barriers = zhashx_new ())) {
+        errno = ENOMEM;
+        goto error;
+    }
+    zhashx_set_destructor (pmi->barriers, barrier_destructor);
+    if (ranks && !(pmi->local_ranks = idset_copy (ranks)))
+        goto error;
     if (!pmi->kvsname || !pmi->clients) {
         errno = ENOMEM;
         goto error;
@@ -183,26 +287,35 @@ void pmi_simple_server_destroy (struct pmi_simple_server *pmi)
         int saved_errno = errno;
         free (pmi->kvsname);
         client_hash_destroy (pmi->clients);
+        zhashx_destroy (&pmi->barriers);
+        idset_destroy (pmi->local_ranks);
         free (pmi);
         errno = saved_errno;
     }
 }
 
-static int barrier_exit (struct pmi_simple_server *pmi, int rc)
+/* Respond to all members that entered barrier 'b' and remove it. */
+static int barrier_exit (struct pmi_simple_server *pmi,
+                         struct barrier *b,
+                         int rc)
 {
     char resp[SIMPLE_MAX_PROTO_LINE+1];
-    struct client *cli;
+    void *client;
     int ret = 0;
 
-    pmi->local_barrier_count = 0;
-    cli = zhashx_first (pmi->clients);
-    while (cli) {
+    if (b->has_tag)
+        snprintf (resp, sizeof (resp),
+                  "cmd=barrier_out tag=%d rc=%d\n", b->tag, rc);
+    else
         snprintf (resp, sizeof (resp), "cmd=barrier_out rc=%d\n", rc);
-        trace (pmi, cli->arg, "S: %s", resp);
-        if (pmi->ops.response_send (cli->arg, resp) < 0)
+    client = zlistx_first (b->clients);
+    while (client) {
+        trace (pmi, client, "S: %s", resp);
+        if (pmi->ops.response_send (client, resp) < 0)
             ret = -1;
-        cli = zhashx_next (pmi->clients);
+        client = zlistx_next (b->clients);
     }
+    zhashx_delete (pmi->barriers, b->name); // frees b
     return ret;
 }
 
@@ -383,13 +496,34 @@ get_respond:
     }
     /* barrier */
     else if (keyval_parse_isword (buf, "cmd", "barrier_in") == 0) {
-        if (++pmi->local_barrier_count == pmi->local_size) {
+        char groupbuf[SIMPLE_MAX_PROTO_LINE];
+        const char *group = NULL;
+        struct barrier *b;
+
+        if (keyval_parse_word (buf, "group", groupbuf, sizeof (groupbuf)) == 0)
+            group = groupbuf;
+        if (!(b = zhashx_lookup (pmi->barriers, group ? group : ""))) {
+            if (!(b = barrier_create (pmi, group))) {
+                if (errno == EINVAL)
+                    goto proto;
+                goto error;
+            }
+            if (zhashx_insert (pmi->barriers, b->name, b) < 0) {
+                barrier_destroy (b);
+                goto error;
+            }
+        }
+        if (b->members && !idset_test (b->members, rank))
+            goto proto; // rank entered a group it is not a member of
+        if (!zlistx_add_end (b->clients, client))
+            goto error;
+        if (zlistx_size (b->clients) == b->expected) {
             if (pmi->ops.barrier_enter) {
-                if (pmi->ops.barrier_enter (pmi->arg) < 0)
-                    if (barrier_exit (pmi, PMI_FAIL) < 0)
+                if (pmi->ops.barrier_enter (pmi->arg, group) < 0)
+                    if (barrier_exit (pmi, b, PMI_FAIL) < 0)
                         rc = -1;
             } else
-                if (barrier_exit (pmi, 0) < 0)
+                if (barrier_exit (pmi, b, 0) < 0)
                     rc = -1;
         }
     }
@@ -434,9 +568,17 @@ error:
     return -1;
 }
 
-int pmi_simple_server_barrier_complete (struct pmi_simple_server *pmi, int rc)
+int pmi_simple_server_barrier_complete (struct pmi_simple_server *pmi,
+                                        const char *group,
+                                        int rc)
 {
-    return barrier_exit (pmi, rc);
+    struct barrier *b;
+
+    if (!(b = zhashx_lookup (pmi->barriers, group ? group : ""))) {
+        errno = ENOENT;
+        return -1;
+    }
+    return barrier_exit (pmi, b, rc);
 }
 
 static int pmi_simple_server_kvs_get_error (struct pmi_simple_server *pmi,
