@@ -28,6 +28,10 @@
 #include "keyval.h"
 #include "pmi.h"
 
+/* Client sends exact required pmi_version and minimum required pmi_subversion.
+ * Server sends client's pmi_version and maximum supported pmi_subversion.
+ * See RFC 13 Version Handshake section for more detail.
+ */
 int pmi_simple_client_init (struct pmi_simple_client *pmi)
 {
     int result = PMI_FAIL;
@@ -50,7 +54,7 @@ int pmi_simple_client_init (struct pmi_simple_client *pmi)
     if (keyval_parse_uint (buf, "pmi_version", &vers) < 0
         || keyval_parse_uint (buf, "pmi_subversion", &subvers) < 0)
         goto done;
-    if (vers != 1 || subvers != 1)
+    if (vers != 1 || subvers < 1)
         goto done;
 
     if (fprintf (pmi->f, "cmd=get_maxes\n") < 0)
