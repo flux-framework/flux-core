@@ -180,6 +180,25 @@ static int fake_finalize (FILE *fp)
     return 0;
 }
 
+/* Send a raw kvs get and read get_result, returning the value in 'val'. */
+static int fake_get (FILE *fp, const char *key, char *val, int len)
+{
+    char buf[SIMPLE_MAX_PROTO_LINE];
+    int rc;
+
+    if (fprintf (fp, "cmd=get kvsname=x key=%s\n", key) < 0 || fflush (fp) < 0)
+        return -1;
+    if (!fgets (buf, sizeof (buf), fp))
+        return -1;
+    if (keyval_parse_isword (buf, "cmd", "get_result") < 0)
+        return -1;
+    if (keyval_parse_int (buf, "rc", &rc) == 0 && rc != 0)
+        return rc;
+    if (val && keyval_parse_string (buf, "value", val, len) < 0)
+        return -1;
+    return 0;
+}
+
 /* Scripted server that answers a single client init with a rigged protocol
  * version, then answers the get_maxes the client sends on a successful init.
  * Responses are delivered in lockstep with the client's requests so that no
@@ -509,6 +528,38 @@ int main (int argc, char *argv[])
         && recv_barrier_out (f0, &ntag) == 0 && ntag == 5
         && recv_barrier_out (f1, &ntag) == 0 && ntag == 5,
         "WORLD barrier with the same tag completed separately");
+
+    /* Out-of-order completion on a single connection: rank 0 has two barriers
+     * outstanding (WORLD:10 then WORLD:11), but WORLD:11 is driven to
+     * completion first.  rank 0 must therefore read tag=11 before tag=10,
+     * which only works because barrier_out is matched by tag, not by order.
+     */
+    int t = -1;
+    ok (send_barrier_in (f0, "WORLD:10") == 0    // A: rank0 in
+        && send_barrier_in (f0, "WORLD:11") == 0 // B: rank0 in
+        && send_barrier_in (f1, "WORLD:11") == 0 // B: rank1 in -> B completes
+        && recv_barrier_out (f0, &t) == 0 && t == 11
+        && recv_barrier_out (f1, &t) == 0 && t == 11,
+        "later-requested barrier (tag 11) completes first");
+    ok (send_barrier_in (f1, "WORLD:10") == 0    // A: rank1 in -> A completes
+        && recv_barrier_out (f0, &t) == 0 && t == 10
+        && recv_barrier_out (f1, &t) == 0 && t == 10,
+        "earlier-requested barrier (tag 10) completes second, matched by tag");
+
+    /* Interleave a non-barrier op on a connection with a barrier pending:
+     * rank 0 enters a barrier (incomplete, needs rank 1), then does a kvs get.
+     * The get is answered while the barrier is still outstanding, proving the
+     * engine is not lock-step per connection.
+     */
+    char getval[SIMPLE_MAX_PROTO_LINE] = "";
+    ok (send_barrier_in (f0, "WORLD:12") == 0    // pending, needs rank 1
+        && fake_get (f0, "test_key", getval, sizeof (getval)) == 0
+        && streq (getval, "test_val"),
+        "kvs get answered while a barrier is pending on the same connection");
+    ok (send_barrier_in (f1, "WORLD:12") == 0    // completes the barrier
+        && recv_barrier_out (f0, &t) == 0 && t == 12
+        && recv_barrier_out (f1, &t) == 0 && t == 12,
+        "the pending barrier then completes (tag 12)");
 
     ok (fake_finalize (f0) == 0 && fake_finalize (f1) == 0,
         "raw clients finalized");
