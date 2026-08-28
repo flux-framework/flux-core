@@ -11,6 +11,10 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <stdio.h>
+#include <unistd.h>
+#include <sys/socket.h>
+#include <pthread.h>
 #include "src/common/libutil/oom.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libpmi/simple_client.h"
@@ -118,6 +122,73 @@ int fake_init (FILE *fp, int version, int subversion)
     return 0;
 }
 
+/* Scripted server that answers a single client init with a rigged protocol
+ * version, then answers the get_maxes the client sends on a successful init.
+ * Responses are delivered in lockstep with the client's requests so that no
+ * response is buffered across a stdio write/read transition (which fails on a
+ * socket without an intervening fflush).
+ */
+struct rig_server {
+    int sfd;
+    int vers;
+    int subvers;
+};
+
+static void *rig_server_thread (void *arg)
+{
+    struct rig_server *r = arg;
+    char buf[SIMPLE_MAX_PROTO_LINE];
+    FILE *fp;
+
+    if (!(fp = fdopen (r->sfd, "r+")))
+        BAIL_OUT ("fdopen failed");
+    if (fgets (buf, sizeof (buf), fp)) { // client's cmd=init
+        fprintf (fp,
+                 "cmd=response_to_init rc=0 pmi_version=%d pmi_subversion=%d\n",
+                 r->vers,
+                 r->subvers);
+        fflush (fp);
+        if (fgets (buf, sizeof (buf), fp)) { // client's cmd=get_maxes (if any)
+            fprintf (fp,
+                     "cmd=maxes rc=0 "
+                     "kvsname_max=64 keylen_max=64 vallen_max=64\n");
+            fflush (fp);
+        }
+    }
+    fclose (fp);
+    return NULL;
+}
+
+/* Run the real client init against a server rigged to report protocol
+ * version vers.subvers, and return the init result.
+ */
+static int client_init_rigged (int vers, int subvers)
+{
+    int fd[2];
+    pthread_t t;
+    struct rig_server r;
+    struct pmi_simple_client *cli;
+    char pmi_fd[16], pmi_rank[16], pmi_size[16];
+    int rc;
+
+    if (socketpair (PF_LOCAL, SOCK_STREAM, 0, fd) < 0)
+        BAIL_OUT ("socketpair failed");
+    r.sfd = fd[1];
+    r.vers = vers;
+    r.subvers = subvers;
+    if (pthread_create (&t, NULL, rig_server_thread, &r) != 0)
+        BAIL_OUT ("pthread_create failed");
+    snprintf (pmi_fd, sizeof (pmi_fd), "%d", fd[0]);
+    snprintf (pmi_rank, sizeof (pmi_rank), "%d", 0);
+    snprintf (pmi_size, sizeof (pmi_size), "%d", 1);
+    if (!(cli = pmi_simple_client_create_fd (pmi_fd, pmi_rank, pmi_size, NULL)))
+        BAIL_OUT ("pmi_simple_client_create_fd failed");
+    rc = pmi_simple_client_init (cli);
+    pmi_simple_client_destroy (cli); // closes fd[0]
+    pthread_join (t, NULL);
+    return rc;
+}
+
 int main (int argc, char *argv[])
 {
     struct pmi_simple_client *cli;
@@ -152,6 +223,17 @@ int main (int argc, char *argv[])
         "fake init for protocol 1.0 succeeds");
     ok (fake_init (cfp, 1, 1) == 0,
         "fake init for protocol 1.1 succeeds");
+
+    /* Client-side negotiation: the client offers 1.1 but MUST accept a
+     * server that bids up to a higher subversion, and MUST reject an
+     * incompatible major version.  (RFC 13 version negotiation.)
+     */
+    ok (client_init_rigged (1, 1) == PMI_SUCCESS,
+        "client init succeeds when server replies pmi_subversion=1");
+    ok (client_init_rigged (1, 2) == PMI_SUCCESS,
+        "client init succeeds when server bids up to pmi_subversion=2");
+    ok (client_init_rigged (2, 0) != PMI_SUCCESS,
+        "client init fails on incompatible pmi_version=2");
 
     /* create/init
      */
