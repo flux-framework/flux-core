@@ -184,8 +184,16 @@ static int put_dict (struct shell_pmi *pmi,
                          "local", local ? 1 : 0);
 }
 
-/* Fixed jobdict exchange tag for the global (all-shells) PMI barrier. */
+/* The jobdict exchange tag is the PMI barrier group string.  The legacy
+ * whole-job barrier (no group) uses the reserved tag PMI_GLOBAL_TAG, which
+ * maps back to a NULL group for the PMI server.
+ */
 #define PMI_GLOBAL_TAG "global"
+
+static const char *tag_to_group (const char *tag)
+{
+    return streq (tag, PMI_GLOBAL_TAG) ? NULL : tag;
+}
 
 /* The jobdict exchange has completed on this shell (successfully or not).
  */
@@ -211,7 +219,7 @@ static int exchange_exit_cb (flux_plugin_t *p,
         shell_warn ("exchange %s: %s", tag, errmsg);
         rc = -1;
     }
-    pmi_simple_server_barrier_complete (pmi->server, rc);
+    pmi_simple_server_barrier_complete (pmi->server, tag_to_group (tag), rc);
     return 0;
 }
 
@@ -258,15 +266,16 @@ static int exchange_kvs_get (void *arg,
 
 /* pmi_simple_ops->barrier_enter() signature.
  *
- * Run a jobdict exchange over all shells, keyed by the fixed global tag,
- * which completes via exchange_exit_cb().
+ * Run a jobdict exchange over all shells, keyed by the group string (the
+ * tag), which completes via exchange_exit_cb().
  */
-static int exchange_barrier_enter (void *arg)
+static int exchange_barrier_enter (void *arg, const char *group)
 {
     struct shell_pmi *pmi = arg;
+    const char *tag = group ? group : PMI_GLOBAL_TAG;
 
     if (pmi->shell->info->shell_size == 1) {
-        pmi_simple_server_barrier_complete (pmi->server, 0);
+        pmi_simple_server_barrier_complete (pmi->server, group, 0);
         return 0;
     }
     return jobdict_call (pmi,
@@ -274,7 +283,7 @@ static int exchange_barrier_enter (void *arg)
                          NULL,
                          "{s:s s:s s:s}",
                          "name", PMI_JOBDICT,
-                         "tag", PMI_GLOBAL_TAG,
+                         "tag", tag,
                          "exit_topic", PMI_EXCHANGE_EXIT_TOPIC);
 }
 
@@ -426,6 +435,7 @@ static struct shell_pmi *pmi_create (flux_plugin_t *p, json_t *config)
     flux_shell_t *shell = flux_plugin_get_shell (p);
     struct shell_pmi *pmi;
     struct shell_info *info = shell->info;
+    const struct idset *local_ranks;
     int flags = shell->verbose ? PMI_SIMPLE_SERVER_TRACE : 0;
     char kvsname[32];
     const char *kvs = "exchange";
@@ -472,10 +482,12 @@ static struct shell_pmi *pmi_create (flux_plugin_t *p, json_t *config)
                             kvsname,
                             sizeof (kvsname)) < 0)
         goto error;
+    local_ranks = taskmap_taskids (info->taskmap, info->shell_rank);
     if (!(pmi->server = pmi_simple_server_create (shell_pmi_ops,
                                                   0, // appnum
                                                   info->total_ntasks,
                                                   info->rankinfo.ntasks,
+                                                  local_ranks,
                                                   kvsname,
                                                   flags,
                                                   pmi)))

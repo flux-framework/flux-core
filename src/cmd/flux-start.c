@@ -791,6 +791,7 @@ void pmi_server_initialize (int flags)
                                             appnum,
                                             ctx.test_size,
                                             ctx.test_size,
+                                            NULL, // no group barriers
                                             ctx.instance_name,
                                             flags,
                                             NULL);
