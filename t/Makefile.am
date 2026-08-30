@@ -505,7 +505,11 @@ dist_check_SCRIPTS = \
 	job-exec/imp-fail.sh \
 	job-list/list-id.py \
 	job-list/job-list-helper.sh \
-	ingest/bad-validate.py
+	ingest/bad-validate.py \
+	asan-scripts/no-asan.sh \
+	asan-scripts/ps \
+	asan-scripts/pkill \
+	asan-scripts/dd
 
 check_PROGRAMS = \
 	content/content_validate \
