@@ -88,6 +88,7 @@ Python class name.  When omitted, :class:`HwlocMapper` is used.
 
 import errno
 import math
+import re
 from pathlib import Path
 
 from flux.cli.argparse import FluxArgumentParser
@@ -98,6 +99,10 @@ from flux.resource import ResourceSet
 SYSFS_PCI_DEVICES = "/sys/bus/pci/devices"
 DEV_DRI = "/dev/dri"
 DEV_PREFIX = "/dev"
+DEV_ROOT = Path(DEV_PREFIX)
+
+# systemd.resource-control(5) DeviceAllow permissions field
+_PERMS_RE = re.compile(r"^[rwm]{1,3}$")
 
 # Driver names
 NVIDIA_DRIVER = "nvidia"
@@ -176,6 +181,69 @@ def _scale_memory_prop(value_str, alloc, total):
     if is_pct:
         return f"{round(scaled)}%"
     return str(int(scaled))
+
+
+def _is_device_node(path):
+    """True if path is a char or block device resolving within /dev.
+
+    Some /dev entries are symlinks (e.g. /dev/dri/by-path/*), so the target is
+    resolved rather than rejected, but a symlink pointing outside /dev must not
+    widen the allowlist.
+    """
+    if not (path.is_char_device() or path.is_block_device()):
+        return False
+    try:
+        real = path.resolve(strict=True)
+    except OSError:
+        return False
+    return real == DEV_ROOT or DEV_ROOT in real.parents
+
+
+def expand_allowed_devices(patterns):
+    """Expand configured device path globs to DeviceAllow entries.
+
+    Each entry in patterns is a path glob under /dev, optionally followed by
+    whitespace and a systemd permissions field. Permissions default to "rw".
+    Globs are expanded relative to /dev, so a pattern cannot escape upward,
+    recursive "**" globs are rejected, and each result must be a char or block
+    device node.
+
+    A pattern that matches nothing is silently ignored. This lets a site use
+    one global allowed-devices policy across nodes with different hardware: a
+    node simply grants the devices it has and skips the rest.
+
+    Args:
+        patterns: List of configured pattern strings.
+
+    Returns:
+        Deduplicated list of "<path> <perms>" strings.
+
+    Raises:
+        ValueError: A pattern is malformed or not under /dev.
+    """
+    result = []
+    for entry in patterns or []:
+        if not isinstance(entry, str):
+            raise ValueError(f"allowed-devices entry is not a string: {entry!r}")
+        fields = entry.split()
+        if not fields:
+            raise ValueError("allowed-devices entry is empty")
+        if len(fields) > 2:
+            raise ValueError(f"too many fields in allowed-devices entry: {entry!r}")
+        pattern = fields[0]
+        perms = fields[1] if len(fields) > 1 else "rw"
+        if not _PERMS_RE.match(perms):
+            raise ValueError(f"invalid device permissions in {entry!r}")
+        if not pattern.startswith(f"{DEV_PREFIX}/"):
+            raise ValueError(f"device pattern must be under {DEV_PREFIX}: {pattern!r}")
+        rel = pattern[len(DEV_PREFIX) + 1 :]
+        parts = Path(rel).parts
+        if not rel or ".." in parts or "**" in parts:
+            raise ValueError(f"invalid device pattern: {pattern!r}")
+        matches = sorted(DEV_ROOT.glob(rel))
+        devices = [p for p in matches if _is_device_node(p)]
+        result.extend(f"{path} {perms}" for path in devices)
+    return list(dict.fromkeys(result))
 
 
 class ResourceMapper:
