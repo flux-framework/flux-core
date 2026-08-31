@@ -84,6 +84,13 @@ Configuration
 The sdexec broker module loads the mapper class named by the
 ``[sdexec] mapper`` TOML config key.  The value must be a fully-qualified
 Python class name.  When omitted, :class:`HwlocMapper` is used.
+
+The ``[sdexec] allowed-devices`` config key holds a list of device path globs
+under ``/dev`` that are unconditionally merged into ``DeviceAllow`` for every
+job, independent of its resource allocation. The sdexec-mapper module applies
+this allowlist to the mapper's output (see :func:`expand_allowed_devices` and
+:func:`merge_allowed_devices`), so it works with any mapper class regardless of
+its constructor.
 """
 
 import errno
@@ -246,6 +253,35 @@ def expand_allowed_devices(patterns):
     return list(dict.fromkeys(result))
 
 
+def merge_allowed_devices(properties, allowed_devices):
+    """Merge a static device allowlist into a mapper's DeviceAllow property.
+
+    The allowlist is site policy applied by the sdexec-mapper module to the
+    output of any mapper, so it lives here rather than in a mapper class: a
+    custom :class:`ResourceMapper` that never calls ``super().__init__`` still
+    gets the configured devices. Entries are merged with, not substituted for,
+    any ``DeviceAllow`` set by the mapper's ``map_<type>()`` methods.
+
+    An empty *properties* dict is left untouched: a mapper returns ``{}`` to
+    request unconstrained execution, and adding ``DeviceAllow`` would flip that
+    to a constrained unit.
+
+    Args:
+        properties: Dict of systemd unit properties from a mapper's ``map()``.
+        allowed_devices: List of pre-expanded ``"<path> <perms>"`` entries,
+            as returned by :func:`expand_allowed_devices`.
+
+    Returns:
+        The *properties* dict, modified in place.
+    """
+    if properties and allowed_devices:
+        existing = properties.get("DeviceAllow", "")
+        entries = [e.strip() for e in existing.split(",") if e.strip()]
+        entries.extend(allowed_devices)
+        properties["DeviceAllow"] = ",".join(dict.fromkeys(entries))
+    return properties
+
+
 class ResourceMapper:
     """Base class for resource ID to systemd unit property mappers.
 
@@ -305,7 +341,9 @@ class ResourceMapper:
         by allowing access to standard pseudo devices (/dev/null, /dev/zero,
         etc.) while blocking physical devices unless explicitly allowed via
         ``DeviceAllow`` (set by resource mappers like
-        :meth:`~HwlocMapper.map_gpus`).
+        :meth:`~HwlocMapper.map_gpus`). The static ``sdexec.allowed-devices``
+        allowlist is applied separately by the sdexec-mapper module (see
+        :func:`merge_allowed_devices`), not here.
 
         An empty properties dict is left empty, preserving the ability for
         custom mappers to return ``{}`` to indicate unconstrained execution
@@ -657,6 +695,14 @@ def main(args=None):
         default=None,
         help="fully-qualified mapper class (default: flux.sdexec.map.HwlocMapper)",
     )
+    parser.add_argument(
+        "--allowed-devices",
+        metavar="PATTERN",
+        action="append",
+        default=[],
+        help="device path glob to allow for all jobs (repeatable); "
+        "expanded against the local /dev",
+    )
     opts = parser.parse_args(args)
 
     xml = _get_system_xml(opts.xml)
@@ -672,6 +718,10 @@ def main(args=None):
     else:
         cls = HwlocMapper
 
+    try:
+        allowed = expand_allowed_devices(opts.allowed_devices)
+    except ValueError as exc:
+        raise SystemExit(f"--allowed-devices: {exc}")
     mapper = cls(xml)
     R = _build_R(cores=opts.cores or None, gpus=opts.gpus or None)
     try:
@@ -679,6 +729,7 @@ def main(args=None):
     except OSError as exc:
         print(f"mapper failed: {exc}", file=sys.stderr)
         return 1
+    merge_allowed_devices(result, allowed)
 
     print(json.dumps(result, indent=2))
     return 0
