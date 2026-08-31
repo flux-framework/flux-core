@@ -7,9 +7,13 @@ systemdsystemunit_DATA = \
 #endif
 
 tmpfilesdir = $(prefix)/lib/tmpfiles.d
+crondailydir = $(sysconfdir)/cron.daily
 fluxrc1dir = $(fluxconfdir)/rc1.d
 
 tmpfiles_DATA = flux.conf
+
+dist_crondaily_SCRIPTS = \
+	cron.daily/50-flux-dump
 
 nobase_dist_fluxlibexec_DATA = \
 	modprobe/rc1.py \
