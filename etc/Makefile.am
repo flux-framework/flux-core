@@ -13,7 +13,8 @@ fluxrc1dir = $(fluxconfdir)/rc1.d
 tmpfiles_DATA = flux.conf
 
 dist_crondaily_SCRIPTS = \
-	cron.daily/50-flux-dump
+	cron.daily/50-flux-dump \
+	cron.daily/51-flux-gc
 
 nobase_dist_fluxlibexec_DATA = \
 	modprobe/rc1.py \
