@@ -191,18 +191,30 @@ def cron_load(context):
 def push_cleanup(context):
     if "FLUX_DISABLE_JOB_CLEANUP" in os.environ:
         return
-    context.rpc(
-        "runat.push",
-        {
-            "name": "cleanup",
-            "commands": [
-                "flux queue idle --quiet",
-                "flux cancel --user=all --quiet --states RUN",
-                "flux resource acquire-mute",
-                "flux queue stop --quiet --all --nocheckpoint",
-            ],
-        },
-    ).get()
+    # N.B. runat.push is LIFO, so the commands below execute in reverse of
+    # list order, i.e. queue stop, acquire-mute, cancel, idle.
+    commands = [
+        "flux resource acquire-mute",
+        "flux queue stop --quiet --all --nocheckpoint",
+    ]
+    # Jobs survive a broker restart and are recovered at startup only when both
+    # the transport survives the broker (exec.service=sdexec, i.e. systemd
+    # units outside the broker) and the exec method can reattach to them
+    # (exec.method=bgexec, which posts the RFC 50 recoverable event).  Only
+    # then is it safe to leave jobs running instead of canceling them and
+    # waiting for the queue to drain: with any other combination a leftover job
+    # cannot be reattached and would fail on restart with its unit leaked.
+    # Selecting bgexec (not the default) is itself the opt-in to recovery.
+    recover = (
+        context.conf_get("exec.service", "rexec") == "sdexec"
+        and context.conf_get("exec.method", "bulk-exec") == "bgexec"
+    )
+    if not recover:
+        commands = [
+            "flux queue idle --quiet",
+            "flux cancel --user=all --quiet --states RUN",
+        ] + commands
+    context.rpc("runat.push", {"name": "cleanup", "commands": commands}).get()
 
 
 @task(
