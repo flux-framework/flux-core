@@ -239,6 +239,32 @@ system units are drained *and* the user-clean signal has arrived).  Because a
 request to an unloaded module is lost rather than queued, sdmon must be
 loaded before sdexec (enforced by modprobe ordering).
 
+Preserving Jobs Across a Broker Restart
+=======================================
+
+By default the broker's shutdown *cleanup* phase cancels all running jobs and
+waits for the queue to drain.  This is the right behavior for the ``rexec``
+service, whose processes die with the broker anyway.  With sdexec, the units
+keep running and are recovered at the next startup, so canceling them at
+shutdown would needlessly kill work that could otherwise survive.
+
+When the instance is configured to recover jobs across a broker restart, the
+cleanup phase omits the job cancellation and idle-drain, leaving ``flux queue
+stop`` and ``flux resource acquire-mute`` in place.  Running jobs are then
+checkpointed in the ``RUN`` state and adopted after the broker comes back.
+This happens automatically when *both* keys are set:
+
+- ``exec.service = sdexec`` — the units run outside the broker (in the user
+  systemd instance) and so survive its exit; and
+- ``exec.method = bgexec`` — the exec backend posts the RFC 50 *recoverable*
+  event and implements reattach, so a replayed ``RUN`` job is re-adopted
+  rather than failed.
+
+Both are non-default, so selecting them *is* the opt-in to recovery.  With any
+other combination the cleanup phase still cancels running jobs: a leftover job
+that no backend can reattach would otherwise fail on restart with its unit
+leaked.
+
 ********************
 sdexec-mapper Module
 ********************
