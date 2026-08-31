@@ -7,13 +7,9 @@ systemdsystemunit_DATA = \
 #endif
 
 tmpfilesdir = $(prefix)/lib/tmpfiles.d
-crondir = $(fluxconfdir)/system/cron.d
 fluxrc1dir = $(fluxconfdir)/rc1.d
 
 tmpfiles_DATA = flux.conf
-
-dist_cron_DATA = \
-	kvs-backup.cron
 
 nobase_dist_fluxlibexec_DATA = \
 	modprobe/rc1.py \
