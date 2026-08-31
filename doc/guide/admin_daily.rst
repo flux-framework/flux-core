@@ -38,10 +38,12 @@ This state is held in the ``content.sqlite`` that was configured above.
 See also :man1:`flux-shutdown`.
 
 .. note::
-    ``flux-shutdown --gc`` should be used from time to time to perform offline
-    KVS garbage collection.  This, in conjunction with configuring inactive
-    job purging, keeps the size of the ``content.sqlite`` database in check
-    and improves Flux startup time.
+    Routine garbage collection is handled automatically by the daily
+    ``51-flux-gc`` job described under `KVS maintenance`_ below.
+    ``flux-shutdown --gc`` may still be used to perform offline garbage
+    collection during a planned restart.  Either, in conjunction with
+    configuring inactive job purging, keeps the size of the ``content.sqlite``
+    database in check and improves Flux startup time.
 
 The brokers on other nodes will automatically shut down in response,
 then respawn, awaiting the return of the rank 0 broker.
@@ -53,6 +55,28 @@ To shut down a single node running Flux, simply run
  $ sudo systemctl stop flux
 
 on that node.
+
+KVS maintenance
+===============
+
+Flux installs the following scripts under ``/etc/cron.daily`` that perform
+routine key-value store maintenance on the rank 0 node once per day:
+
+- ``50-flux-dump`` writes a KVS snapshot to the ``dump`` subdirectory of the
+  ``statedir`` using :man1:`flux-dump` for emergency recovery purposes.
+
+- ``51-flux-gc`` performs online garbage collection of the KVS using
+  :man1:`flux-gc`, reclaiming space from unreferenced blobs while
+  the instance keeps running.
+
+Both scripts exit silently on any node that is not rank 0, or when the broker
+is not running, so the package may be installed uniformly across the cluster.
+
+To disable either job, remove its execute bit:
+
+.. code-block:: console
+
+ $ sudo chmod -x /etc/cron.daily/51-flux-gc
 
 Configuration update
 ====================
