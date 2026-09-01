@@ -39,6 +39,9 @@ which is initialized to the calling process's PID.
 application name, which is initialized to the value of the :var:`__progname`
 symbol (normally the :var:`argv[0]` program name).
 
+Logging is restricted to the Flux instance owner and silently fails
+if the caller does not have sufficient privilege.
+
 
 RETURN VALUE
 ============
