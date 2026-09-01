@@ -84,10 +84,18 @@ Configuration
 The sdexec broker module loads the mapper class named by the
 ``[sdexec] mapper`` TOML config key.  The value must be a fully-qualified
 Python class name.  When omitted, :class:`HwlocMapper` is used.
+
+The ``[sdexec] allowed-devices`` config key holds a list of device path globs
+under ``/dev`` that are unconditionally merged into ``DeviceAllow`` for every
+job, independent of its resource allocation. The sdexec-mapper module applies
+this allowlist to the mapper's output (see :func:`expand_allowed_devices` and
+:func:`merge_allowed_devices`), so it works with any mapper class regardless of
+its constructor.
 """
 
 import errno
 import math
+import re
 from pathlib import Path
 
 from flux.cli.argparse import FluxArgumentParser
@@ -98,6 +106,10 @@ from flux.resource import ResourceSet
 SYSFS_PCI_DEVICES = "/sys/bus/pci/devices"
 DEV_DRI = "/dev/dri"
 DEV_PREFIX = "/dev"
+DEV_ROOT = Path(DEV_PREFIX)
+
+# systemd.resource-control(5) DeviceAllow permissions field
+_PERMS_RE = re.compile(r"^[rwm]{1,3}$")
 
 # Driver names
 NVIDIA_DRIVER = "nvidia"
@@ -178,6 +190,98 @@ def _scale_memory_prop(value_str, alloc, total):
     return str(int(scaled))
 
 
+def _is_device_node(path):
+    """True if path is a char or block device resolving within /dev.
+
+    Some /dev entries are symlinks (e.g. /dev/dri/by-path/*), so the target is
+    resolved rather than rejected, but a symlink pointing outside /dev must not
+    widen the allowlist.
+    """
+    if not (path.is_char_device() or path.is_block_device()):
+        return False
+    try:
+        real = path.resolve(strict=True)
+    except OSError:
+        return False
+    return real == DEV_ROOT or DEV_ROOT in real.parents
+
+
+def expand_allowed_devices(patterns):
+    """Expand configured device path globs to DeviceAllow entries.
+
+    Each entry in patterns is a path glob under /dev, optionally followed by
+    whitespace and a systemd permissions field. Permissions default to "rw".
+    Globs are expanded relative to /dev, so a pattern cannot escape upward,
+    recursive "**" globs are rejected, and each result must be a char or block
+    device node.
+
+    A pattern that matches nothing is silently ignored. This lets a site use
+    one global allowed-devices policy across nodes with different hardware: a
+    node simply grants the devices it has and skips the rest.
+
+    Args:
+        patterns: List of configured pattern strings.
+
+    Returns:
+        Deduplicated list of "<path> <perms>" strings.
+
+    Raises:
+        ValueError: A pattern is malformed or not under /dev.
+    """
+    result = []
+    for entry in patterns or []:
+        if not isinstance(entry, str):
+            raise ValueError(f"allowed-devices entry is not a string: {entry!r}")
+        fields = entry.split()
+        if not fields:
+            raise ValueError("allowed-devices entry is empty")
+        if len(fields) > 2:
+            raise ValueError(f"too many fields in allowed-devices entry: {entry!r}")
+        pattern = fields[0]
+        perms = fields[1] if len(fields) > 1 else "rw"
+        if not _PERMS_RE.match(perms):
+            raise ValueError(f"invalid device permissions in {entry!r}")
+        if not pattern.startswith(f"{DEV_PREFIX}/"):
+            raise ValueError(f"device pattern must be under {DEV_PREFIX}: {pattern!r}")
+        rel = pattern[len(DEV_PREFIX) + 1 :]
+        parts = Path(rel).parts
+        if not rel or ".." in parts or "**" in parts:
+            raise ValueError(f"invalid device pattern: {pattern!r}")
+        matches = sorted(DEV_ROOT.glob(rel))
+        devices = [p for p in matches if _is_device_node(p)]
+        result.extend(f"{path} {perms}" for path in devices)
+    return list(dict.fromkeys(result))
+
+
+def merge_allowed_devices(properties, allowed_devices):
+    """Merge a static device allowlist into a mapper's DeviceAllow property.
+
+    The allowlist is site policy applied by the sdexec-mapper module to the
+    output of any mapper, so it lives here rather than in a mapper class: a
+    custom :class:`ResourceMapper` that never calls ``super().__init__`` still
+    gets the configured devices. Entries are merged with, not substituted for,
+    any ``DeviceAllow`` set by the mapper's ``map_<type>()`` methods.
+
+    An empty *properties* dict is left untouched: a mapper returns ``{}`` to
+    request unconstrained execution, and adding ``DeviceAllow`` would flip that
+    to a constrained unit.
+
+    Args:
+        properties: Dict of systemd unit properties from a mapper's ``map()``.
+        allowed_devices: List of pre-expanded ``"<path> <perms>"`` entries,
+            as returned by :func:`expand_allowed_devices`.
+
+    Returns:
+        The *properties* dict, modified in place.
+    """
+    if properties and allowed_devices:
+        existing = properties.get("DeviceAllow", "")
+        entries = [e.strip() for e in existing.split(",") if e.strip()]
+        entries.extend(allowed_devices)
+        properties["DeviceAllow"] = ",".join(dict.fromkeys(entries))
+    return properties
+
+
 class ResourceMapper:
     """Base class for resource ID to systemd unit property mappers.
 
@@ -237,7 +341,9 @@ class ResourceMapper:
         by allowing access to standard pseudo devices (/dev/null, /dev/zero,
         etc.) while blocking physical devices unless explicitly allowed via
         ``DeviceAllow`` (set by resource mappers like
-        :meth:`~HwlocMapper.map_gpus`).
+        :meth:`~HwlocMapper.map_gpus`). The static ``sdexec.allowed-devices``
+        allowlist is applied separately by the sdexec-mapper module (see
+        :func:`merge_allowed_devices`), not here.
 
         An empty properties dict is left empty, preserving the ability for
         custom mappers to return ``{}`` to indicate unconstrained execution
@@ -589,6 +695,14 @@ def main(args=None):
         default=None,
         help="fully-qualified mapper class (default: flux.sdexec.map.HwlocMapper)",
     )
+    parser.add_argument(
+        "--allowed-devices",
+        metavar="PATTERN",
+        action="append",
+        default=[],
+        help="device path glob to allow for all jobs (repeatable); "
+        "expanded against the local /dev",
+    )
     opts = parser.parse_args(args)
 
     xml = _get_system_xml(opts.xml)
@@ -604,6 +718,10 @@ def main(args=None):
     else:
         cls = HwlocMapper
 
+    try:
+        allowed = expand_allowed_devices(opts.allowed_devices)
+    except ValueError as exc:
+        raise SystemExit(f"--allowed-devices: {exc}")
     mapper = cls(xml)
     R = _build_R(cores=opts.cores or None, gpus=opts.gpus or None)
     try:
@@ -611,6 +729,7 @@ def main(args=None):
     except OSError as exc:
         print(f"mapper failed: {exc}", file=sys.stderr)
         return 1
+    merge_allowed_devices(result, allowed)
 
     print(json.dumps(result, indent=2))
     return 0

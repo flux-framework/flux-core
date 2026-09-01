@@ -14,15 +14,18 @@ import io
 import json
 import math
 import os
+import re
+import stat as stat_mod
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 from unittest.mock import patch
 
 import flux.sdexec.map as m
 import subflux  # noqa: F401 - for PYTHONPATH
 from flux.idset import IDset
-from flux.sdexec.map import HwlocMapper, ResourceMapper
+from flux.sdexec.map import HwlocMapper, ResourceMapper, merge_allowed_devices
 from pycotap import TAPTestRunner
 
 os.environ["PATH"] = (
@@ -536,6 +539,75 @@ class TestFinalizeProperties(unittest.TestCase):
         self.assertEqual(result["DevicePolicy"], "closed")
 
 
+class TestMergeAllowedDevices(unittest.TestCase):
+    """Test merge_allowed_devices(), which applies the static allowlist to a
+    mapper's output independent of the mapper class."""
+
+    DEVLINK = re.compile(r"^\S+ [rwm]{1,3}$")
+
+    def _assert_valid_entries(self, device_allow):
+        """Every DeviceAllow entry has exactly one space and non-empty perms."""
+        for entry in device_allow.split(","):
+            self.assertRegex(entry, self.DEVLINK)
+
+    def test_no_existing_device_allow(self):
+        """With no mapper DeviceAllow, the entry comes from the allowlist alone."""
+        props = {"AllowedCPUs": "0-1", "DevicePolicy": "closed"}
+        merge_allowed_devices(props, ["/dev/cxi0 rw"])
+        self.assertEqual(props["DeviceAllow"], "/dev/cxi0 rw")
+        self._assert_valid_entries(props["DeviceAllow"])
+
+    def test_appended_to_existing(self):
+        """Allowlist entries are appended to a mapper-set DeviceAllow value."""
+        props = {"DeviceAllow": "/dev/dri/renderD128 rw", "DevicePolicy": "closed"}
+        merge_allowed_devices(props, ["/dev/cxi0 rw"])
+        entries = props["DeviceAllow"].split(",")
+        self.assertIn("/dev/dri/renderD128 rw", entries)
+        self.assertIn("/dev/cxi0 rw", entries)
+        self._assert_valid_entries(props["DeviceAllow"])
+
+    def test_duplicate_appears_once(self):
+        """An allowlist entry duplicating a mapper device is deduplicated."""
+        props = {"DeviceAllow": "/dev/dri/renderD128 rw"}
+        merge_allowed_devices(props, ["/dev/dri/renderD128 rw"])
+        entries = props["DeviceAllow"].split(",")
+        self.assertEqual(entries.count("/dev/dri/renderD128 rw"), 1)
+
+    def test_empty_properties_stays_empty(self):
+        """Empty properties (unconstrained execution) are not turned on."""
+        props = {}
+        merge_allowed_devices(props, ["/dev/cxi0 rw"])
+        self.assertEqual(props, {})
+
+    def test_empty_allowlist_is_noop(self):
+        """An empty or None allowlist leaves properties unchanged."""
+        base = {"AllowedCPUs": "0-1", "DevicePolicy": "closed"}
+        for allowed in (None, []):
+            props = dict(base)
+            merge_allowed_devices(props, allowed)
+            self.assertEqual(props, base)
+            self.assertNotIn("DeviceAllow", props)
+
+    def test_returns_same_dict(self):
+        """merge_allowed_devices modifies and returns the same dict."""
+        props = {"DevicePolicy": "closed"}
+        self.assertIs(merge_allowed_devices(props, ["/dev/cxi0 rw"]), props)
+
+    def test_applies_to_any_mapper_output(self):
+        """The merge applies to a custom mapper that never calls super().__init__."""
+
+        class BespokeMapper(ResourceMapper):
+            def __init__(self):  # deliberately ignores the base constructor
+                self._rank = 0
+
+            def map_cores(self, cores):
+                return {"AllowedCPUs": cores}
+
+        result = BespokeMapper().map(make_R(cores="0"))
+        merge_allowed_devices(result, ["/dev/cxi0 rw"])
+        self.assertEqual(result["DeviceAllow"], "/dev/cxi0 rw")
+
+
 class TestParseSize(unittest.TestCase):
     """Test the _parse_size() helper."""
 
@@ -722,6 +794,163 @@ class TestHwlocMapperMemoryMax(unittest.TestCase):
         self.assertEqual(received["extra"], ep)
 
 
+class _FakeDev:
+    """Describe a fake /dev entry for the expand_allowed_devices tests.
+
+    kind is one of "char", "block", "file", "dir", or "symlink". For a
+    symlink, target is the resolved path (a string).
+    """
+
+    def __init__(self, kind, target=None):
+        self.kind = kind
+        self.target = target
+
+
+class TestExpandAllowedDevices(unittest.TestCase):
+    """Test expand_allowed_devices() against a patched fake /dev.
+
+    No broker and no real /dev dependency: Path.glob, Path.stat, and
+    Path.resolve are patched to describe a synthetic device tree.
+    """
+
+    def setUp(self):
+        # Map of absolute path string -> _FakeDev describing it.
+        self.tree = {}
+
+    def _expand(self, patterns):
+        tree = self.tree
+
+        def fake_glob(path_self, pattern):
+            prefix = str(path_self)
+            matched = []
+            for p in tree:
+                if not p.startswith(prefix + "/"):
+                    continue
+                rel = p[len(prefix) + 1 :]
+                if Path(rel).match(pattern):
+                    matched.append(Path(p))
+            return matched
+
+        def fake_stat(path_self):
+            entry = tree.get(str(path_self))
+            if entry is None:
+                raise OSError(errno.ENOENT, "no such fake device")
+            if entry.kind == "char":
+                mode = stat_mod.S_IFCHR
+            elif entry.kind == "block":
+                mode = stat_mod.S_IFBLK
+            elif entry.kind == "dir":
+                mode = stat_mod.S_IFDIR
+            elif entry.kind == "symlink":
+                # stat() follows the link to its target
+                target = tree.get(entry.target)
+                if target is None:
+                    raise OSError(errno.ENOENT, "dangling symlink")
+                mode = stat_mod.S_IFCHR if target.kind == "char" else stat_mod.S_IFBLK
+            else:
+                mode = stat_mod.S_IFREG
+            st = mock.Mock()
+            st.st_mode = mode
+            return st
+
+        def fake_resolve(path_self, strict=False):
+            entry = tree.get(str(path_self))
+            if entry is not None and entry.kind == "symlink":
+                return Path(entry.target)
+            return path_self
+
+        with patch.object(Path, "glob", fake_glob), patch.object(
+            Path, "stat", fake_stat
+        ), patch.object(Path, "resolve", fake_resolve):
+            return m.expand_allowed_devices(patterns)
+
+    def test_single_literal(self):
+        self.tree = {"/dev/cxi0": _FakeDev("char")}
+        self.assertEqual(self._expand(["/dev/cxi0"]), ["/dev/cxi0 rw"])
+
+    def test_glob_multiple_sorted(self):
+        self.tree = {
+            "/dev/cxi1": _FakeDev("char"),
+            "/dev/cxi0": _FakeDev("char"),
+        }
+        self.assertEqual(self._expand(["/dev/cxi*"]), ["/dev/cxi0 rw", "/dev/cxi1 rw"])
+
+    def test_explicit_perms(self):
+        self.tree = {"/dev/cxi0": _FakeDev("char")}
+        self.assertEqual(self._expand(["/dev/cxi* r"]), ["/dev/cxi0 r"])
+
+    def test_perms_separated_by_any_whitespace(self):
+        # The pattern and perms may be separated by any whitespace run, not
+        # just a single space.
+        self.tree = {"/dev/cxi0": _FakeDev("char")}
+        self.assertEqual(self._expand(["/dev/cxi0\tr"]), ["/dev/cxi0 r"])
+        self.assertEqual(self._expand(["/dev/cxi0   rw"]), ["/dev/cxi0 rw"])
+
+    def test_invalid_perms_raises(self):
+        with self.assertRaises(ValueError):
+            self._expand(["/dev/foo x"])
+        with self.assertRaises(ValueError):
+            self._expand(["/dev/foo rwmx"])
+
+    def test_too_many_fields_raises(self):
+        with self.assertRaises(ValueError):
+            self._expand(["/dev/foo rw extra"])
+
+    def test_empty_entry_raises(self):
+        with self.assertRaises(ValueError):
+            self._expand(["   "])
+
+    def test_pattern_not_under_dev_raises(self):
+        for bad in ["/etc/*", "dev/cxi0", "/dev"]:
+            with self.assertRaises(ValueError):
+                self._expand([bad])
+
+    def test_pattern_with_dotdot_raises(self):
+        with self.assertRaises(ValueError):
+            self._expand(["/dev/../etc/shadow"])
+
+    def test_recursive_glob_rejected(self):
+        # "**" would recurse into subdirectories of /dev; reject it explicitly.
+        for bad in ["/dev/**", "/dev/**/cxi0"]:
+            with self.assertRaises(ValueError):
+                self._expand([bad])
+
+    def test_non_string_entry_raises(self):
+        with self.assertRaises(ValueError):
+            self._expand([42])
+
+    def test_regular_file_skipped(self):
+        self.tree = {"/dev/notadev": _FakeDev("file")}
+        self.assertEqual(self._expand(["/dev/notadev"]), [])
+
+    def test_directory_skipped(self):
+        self.tree = {"/dev/shm": _FakeDev("dir")}
+        self.assertEqual(self._expand(["/dev/shm"]), [])
+
+    def test_symlink_outside_dev_skipped(self):
+        self.tree = {
+            "/dev/evil": _FakeDev("symlink", target="/tmp/evil"),
+            "/tmp/evil": _FakeDev("char"),
+        }
+        self.assertEqual(self._expand(["/dev/evil"]), [])
+
+    def test_symlink_inside_dev_returned(self):
+        self.tree = {
+            "/dev/link": _FakeDev("symlink", target="/dev/cxi0"),
+            "/dev/cxi0": _FakeDev("char"),
+        }
+        self.assertEqual(self._expand(["/dev/link"]), ["/dev/link rw"])
+
+    def test_no_match_silently_ignored(self):
+        # A glob matching nothing yields no entries and raises nothing, so a
+        # global allowed-devices policy works across heterogeneous nodes.
+        self.assertEqual(self._expand(["/dev/nomatch*"]), [])
+
+    def test_duplicate_patterns_deduplicated(self):
+        self.tree = {"/dev/cxi0": _FakeDev("char")}
+        self.assertEqual(self._expand(["/dev/cxi0", "/dev/cxi0"]), ["/dev/cxi0 rw"])
+
+
 class TestMain(unittest.TestCase):
     """Test the main() CLI entry point."""
 
@@ -782,6 +1011,24 @@ class TestMain(unittest.TestCase):
         ):
             ret = m.main(["--cores=0"])
         self.assertEqual(ret, 1)
+
+    def test_allowed_devices_merged(self):
+        """--allowed-devices entries appear in DeviceAllow."""
+        captured = io.StringIO()
+        with patch.object(m, "_get_system_xml", return_value=HWLOC_XML), patch.object(
+            m, "expand_allowed_devices", return_value=["/dev/null rw"]
+        ), patch("sys.stdout", captured):
+            ret = m.main(["--cores=0", "--allowed-devices=/dev/null"])
+        self.assertEqual(ret, 0)
+        result = json.loads(captured.getvalue())
+        self.assertEqual(result["DeviceAllow"], "/dev/null rw")
+        self.assertEqual(result["DevicePolicy"], "closed")
+
+    def test_allowed_devices_bad_pattern_exits(self):
+        """A malformed --allowed-devices pattern raises SystemExit."""
+        with patch.object(m, "_get_system_xml", return_value=HWLOC_XML):
+            with self.assertRaises(SystemExit):
+                m.main(["--cores=0", "--allowed-devices=/etc/passwd"])
 
 
 if __name__ == "__main__":

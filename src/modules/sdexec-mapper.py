@@ -25,9 +25,13 @@ substituted via broker configuration::
 
     [sdexec]
     mapper = "mypackage.mymodule.MyMapper"
+    allowed-devices = [ "/dev/cxi*" ]
 
 The custom class must accept the same constructor arguments as
-:class:`~flux.sdexec.map.HwlocMapper` (xml).
+:class:`~flux.sdexec.map.HwlocMapper` (xml). ``sdexec.allowed-devices`` is a
+list of device path globs under ``/dev`` that this module merges into every
+job's ``DeviceAllow`` after the mapper runs, so it applies to any mapper class
+regardless of its constructor.
 
 Load with::
 
@@ -38,7 +42,7 @@ import errno
 import importlib
 
 from flux.brokermod import BrokerModule, request_handler
-from flux.sdexec.map import HwlocMapper
+from flux.sdexec.map import HwlocMapper, expand_allowed_devices, merge_allowed_devices
 
 
 def _load_mapper_class(dotted_name):
@@ -61,6 +65,8 @@ class SdexecMapModule(BrokerModule):
         self._mapper = None
         self._mapper_class = None
         self._mapper_searchpath = None
+        self._allowed_device_patterns = None
+        self._allowed_devices = None
         self._sdexec_props = None
         self._requests = 0
 
@@ -97,6 +103,14 @@ class SdexecMapModule(BrokerModule):
             self._mapper_class = "flux.sdexec.map.HwlocMapper"
 
         self._mapper_searchpath = searchpath
+
+        patterns = self.handle.conf_get("sdexec.allowed-devices", default=[])
+        if not isinstance(patterns, list):
+            raise ValueError("sdexec.allowed-devices is not an array")
+        allowed = expand_allowed_devices(patterns)
+
+        self._allowed_device_patterns = patterns
+        self._allowed_devices = allowed
         self._mapper = cls(self._xml, rank)
         self._sdexec_props = self.handle.conf_get("exec.sdexec-properties", default={})
 
@@ -118,6 +132,7 @@ class SdexecMapModule(BrokerModule):
             result = self._mapper.map(
                 msg.payload["R"], extra_properties=self._sdexec_props
             )
+            merge_allowed_devices(result, self._allowed_devices)
             self._requests += 1
             self.handle.respond(msg, result)
         except OSError as exc:
@@ -139,6 +154,8 @@ class SdexecMapModule(BrokerModule):
             self._mapper = None
             self._mapper_class = None
             self._mapper_searchpath = None
+            self._allowed_device_patterns = None
+            self._allowed_devices = None
             self._sdexec_props = None
             self.handle.respond(msg)
         except Exception as exc:
@@ -159,6 +176,8 @@ class SdexecMapModule(BrokerModule):
                 "config": {
                     "mapper_class": self._mapper_class,
                     "mapper_searchpath": self._mapper_searchpath or "",
+                    "allowed_device_patterns": self._allowed_device_patterns or [],
+                    "allowed_devices": self._allowed_devices or [],
                 },
                 "requests": self._requests,
             }

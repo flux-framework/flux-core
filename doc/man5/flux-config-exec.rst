@@ -286,7 +286,9 @@ The following unit properties are reserved for use by Flux and should not be
 added to ``exec.sdexec-properties``: AllowedCPUs, AllowedMemoryNodes, DeviceAllow,
 DevicePolicy, Description, Environment, ExecStart, KillMode, RemainAfterExit,
 SendSIGKILL, StandardInputFileDescriptor, StandardOutputFileDescriptor,
-StandardErrorFileDescriptor, TimeoutStopUSec, Type, WorkingDirectory.
+StandardErrorFileDescriptor, TimeoutStopUSec, Type, WorkingDirectory. To allow
+additional devices, use ``sdexec.allowed-devices`` (see :ref:`sdexec_mapper`)
+rather than ``DeviceAllow``.
 
 
 .. _sdexec_mapper:
@@ -314,6 +316,33 @@ sdexec.mapper-searchpath
    (optional) Colon-separated list of directories to search for mapper modules.
    This allows loading custom mappers from site-specific locations without
    modifying the Python system path. (Default: empty).
+
+sdexec.allowed-devices
+   (optional) A list of device path globs allowed for every job regardless of
+   its resource allocation. This is the supported way to grant access to a
+   device that all jobs need, such as a network device (e.g. ``/dev/cxi*``
+   on HPE Slingshot), when ``sdexec-constrain-resources`` is enabled.
+   (Default: empty).
+
+   Each entry is a path glob under ``/dev``, optionally followed by whitespace
+   and a systemd permissions field (``r``, ``w``, ``m``); the default is
+   ``rw``. Recursive ``**`` globs are not allowed. Each match must resolve to a
+   char or block device node within ``/dev``. Expansion happens when the mapper
+   initializes and on ``flux config reload``, not per job, so a node that gains
+   a device needs a config reload. A pattern that matches nothing is silently
+   ignored, so one site-wide policy can be shared across nodes with different
+   hardware: each node grants the devices it has.
+
+   Entries are merged with, not substituted for, the ``DeviceAllow`` entries
+   computed by the mapper (for example GPU devices). The expanded list is
+   visible via ``flux module stats sdexec-mapper``.
+
+   Example:
+
+   .. code-block:: toml
+
+      [sdexec]
+      allowed-devices = [ "/dev/cxi*" ]
 
 Default Mapper Behavior
 ------------------------
@@ -367,7 +396,9 @@ Custom Mappers
 --------------
 
 Sites can customize resource mapping by providing a Python class that extends
-``flux.sdexec.map.ResourceMapper`` or ``flux.sdexec.map.HwlocMapper``.
+``flux.sdexec.map.ResourceMapper`` or ``flux.sdexec.map.HwlocMapper``. The
+static ``sdexec.allowed-devices`` allowlist is always applied by the
+sdexec-mapper module to the mapper's output when the output is non-empty.
 
 The mapper provides two extension points:
 
@@ -753,6 +784,15 @@ EXAMPLES
    [sdexec]
    mapper = "site.mappers.AccountingMapper"
    mapper-searchpath = "/etc/flux/mappers"
+
+::
+
+   [exec]
+   service = "sdexec"
+   sdexec-constrain-resources = true
+   [sdexec]
+   # Allow every job access to the Slingshot fabric device
+   allowed-devices = [ "/dev/cxi*" ]
 
 ::
 

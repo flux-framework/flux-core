@@ -288,6 +288,110 @@ test_expect_success 'MemoryMax absolute: revert to default config' '
 '
 
 #
+# Static device allowlist: sdexec.allowed-devices is merged into DeviceAllow
+# for every job. Use /dev/null, a char device present everywhere, so the
+# test needs no fabric NIC or GPU.
+#
+# Note: /dev/null is always usable by a job regardless of this config, since
+# systemd's DevicePolicy=closed includes it in a built-in whitelist. These
+# tests remain valid because they assert on the systemd DeviceAllow unit
+# property (i.e. that our config->expand->merge->unit plumbing works), not on
+# whether the job can actually access the device.
+#
+test_expect_success 'allowed-devices: configure sdexec.allowed-devices' '
+	cat >config/config.toml <<-EOT &&
+	[systemd]
+	enable = true
+	sdexec-debug = true
+	[exec]
+	service = "sdexec"
+	sdexec-constrain-resources = true
+	[sdexec]
+	allowed-devices = [ "/dev/null" ]
+	EOT
+	flux config reload
+'
+
+test_expect_success 'allowed-devices: stats report patterns and expansion' '
+	flux module stats sdexec-mapper >devstats.json &&
+	jq -e ".config.allowed_device_patterns == [\"/dev/null\"]" <devstats.json &&
+	jq -e ".config.allowed_devices == [\"/dev/null rw\"]" <devstats.json
+'
+
+test_expect_success "allowed-devices: job unit DeviceAllow contains /dev/null" '
+	result=$(flux run -n1 -c1 ./get_unit_prop.sh DeviceAllow) &&
+	test_debug "echo DeviceAllow=$result" &&
+	echo "$result" | grep "/dev/null rw"
+'
+
+# Use the glob /dev/nul* rather than a literal path so this exercises glob
+# expansion end to end: it matches exactly /dev/null on every system, and the
+# configured pattern differs from the expanded result, proving the mapper
+# expanded it rather than passing it through verbatim.
+test_expect_success 'allowed-devices: glob pattern is expanded' '
+	cat >config/config.toml <<-EOT &&
+	[systemd]
+	enable = true
+	sdexec-debug = true
+	[exec]
+	service = "sdexec"
+	sdexec-constrain-resources = true
+	[sdexec]
+	allowed-devices = [ "/dev/nul*" ]
+	EOT
+	flux config reload &&
+	flux module stats sdexec-mapper >devglob.json &&
+	jq -e ".config.allowed_device_patterns == [\"/dev/nul*\"]" <devglob.json &&
+	jq -e ".config.allowed_devices == [\"/dev/null rw\"]" <devglob.json &&
+	result=$(flux run -n1 -c1 ./get_unit_prop.sh DeviceAllow) &&
+	test_debug "echo DeviceAllow=$result" &&
+	echo "$result" | grep "/dev/null rw"
+'
+
+test_expect_success 'allowed-devices: changed config picked up via reload' '
+	cat >config/config.toml <<-EOT &&
+	[systemd]
+	enable = true
+	sdexec-debug = true
+	[exec]
+	service = "sdexec"
+	sdexec-constrain-resources = true
+	[sdexec]
+	allowed-devices = [ "/dev/zero" ]
+	EOT
+	flux config reload &&
+	result=$(flux run -n1 -c1 ./get_unit_prop.sh DeviceAllow) &&
+	test_debug "echo DeviceAllow=$result" &&
+	echo "$result" | grep "/dev/zero rw" &&
+	test_must_fail sh -c "echo \"$result\" | grep /dev/null"
+'
+
+test_expect_success 'allowed-devices: bad pattern makes jobs fail' '
+	cat >config/config.toml <<-EOT &&
+	[systemd]
+	enable = true
+	sdexec-debug = true
+	[exec]
+	service = "sdexec"
+	sdexec-constrain-resources = true
+	[sdexec]
+	allowed-devices = [ "/etc/*" ]
+	EOT
+	flux config reload &&
+	test_must_fail flux run -n1 -c1 hostname
+'
+test_expect_success 'allowed-devices: restore config' '
+	cat >config/config.toml <<-EOT &&
+	[systemd]
+	enable = true
+	sdexec-debug = true
+	[exec]
+	service = "sdexec"
+	sdexec-constrain-resources = true
+	EOT
+	flux config reload
+'
+#
 # Sad path: post-start AllowedCPUs check failure drains rank
 #
 # SDEXEC_TEST_EXPECTED_CPUS injects a wrong expected CPU idset (requires
