@@ -153,7 +153,7 @@ static void mark_reap (flux_future_t *f, void *arg)
     else {
         m->marked += marked;
         if (verbose > 1)
-            log_msg ("marked %d blobs", marked);
+            printf ("marked %d blobs\n", marked);
     }
 
     flux_future_destroy (f);
@@ -337,7 +337,7 @@ static int enumerate_checkpoint_roots (flux_t *h, json_t *roots_array)
         /* No checkpoints yet (ENOENT) is OK - just no roots to mark */
         if (errno == ENOENT) {
             if (verbose)
-                log_msg ("no checkpoints found");
+                printf ("no checkpoints found\n");
             rc = 0;
             goto done;
         }
@@ -368,7 +368,7 @@ static int enumerate_checkpoint_roots (flux_t *h, json_t *roots_array)
     }
 
     if (verbose)
-        log_msg ("enumerated %d checkpoint roots", count);
+        printf ("enumerated %d checkpoint roots\n", count);
 
     rc = 0;
 done:
@@ -392,8 +392,10 @@ static int enumerate_private_namespace_roots (flux_t *h, json_t *roots_array)
          * checkpoints alone are correct (mirroring flux-dump --checkpoint).
          */
         if (errno == ENOSYS || errno == ENOENT) {
-            if (verbose)
-                log_msg ("kvs not loaded; skipping live private namespace roots");
+            if (verbose) {
+                printf ("kvs not loaded;"
+                        " skipping live private namespace roots\n");
+            }
             rc = 0;
             goto done;
         }
@@ -469,7 +471,7 @@ static int enumerate_private_namespace_roots (flux_t *h, json_t *roots_array)
     }
 
     if (verbose)
-        log_msg ("enumerated %d private namespace roots", count);
+        printf ("enumerated %d private namespace roots\n", count);
 
     rc = 0;
 done:
@@ -592,7 +594,7 @@ static int mark_all_roots (flux_t *h, json_t *roots_array, int64_t *markedp)
         goto done;
 
     if (verbose)
-        log_msg ("mark phase complete");
+        printf ("mark phase complete\n");
 
     *markedp = m.marked;
     rc = 0;
@@ -607,7 +609,7 @@ static int sweep_blobs (flux_t *h, int64_t *deletedp)
     int64_t cursor = 0;
 
     if (verbose)
-        log_msg ("starting sweep phase");
+        printf ("starting sweep phase\n");
 
     /* Sweep by walking the objects table in rowid order via a cursor, bounded
      * at the frozen high-water rowid.  Each call deletes garbage in a rowid
@@ -641,17 +643,18 @@ static int sweep_blobs (flux_t *h, int64_t *deletedp)
 
         total_deleted += deleted;
 
-        if (verbose > 1)
-            log_msg ("swept %jd blobs, cursor %jd/%jd",
-                     (intmax_t)deleted,
-                     (intmax_t)cursor,
-                     (intmax_t)horizon_high_water);
+        if (verbose > 1) {
+            printf ("swept %jd blobs, cursor %jd/%jd\n",
+                    (intmax_t)deleted,
+                    (intmax_t)cursor,
+                    (intmax_t)horizon_high_water);
+        }
 
         flux_future_destroy (f);
     }
 
     if (verbose)
-        log_msg ("sweep complete: deleted %jd blobs", (intmax_t)total_deleted);
+        printf ("sweep complete: deleted %jd blobs\n", (intmax_t)total_deleted);
 
     *deletedp = total_deleted;
     return 0;
@@ -666,6 +669,8 @@ int cmd_gc (optparse_t *p, int argc, char **argv)
     json_t *roots = NULL;
     int64_t marked = 0;
     int64_t deleted = 0;
+
+    setvbuf(stdout, NULL, _IONBF, 0);
 
     if (optindex != argc) {
         optparse_print_usage (p);
@@ -689,10 +694,11 @@ int cmd_gc (optparse_t *p, int argc, char **argv)
     horizon_epoch = current_epoch;
     horizon_high_water = high_water;
 
-    if (verbose)
-        log_msg ("froze epoch at %jd, high-water rowid %jd",
-                 (intmax_t)horizon_epoch,
-                 (intmax_t)high_water);
+    if (verbose) {
+        printf ("froze epoch at %jd, high-water rowid %jd\n",
+                (intmax_t)horizon_epoch,
+                (intmax_t)high_water);
+    }
 
     /* Enumerate roots */
     if (!(roots = json_array ()))
@@ -713,7 +719,7 @@ int cmd_gc (optparse_t *p, int argc, char **argv)
         log_err_exit ("failed to enumerate live primary root");
 
     if (verbose)
-        log_msg ("enumerated %zu total roots", json_array_size (roots));
+        printf ("enumerated %zu total roots\n", json_array_size (roots));
 
     /* Mark phase */
     if (mark_all_roots (h, roots, &marked) < 0)
@@ -740,10 +746,11 @@ int cmd_gc (optparse_t *p, int argc, char **argv)
      * 'deleted' counts blobs actually reclaimed -- the accurate figures, in
      * contrast to a pre-mark count that would include reachable data.
      */
-    log_msg ("gc complete: marked %jd, reclaimed %jd blobs (horizon epoch %jd)",
-             (intmax_t)marked,
-             (intmax_t)deleted,
-             (intmax_t)horizon_epoch);
+    printf ("gc complete:"
+            " marked %jd, reclaimed %jd blobs (horizon epoch %jd)\n",
+            (intmax_t)marked,
+            (intmax_t)deleted,
+            (intmax_t)horizon_epoch);
     json_decref (roots);
     json_decref (visited);
     flux_close (h);

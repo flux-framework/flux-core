@@ -1,0 +1,20 @@
+#!/bin/sh
+# 51-flux-gc - Flux online KVS garbage collection
+#
+# Installed to /etc/cron.daily/
+#
+# Note: chmod -x to disable.
+
+# Exit silently if Flux is down, or this is not the leader broker.
+# N.B. this short circuits the flux user transition on non-participating
+# ranks to avoid a PAM session auth-log entry per node from runuser.
+test "$(flux getattr rank 2>/dev/null)" = "0" || exit 0
+
+exec runuser -u flux -- sh -c '
+    runcmd() {
+        name=cron.daily
+        (eval "$@" | flux logger -n $name -s info) 2>&1 \
+            | flux logger -n $name -s err
+    }
+    runcmd flux gc --maxreqs=16
+'

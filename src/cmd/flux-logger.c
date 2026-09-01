@@ -73,6 +73,8 @@ int main (int argc, char *argv[])
     }
     if (optind == argc) {
         len = read_all (STDIN_FILENO, (void **)&message);
+        if (len == 0)
+            goto done;
     } else {
         if ((e = argz_create (argv + optind, &message, &len)) != 0)
             log_errn_exit (e, "argz_create");
@@ -88,6 +90,7 @@ int main (int argc, char *argv[])
 
     flux_close (h);
 
+done:
     free (message);
     log_fini ();
     return 0;

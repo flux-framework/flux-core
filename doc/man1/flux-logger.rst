@@ -20,6 +20,9 @@ For more information, refer to the :ref:`broker_logging` section of
 The wall clock time (UTC) and the broker rank are added to the log
 message when it is created.
 
+Logging is restricted to the Flux instance owner and silently fails
+if the caller does not have sufficient privilege.
+
 
 OPTIONS
 =======
@@ -28,7 +31,7 @@ OPTIONS
 
    Specify the log message severity by name.  Valid severity names are
    *emerg*, *alert*, *crit*, *err*, *warning*, *notice*, *info*, *debug*.
-   The default severity is *info*.
+   The default severity is *notice*.
 
 .. option:: -n, --appname=NAME
 
