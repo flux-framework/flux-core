@@ -39,9 +39,13 @@ Each exec request creates an ``sdproc`` that holds:
 Unit Naming
 ===========
 
-Each transient unit is given a unique name derived from a UUID, with the
-Flux job ID embedded for observability.  The name has a ``.service`` suffix
-as required by systemd.
+systemd requires each transient unit to have a unique name.  For job shells,
+bulk-exec supplies one of the form ``<name>-<rank>-<jobid>`` (e.g.
+``shell-0-fuzzybunny``); the rank keeps it unique when multiple brokers share
+a node, and the job ID makes the name a stable handle for reclaiming a
+leftover unit after a module restart.  If no name is supplied, sdexec falls
+back to one derived from a truncated UUID.  The name has a ``.service``
+suffix as required by systemd.
 
 I/O Channels
 ============
@@ -156,6 +160,37 @@ its pid, command, label, and state (``R`` while the unit is running, ``Z``
 once it has finished but is retained awaiting a ``wait``).  The
 ``sdexec.kill`` RPC signals a process identified by ``pid`` or, if given,
 ``label``.  Both are surfaced by :man1:`flux-sproc` with ``--service sdexec``.
+
+Recovery After a Module Restart
+===============================
+
+Transient units keep running when the sdexec module is unloaded, so a module
+(or broker) restart can leave units behind.  At startup, sdexec sweeps the
+user systemd instance for leftover units matching the names bulk-exec uses
+(``shell-`` and ``imp-shell-`` prefixes) and adopts each running one as an
+ordinary tracked process, monitored by the same per-unit property watch as a
+live unit.  Its state is seeded from the unit list; a ``GetAll`` snapshot then
+supplies the exit status of a unit that has already exited (preserved by
+``RemainAfterExit``).
+
+job-exec reclaims a recovered process with a ``wait`` request by label.
+Because the stdio channels died with the previous module instance, no output
+can be retained: the ``wait`` response carries the exit status only.
+A recovered process also has no command line, so ``sdexec.list`` reports
+the unit name in its place.
+
+sdexec owns the *user-bus clean* decision that gates node availability: once
+the startup sweep is complete and no recovered process is an *unreclaimed
+orphan* (still running, with no waiter attached), it sends a one-shot
+``sdmon.user-clean`` request to the sdmon module on the local rank.  A
+reclaimed unit stops blocking as soon as a waiter attaches, so the node comes
+online while the legitimate job keeps running; a true orphan blocks until it
+exits.  sdmon monitors only the system systemd instance (housekeeping,
+prolog, epilog) and joins the ``sdmon.online`` broker group, making the node
+eligible for scheduling when systemd support is enabled (only after its own
+system units are drained *and* the user-clean signal has arrived).  Because a
+request to an unloaded module is lost rather than queued, sdmon must be
+loaded before sdexec (enforced by modprobe ordering).
 
 ********************
 sdexec-mapper Module
