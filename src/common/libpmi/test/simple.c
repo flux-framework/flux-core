@@ -142,10 +142,14 @@ int main (int argc, char *argv[])
      * of this to beat on its version negotiation without any
      * setup/teardown of the server.
      */
-    ok (fake_init (cfp, 1, 0) == -1,
-        "fake init for protocol 1.0 fails");
+    ok (fake_init (cfp, 1, 3) == -1,
+        "fake init for protocol 1.3 fails");
     ok (fake_init (cfp, 2, 0) == -1,
         "fake init for protocol 2.0 fails");
+    ok (fake_init (cfp, 3, 0) == -1,
+        "fake init for protocol 3.0 fails");
+    ok (fake_init (cfp, 1, 0) == 0,
+        "fake init for protocol 1.0 succeeds");
     ok (fake_init (cfp, 1, 1) == 0,
         "fake init for protocol 1.1 succeeds");
 
