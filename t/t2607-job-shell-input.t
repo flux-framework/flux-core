@@ -1,5 +1,7 @@
 #!/bin/sh
 #
+# ci=asan
+
 test_description='Test flux-shell'
 
 . `dirname $0`/sharness.sh
