@@ -1,3 +1,37 @@
+flux-core version 0.89.0 - 2026-09-02
+-------------------------------------
+
+## New Features
+
+ * kvs: enable nightly garbage collection on system instance (#7792)
+ * support `sdexec.allowed-devices` to extend allowed devices for all jobs
+   when `sdexec-constrain-resources` is set (#7793)
+ * job-manager: add effective queue policy to the queue-list RPC (#7784)
+ * return effective queue config in `job-manager.queue-list` and use it in
+   `flux resource` and frobnicator (#7772)
+ * sdexec: add background task support (#7773)
+ * job-exec: add background process recovery support (#7767)
+ * libfluxutil: normalize vqueue parent error message (#7770)
+ * add core support for RFC 33 virtual queues (#7753)
+ * strip instance-local properties from R generated for jobs (#7764)
+
+## Fixes
+
+ * libpmi: conform to recent RFC 13 version handshake changes (#7795)
+ * fix mismatched pack/unpack format specifiers and arguments (#7783)
+ * fix segfault in `flux job eventlog --follow` (#7781)
+ * libsubprocess: fix potential hang in buffered read watcher (#7779)
+ * libsubprocess: fix busy loop on unreadable fd (#7777)
+ * flux-job: fix spurious warning on guest eventlog follow (#7771)
+
+## Build/CI/Testsuite/Documentation
+
+ * github: bump the github-actions group with 4 updates (#7791)
+ * add clang-based check on json pack/unpack arguments (#7785)
+ * testsuite: add cocci check for double-free json_pack() style functions
+   (#7782)
+ * testsuite: add libschedutil test coverage (#7763)
+
 flux-core version 0.88.0 - 2026-08-04
 -------------------------------------
 
