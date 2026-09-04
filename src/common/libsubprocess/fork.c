@@ -246,6 +246,11 @@ static int local_release_child (flux_subprocess_t *p)
         // exec error received
         return e;
     }
+    else if (n != 0) {
+        // short read: sync protocol violated
+        errno = EPROTO;
+        return -1;
+    }
     /* else n == 0, child exec'ed and closed sync_fds[1] */
 
     /* no longer need this fd */

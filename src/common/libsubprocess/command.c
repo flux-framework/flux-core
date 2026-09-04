@@ -137,6 +137,7 @@ static int argz_appendv (char **argzp,
     if (vasprintf (&s, fmt, ap) < 0)
         return -1;
     if ((e = argz_add (argzp, argz_lenp, s))) {
+        free (s);
         errno = e;
         return -1;
     }
@@ -181,7 +182,7 @@ static char *env_entry_name (char *entry, char *dst, size_t len)
         p = entry + strlen (entry) + 1;
 
     /* Refuse to truncate */
-    if (len-1 < p - entry)
+    if (len == 0 || len-1 < p - entry)
         return NULL;
 
     /* strncat(3): safer than strncpy(3), faster than by-hand: */
@@ -230,6 +231,7 @@ static int argz_fromjson (json_t *o, char **argzp, size_t *argz_lenp)
 {
     size_t index;
     json_t *value;
+    int errnum = EPROTO;
 
     assert (*argzp == NULL && *argz_lenp == 0);
     if (!json_is_array (o))
@@ -238,15 +240,17 @@ static int argz_fromjson (json_t *o, char **argzp, size_t *argz_lenp)
     json_array_foreach (o, index, value) {
         if (!json_is_string (value))
             goto fail;
-        if (argz_add (argzp, argz_lenp, json_string_value (value)))
+        if (argz_add (argzp, argz_lenp, json_string_value (value))) {
+            errnum = ENOMEM;
             goto fail;
+        }
     }
     return 0;
 fail:
     free (*argzp);
     *argzp = NULL;
     *argz_lenp = 0;
-    errno = EINVAL;
+    errno = errnum;
     return -1;
 }
 
@@ -285,7 +289,7 @@ static int envz_fromjson (json_t *o, char **envzp, size_t *envz_lenp)
 {
     const char *var;
     json_t *val;
-    int errnum = EINVAL;
+    int errnum = EPROTO;
 
     assert (*envzp == NULL && *envz_lenp == 0);
     if (!json_is_object (o))
@@ -294,8 +298,10 @@ static int envz_fromjson (json_t *o, char **envzp, size_t *envz_lenp)
     json_object_foreach (o, var, val) {
         if (!json_is_string (val))
             goto fail;
-        if (envz_add (envzp, envz_lenp, var, json_string_value (val)))
+        if (envz_add (envzp, envz_lenp, var, json_string_value (val))) {
+            errnum = ENOMEM;
             goto fail;
+        }
     }
     return 0;
 fail:
@@ -346,7 +352,10 @@ static zhash_t *zhash_fromjson (json_t *o)
     if (!json_is_object (o))
         goto fail;
 
-    h = zhash_new ();
+    if (!(h = zhash_new ())) {
+        errnum = ENOMEM;
+        goto fail;
+    }
     zhash_autofree (h);
 
     json_object_foreach (o, key, val) {
@@ -376,7 +385,10 @@ static zlist_t *channels_fromjson (json_t *o)
 
     if (!json_is_array (o))
         goto fail;
-    l = zlist_new ();
+    if (!(l = zlist_new ())) {
+        errnum = ENOMEM;
+        goto fail;
+    }
     zlist_autofree (l);
 
     json_array_foreach (o, index, value) {
@@ -465,7 +477,7 @@ static zlist_t *msgchans_fromjson (json_t *o)
     return l;
 inval:
     zlist_destroy (&l);
-    errno = EINVAL;
+    errno = EPROTO;
     return NULL;
 }
 
@@ -519,15 +531,24 @@ static zlist_t *msgchans_dup (zlist_t *l)
 static zhash_t * z_hash_dup (zhash_t *src)
 {
     zhash_t *new;
-    zlist_t *keys = zhash_keys (src);
+    zlist_t *keys;
     const char *k;
 
-    new = zhash_new ();
+    if (!(keys = zhash_keys (src)))
+        return NULL;
+    if (!(new = zhash_new ())) {
+        zlist_destroy (&keys);
+        return NULL;
+    }
     zhash_autofree (new);
 
     k = zlist_first (keys);
     while (k) {
-        zhash_insert (new, k, zhash_lookup (src, k));
+        if (zhash_insert (new, k, zhash_lookup (src, k)) < 0) {
+            zlist_destroy (&keys);
+            zhash_destroy (&new);
+            return NULL;
+        }
         k = zlist_next (keys);
     }
     zlist_destroy (&keys);
@@ -869,8 +890,10 @@ flux_cmd_t * flux_cmd_copy (const flux_cmd_t *src)
         goto err;
     if (!(cmd->msgchans = msgchans_dup (src->msgchans)))
         goto err;
-    cmd->channels = zlist_dup (src->channels);
-    cmd->opts = z_hash_dup (src->opts);
+    if (!(cmd->channels = zlist_dup (src->channels)))
+        goto err;
+    if (!(cmd->opts = z_hash_dup (src->opts)))
+        goto err;
     return (cmd);
 err:
     flux_cmd_destroy (cmd);
@@ -932,6 +955,9 @@ json_t *cmd_tojson (const flux_cmd_t *cmd)
 {
     json_t *o = json_object ();
     json_t *a;
+
+    if (!o)
+        goto err;
 
     /* Pack cwd */
     if (cmd->cwd) {
