@@ -1265,10 +1265,12 @@ static void server_disconnect_cb (flux_t *h,
                 else
                     server_kill (p, SIGKILL);
             }
-            if (p->waiter
-                && streq (flux_msg_route_first (p->waiter), sender)) {
-                flux_msg_decref (p->waiter);
-                p->waiter = NULL;
+            if (p->waiter) {
+                const char *wsender = flux_msg_route_first (p->waiter);
+                if (wsender && streq (wsender, sender)) {
+                    flux_msg_decref (p->waiter);
+                    p->waiter = NULL;
+                }
             }
             p = zlistx_next (s->subprocesses);
         }
@@ -1605,7 +1607,7 @@ static void server_purge_zombies (subprocess_server_t *s)
     }
 }
 
-static int server_killall (subprocess_server_t *s, int signum)
+static void server_killall (subprocess_server_t *s, int signum)
 {
     flux_subprocess_t *p;
 
@@ -1620,8 +1622,6 @@ static int server_killall (subprocess_server_t *s, int signum)
             server_kill (p, signum);
         p = zlistx_next (s->subprocesses);
     }
-
-    return 0;
 }
 
 void subprocess_server_destroy (subprocess_server_t *s)
