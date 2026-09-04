@@ -119,6 +119,7 @@ const struct hostlist *flux_shell_get_hostlist (flux_shell_t *shell);
  *   "ntasks";i,
  *   "service":s,
  *   "options": { "verbose":b },
+ *   "constrained_resources":b,
  *   "jobspec":o,
  *   "R":o
  *  }

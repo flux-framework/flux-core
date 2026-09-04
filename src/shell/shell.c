@@ -542,8 +542,10 @@ static json_t *flux_shell_get_info_object (flux_shell_t *shell)
         return o;
 
     if (!(o = json_pack_ex (&err, 0,
-                            "{ s:I s:i s:i s:i s:i s:s s:O s:O s:{ s:i }}",
+                            "{ s:I s:b s:i s:i s:i s:i s:s s:O s:O s:{ s:i }}",
                             "jobid", shell->info->jobid,
+                            "constrained_resources",
+                                shell->info->constrained_resources,
                             "rank",  shell->info->shell_rank,
                             "instance_owner", (int) shell->broker_owner,
                             "size",  shell->info->shell_size,

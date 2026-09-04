@@ -28,6 +28,7 @@ struct shell_info {
     int shell_rank;
     int shell_size;
     int total_ntasks;
+    bool constrained_resources;
     json_t *R;
     struct jobspec *jobspec;
     rcalc_t *rcalc;

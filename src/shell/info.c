@@ -279,6 +279,10 @@ struct shell_info *shell_info_create (flux_shell_t *shell)
         return NULL;
     }
     info->jobid = shell->jobid;
+    if (getenv ("FLUX_EXEC_CONSTRAINED_RESOURCES")) {
+        info->constrained_resources = true;
+        unsetenv ("FLUX_EXEC_CONSTRAINED_RESOURCES");
+    }
 
     if (shell_init_jobinfo (shell, info) < 0)
         goto error;
