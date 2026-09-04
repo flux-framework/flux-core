@@ -54,6 +54,10 @@ int hostlist_append_list (struct hostlist *hl1, struct hostlist *hl2);
 /*  Return the nth host in hostlist 'hl' or NULL on failure.
  *
  *  Moves the hostlist cursor to the returned host on success.
+ *
+ *  The returned value is only valid until the next call that modifies
+ *   the cursor, i.e. hostlist_next(), hostlist_first(), hostlist_last(),
+ *    hostlist_find(), and hostlist_nth().
  */
 const char * hostlist_nth (struct hostlist * hl, int n);
 
