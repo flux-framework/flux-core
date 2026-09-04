@@ -17,6 +17,8 @@ extern "C" {
 
 /* Look up hostname of broker rank, by consulting "hostlist" attribute.
  * This function always returns a printable string, though it may be "(null)".
+ *
+ * The returned value is only valid until the next call.
  */
 const char *flux_get_hostbyrank (flux_t *h, uint32_t rank);
 
