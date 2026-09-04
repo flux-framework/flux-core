@@ -203,7 +203,7 @@ static flux_subprocess_t *subprocess_create (
 
     /* set CLOEXEC on sync_fds, so on exec(), child sync_fd is closed
      * and seen by parent */
-#if SOCK_CLOEXEC
+#ifdef SOCK_CLOEXEC
     if (socketpair (PF_LOCAL, SOCK_STREAM | SOCK_CLOEXEC, 0, p->sync_fds) < 0)
         goto error;
 #else
@@ -282,7 +282,7 @@ void subprocess_standard_output (flux_subprocess_t *p, const char *stream)
 void subprocess_check_completed (flux_subprocess_t *p)
 {
     if (p->state != FLUX_SUBPROCESS_EXITED) {
-        log_err ("subprocess_check_completed: unexpected state %s",
+        log_msg ("subprocess_check_completed: unexpected state %s",
                  flux_subprocess_state_string (p->state));
         return;
     }
@@ -863,11 +863,11 @@ int flux_subprocess_write (flux_subprocess_t *p,
             log_err ("fbuf_write_watcher_get_buffer");
             return -1;
         }
-        if (fbuf_space (fb) < len) {
+        if ((size_t)fbuf_space (fb) < len) {
             errno = ENOSPC;
             return -1;
         }
-        if ((ret = fbuf_write (fb, buf, len)) < 0) {
+        if ((ret = fbuf_write (fb, buf, (int)len)) < 0) {
             log_err ("fbuf_write");
             return -1;
         }
@@ -880,8 +880,7 @@ int flux_subprocess_write (flux_subprocess_t *p,
             return -1;
         }
         if (subprocess_write (p->f, c->name, buf, len, false) < 0) {
-            log_err ("error sending rexec.write request: %s",
-                     strerror (errno));
+            log_err ("error sending rexec.write request");
             return -1;
         }
         ret = len;
@@ -923,8 +922,7 @@ int flux_subprocess_close (flux_subprocess_t *p, const char *stream)
     }
     else {
         if (subprocess_write (p->f, c->name, NULL, 0, true) < 0) {
-            log_err ("error sending rexec.write request: %s",
-                     strerror (errno));
+            log_err ("error sending rexec.write request");
             return -1;
         }
         c->closed = true;
