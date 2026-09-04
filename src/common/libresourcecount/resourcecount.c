@@ -21,7 +21,7 @@
 #include <jansson.h>
 #include <flux/idset.h>
 
-#include "count.h"
+#include "resourcecount.h"
 
 void set_error (json_error_t *error, const char *fmt, ...)
 {
@@ -34,40 +34,40 @@ void set_error (json_error_t *error, const char *fmt, ...)
     }
 }
 
-struct count *count_create (json_t *json_count,
-                            json_error_t *error)
+struct resourcecount *resourcecount_create (json_t *json_count,
+                                            json_error_t *error)
 {
-    struct count *count;
+    struct resourcecount *count;
     const char *operator = NULL;
     json_int_t min;
-    json_int_t max = COUNT_MAX;
+    json_int_t max = RESOURCECOUNT_MAX;
     json_int_t operand = 1;
 
     if (json_is_string (json_count)) {
-        if (!(count = count_decode (json_string_value (json_count)))) {
+        if (!(count = resourcecount_decode (json_string_value (json_count)))) {
             set_error (error,
-                       "create_count: Failed to decode '%s' as idset or range",
+                       "resourcecount_create: Failed to decode '%s' as idset or range",
                        json_string_value (json_count));
             goto error;
         }
         return count;
     }
     if (!(count = calloc (1, sizeof (*count)))) {
-        set_error (error, "create_count: Out of memory");
+        set_error (error, "resourcecount_create: Out of memory");
         goto error;
     }
     count->idset = NULL;
     if (json_is_integer (json_count)) {
         // have to check positivity first before assigning to unsigned int
         if (json_integer_value (json_count) < 1) {
-            set_error (error, "create_count: integer count must be >= 1");
+            set_error (error, "resourcecount_create: integer count must be >= 1");
             goto error;
         }
         count->integer = json_integer_value (json_count);
         return count;
     }
     if (json_object_size (json_count) == 0) {
-        set_error (error, "create_count: Malformed jobspec resource count");
+        set_error (error, "resourcecount_create: Malformed jobspec resource count");
         goto error;
     }
     if (json_unpack_ex(json_count, error, 0,
@@ -80,7 +80,7 @@ struct count *count_create (json_t *json_count,
     }
     // have to check positivity first before assigning to unsigned ints
     if (min < 1 || max < 1 || operand < 1) {
-        set_error (error, "create_count: min, max, and operand must be >= 1");
+        set_error (error, "resourcecount_create: min, max, and operand must be >= 1");
         goto error;
     }
     count->min = min;
@@ -91,32 +91,37 @@ struct count *count_create (json_t *json_count,
     switch (count->operator) {
     case '^':
         if (count->min < 2) {
-            set_error (error, "create_count: min must be >= 2 for '^' operator");
+            set_error (error,
+                       "resourcecount_create: min must be >= 2 for '^' operator");
             goto error;
         }
     case '*':
         if (count->operand < 2) {
-            set_error (error, "create_count: operand must be >= 2 for '*' or '^' operators");
+            set_error (error,
+                       "resourcecount_create: operand must be >= 2 "
+                       "for '*' or '^' operators");
             goto error;
         }
     case '+':
         break;
     default:
-        set_error (error, "create_count: unknown operator '%c'", count->operator);
+        set_error (error,
+                   "resourcecount_create: unknown operator '%c'",
+                   count->operator);
         goto error;
     }
     if (count->max < count->min) {
-        set_error (error, "create_count: max must be >= min");
+        set_error (error, "resourcecount_create: max must be >= min");
         goto error;
     }
     count->isrange = true;
     return count;
 error:
-    count_destroy (count);
+    resourcecount_destroy (count);
     return NULL;
 }
 
-void count_destroy (struct count *count)
+void resourcecount_destroy (struct resourcecount *count)
 {
     if (count) {
         idset_destroy (count->idset);
@@ -142,9 +147,9 @@ static int strtoui_check (const char *s, char **endptr, unsigned int *result)
     return 0;
 }
 
-struct count *count_decode (const char *s)
+struct resourcecount *resourcecount_decode (const char *s)
 {
-    struct count *count = NULL;
+    struct resourcecount *count = NULL;
     char *cpy = NULL;
     char *ep;
     int len = strlen (s);
@@ -155,7 +160,7 @@ struct count *count_decode (const char *s)
         if (!(json_input = json_loads (s, 0, NULL))) {
             goto error_inval;
         }
-        count = count_create (json_input, NULL);
+        count = resourcecount_create (json_input, NULL);
         json_decref (json_input);
         if (!count) {
             goto error_inval;
@@ -202,7 +207,7 @@ struct count *count_decode (const char *s)
             goto error_inval;
         }
     } else if (*ep == '+') {
-        count->max = COUNT_MAX;
+        count->max = RESOURCECOUNT_MAX;
         ++ep;
     } else {
         goto error_inval;
@@ -242,17 +247,17 @@ success:
 error_inval:
     errno = EINVAL;
 error:
-    count_destroy (count);
+    resourcecount_destroy (count);
     free (cpy);
     return NULL;
 }
 
-char *count_encode (const struct count *count, int flags)
+char *resourcecount_encode (const struct resourcecount *count, int flags)
 {
     char *str;
     int sz;
     int i = 0;
-    int valid_flags = COUNT_FLAG_BRACKETS | COUNT_FLAG_SHORT;
+    int valid_flags = RESOURCECOUNT_FLAG_BRACKETS | RESOURCECOUNT_FLAG_SHORT;
 
     if (!count || ((flags & valid_flags) != flags)) {
         errno = EINVAL;
@@ -267,7 +272,8 @@ char *count_encode (const struct count *count, int flags)
         return str;
     }
     // otherwise encode as RFC14 range
-    sz = snprintf(NULL, 0, "[%u-%u:%u:+]", COUNT_MAX, COUNT_MAX, COUNT_MAX);
+    sz = snprintf(NULL, 0, "[%u-%u:%u:+]",
+                  RESOURCECOUNT_MAX, RESOURCECOUNT_MAX, RESOURCECOUNT_MAX);
     if (!(str = calloc (sz+1, sizeof (*str)))) {
         return NULL;
     }
@@ -275,29 +281,29 @@ char *count_encode (const struct count *count, int flags)
         sprintf (str, "%u", count->min);
         return str;
     }
-    if (flags & COUNT_FLAG_BRACKETS) {
+    if (flags & RESOURCECOUNT_FLAG_BRACKETS) {
         i += sprintf (str, "[");
     }
-    if (count->max == COUNT_MAX) {
+    if (count->max == RESOURCECOUNT_MAX) {
         i += sprintf (str+i, "%u+", count->min);
     } else {
         i += sprintf (str+i, "%u-%u", count->min, count->max);
     }
-    if (!(flags & COUNT_FLAG_SHORT) || (count->operand > 1)) {
+    if (!(flags & RESOURCECOUNT_FLAG_SHORT) || (count->operand > 1)) {
         i += sprintf (str+i, ":%u", count->operand);
     }
-    if (!(flags & COUNT_FLAG_SHORT) || (count->operator != '+')) {
+    if (!(flags & RESOURCECOUNT_FLAG_SHORT) || (count->operator != '+')) {
         i += sprintf (str+i, ":%c", count->operator);
     }
-    if (flags & COUNT_FLAG_BRACKETS) {
+    if (flags & RESOURCECOUNT_FLAG_BRACKETS) {
         sprintf (str+i, "]");
     }
     return str;
 }
 
-unsigned int count_first (const struct count *count)
+unsigned int resourcecount_first (const struct resourcecount *count)
 {
-    unsigned int first = COUNT_INVALID_VALUE;
+    unsigned int first = RESOURCECOUNT_INVALID_VALUE;
 
     if (count) {
         if (count->integer) {
@@ -311,9 +317,9 @@ unsigned int count_first (const struct count *count)
     return first;
 }
 
-unsigned int count_next (const struct count *count, unsigned int value)
+unsigned int resourcecount_next (const struct resourcecount *count, unsigned int value)
 {
-    unsigned int next = COUNT_INVALID_VALUE;
+    unsigned int next = RESOURCECOUNT_INVALID_VALUE;
 
     if (count) {
         if (count->isrange) {
@@ -331,7 +337,7 @@ unsigned int count_next (const struct count *count, unsigned int value)
                     }
             }
             if (next > count->max) {
-                next = COUNT_INVALID_VALUE;
+                next = RESOURCECOUNT_INVALID_VALUE;
             }
         } else if (count->idset) {
             next = idset_next (count->idset, value);

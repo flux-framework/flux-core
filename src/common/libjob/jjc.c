@@ -15,17 +15,17 @@
 #include <errno.h>
 #include <string.h>
 #include <jansson.h>
+#include <flux/resourcecount.h>
 
 #include "ccan/str/str.h"
 
 #include "jjc.h"
-#include "count.h"
 
 static int jjc_read_level (json_t *o, int level, struct jjc_counts *jj, int nodefactor);
 
 static int jjc_read_vertex (json_t *o, int level, struct jjc_counts *jj, int nodefactor)
 {
-    struct count *count;
+    struct resourcecount *count;
     const char *type = NULL;
     json_t *count_json;
     json_t *with = NULL;
@@ -42,7 +42,7 @@ static int jjc_read_vertex (json_t *o, int level, struct jjc_counts *jj, int nod
         errno = EINVAL;
         return -1;
     }
-    if (!(count = count_create (count_json, &error))) {
+    if (!(count = resourcecount_create (count_json, &error))) {
         snprintf (jj->error, sizeof (jj->error) - 1,
                   "level %d: %s", level, error.text);
         errno = EINVAL;
@@ -60,7 +60,7 @@ static int jjc_read_vertex (json_t *o, int level, struct jjc_counts *jj, int nod
             jj->exclusive = true;
     } else {
         // Set negative as flag to indicate non-integer count found
-        nodefactor = count->integer ? nodefactor * count_first (count) : -1;
+        nodefactor = count->integer ? nodefactor * resourcecount_first (count) : -1;
     }
     if (streq (type, "slot"))
         jj->nslots = count;
@@ -70,7 +70,7 @@ static int jjc_read_vertex (json_t *o, int level, struct jjc_counts *jj, int nod
         jj->slot_gpus = count;
     else if (!streq (type, "node")) {
         // ignore unknown resources
-        count_destroy (count);
+        resourcecount_destroy (count);
     }
     if (with)
         return jjc_read_level (with, level+1, jj, nodefactor);
@@ -172,10 +172,10 @@ void jjc_destroy (struct jjc_counts *jj)
 {
     if (jj) {
         int saved_errno = errno;
-        count_destroy (jj->nnodes);
-        count_destroy (jj->nslots);
-        count_destroy (jj->slot_size);
-        count_destroy (jj->slot_gpus);
+        resourcecount_destroy (jj->nnodes);
+        resourcecount_destroy (jj->nslots);
+        resourcecount_destroy (jj->slot_size);
+        resourcecount_destroy (jj->slot_gpus);
         errno = saved_errno;
     }
 }

@@ -26,6 +26,7 @@ SUBDIRS = \
 	libccan \
 	libzmqutil \
 	libtaskmap \
+	libresourcecount \
 	libfilemap \
 	libsdexec \
 	libmissing
@@ -57,6 +58,7 @@ libflux_internal_la_LIBADD = \
 	$(builddir)/libcontent/libcontent.la \
 	$(builddir)/libtaskmap/libtaskmap.la \
 	$(builddir)/libmissing/libmissing.la \
+	$(builddir)/libresourcecount/libresourcecount.la \
 	$(JANSSON_LIBS) \
 	$(LIBUUID_LIBS) \
 	$(LIBPTHREAD) \
@@ -71,6 +73,7 @@ libflux_internal_la_LDFLAGS = $(san_ld_zdef_flag)
 lib_LTLIBRARIES = libflux-core.la \
 	libflux-optparse.la \
 	libflux-idset.la \
+	libflux-resourcecount.la \
 	libflux-schedutil.la \
 	libflux-hostlist.la \
 	libflux-taskmap.la
@@ -131,6 +134,18 @@ libflux_idset_la_LIBADD = \
 libflux_idset_la_LDFLAGS = \
 	-export-symbols-regex "^(idset_|__asan)" \
 	-version-info @LIBFLUX_IDSET_VERSION_INFO@ \
+	-shared -export-dynamic --disable-static \
+	$(ld_gc_sections) \
+	$(san_ld_zdef_flag)
+
+libflux_resourcecount_la_SOURCES =
+libflux_resourcecount_la_LIBADD = \
+	$(builddir)/libresourcecount/libresourcecount.la \
+	$(builddir)/libidset/libidset.la \
+	$(JANSSON_LIBS)
+libflux_resourcecount_la_LDFLAGS = \
+	-export-symbols-regex "^(resourcecount_|__asan)" \
+	-version-info @LIBFLUX_RESOURCECOUNT_VERSION_INFO@ \
 	-shared -export-dynamic --disable-static \
 	$(ld_gc_sections) \
 	$(san_ld_zdef_flag)
