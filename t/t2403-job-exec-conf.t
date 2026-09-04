@@ -296,6 +296,27 @@ test_expect_success 'job-exec: cmdline exec service takes priority' '
 	grep "cmdline-exec-service" reload6B.out &&
 	rm -f ${FLUX_CONF_DIR}/exec.toml
 '
+test_expect_success 'job-exec: sdexec-constrain-resources requires exec.service=sdexec' '
+	name=sdexec-constrain-no-sdexec &&
+	cat <<-EOF > ${name}.toml &&
+	[exec]
+	sdexec-constrain-resources = true
+	EOF
+	test_must_fail flux start --config-path=${name}.toml -s1 \
+		flux dmesg > ${name}.log 2>&1 &&
+	grep "exec.sdexec-constrain-resources requires exec.service" ${name}.log
+'
+test_expect_success 'job-exec: sdexec properties require exec.service=sdexec' '
+	name=sdexec-properties-no-sdexec &&
+	cat <<-EOF > ${name}.toml &&
+	[exec.sdexec-properties]
+	MemoryHigh = "200M"
+	MemoryMax = "100M"
+	EOF
+	test_must_fail flux start --config-path=${name}.toml -s1 \
+		flux dmesg > ${name}.log 2>&1 &&
+	grep "exec.sdexec-properties requires exec.service" ${name}.log
+'
 test_expect_success 'job-exec: sdexex properties can be set in exec conf' '
 	name=sdexec-properties &&
 	cat <<-EOF > ${name}.toml &&
