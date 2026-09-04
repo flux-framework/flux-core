@@ -58,6 +58,14 @@ flux_cmd_t *job_shell_cmd_create (struct jobinfo *job, const char *service)
         flux_log_error (job->h, "exec_init: flux_cmd_setenvf");
         goto err;
     }
+    if (config_get_sdexec_constrain_resources ()
+        && flux_cmd_setenvf (cmd,
+                             1,
+                             "FLUX_EXEC_CONSTRAINED_RESOURCES",
+                             "1") < 0) {
+        flux_log_error (job->h, "setenv(FLUX_EXEC_CONSTRAINED_RESOURCES=1)");
+        goto err;
+    }
     if (job->multiuser) {
         if (flux_cmd_setenvf (cmd,
                               1,
