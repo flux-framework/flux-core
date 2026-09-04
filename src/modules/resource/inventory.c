@@ -95,6 +95,7 @@
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libutil/jpath.h"
+#include "ccan/str/str.h"
 
 #include "rutil.h"
 #include "resource.h"
@@ -349,7 +350,11 @@ static bool no_duplicates (const char *hosts)
  * thus *Rp should be set to NULL before calling this function.
  * On failure return -1 (errno is not set).
  */
-static int convert_R (flux_t *h, json_t *R, int size, json_t **Rp)
+static int convert_R (flux_t *h,
+                      json_t *R,
+                      int size,
+                      bool remap_gpus,
+                      json_t **Rp)
 {
     struct rlist *rl;
     struct idset *ranks;
@@ -391,6 +396,8 @@ static int convert_R (flux_t *h, json_t *R, int size, json_t **Rp)
     }
     /*  Also always remap ids to zero origin
      */
+    if (remap_gpus && rlist_set_remap (rl, "gpu", true) < 0)
+        goto error;
     if (rlist_remap (rl) < 0)
         goto error;
     if (!(*Rp = rlist_to_R (rl)))
@@ -527,7 +534,7 @@ static int lookup_R_fallback (struct inventory *inv, flux_jobid_t id)
         flux_log_error (h, "lookup R from enclosing instance (fallback)");
         goto done;
     }
-    if (convert_R (h, job_R, inv->ctx->size, &R) < 0) {
+    if (convert_R (h, job_R, inv->ctx->size, false, &R) < 0) {
         flux_log (h, LOG_ERR, "fatal error while normalizing R");
         errno = EINVAL;
         goto done;
@@ -550,6 +557,16 @@ done:
     return rc;
 }
 
+static bool check_constrained_resources (flux_t *h)
+{
+    const char *val = flux_attr_get (h, "constrained-resources");
+    if (!val)
+        flux_log_error (h, "failed to get constrained-resources attribute");
+    if (val && streq (val, "1"))
+        return true;
+    return false;
+}
+
 static int start_resource_watch (struct inventory *inv,
                                  struct resource_config *config)
 {
@@ -559,6 +576,7 @@ static int start_resource_watch (struct inventory *inv,
     flux_jobid_t id;
     flux_future_t *f = NULL;
     json_t *R = NULL;
+    bool remap_gpus = false;
     int rc = -1;
     const char *service = "job-info.update-watch";
 
@@ -619,7 +637,12 @@ static int start_resource_watch (struct inventory *inv,
             goto done;
         }
     }
-    if (convert_R (h, job_R, inv->ctx->size, &R) < 0) {
+    /* Check value of constrained_resources broker attribute. If "1", then
+     * remap GPUs since ids should be an index into available GPUs, not
+     * all GPUs on the node.
+     */
+    remap_gpus = check_constrained_resources (h);
+    if (convert_R (h, job_R, inv->ctx->size, remap_gpus, &R) < 0) {
         flux_log (h, LOG_ERR, "fatal error while normalizing R");
         errno = EINVAL;
         goto done;
