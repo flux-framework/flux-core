@@ -15,7 +15,7 @@
 #include <stdbool.h>
 
 #include "src/common/libtap/tap.h"
-#include "src/common/libjob/count.h"
+#include "src/common/libresourcecount/resourcecount.h"
 #include "ccan/str/str.h"
 
 struct inout {
@@ -38,21 +38,35 @@ struct inout test_codec_inputs[] = {
     { "[7-9]",          0,          "7,8,9" },
     { "[2,3,4,5]",      0,          "2,3,4,5" },
 
-    { "2",              COUNT_FLAG_SHORT,  "2" },
-    { "7-9",            COUNT_FLAG_SHORT,  "7-9" },
-    { "1,7-9",          COUNT_FLAG_SHORT,  "1,7-9" },
-    { "1,7-9,16",       COUNT_FLAG_SHORT,  "1,7-9,16" },
-    { "1,7-9,14,16",    COUNT_FLAG_SHORT,  "1,7-9,14,16" },
-    { "1-3,7-9,14,16",  COUNT_FLAG_SHORT,  "1-3,7-9,14,16" },
-    { "2,3,4,5",        COUNT_FLAG_SHORT,  "2-5" },
+    { "2",              RESOURCECOUNT_FLAG_SHORT,  "2" },
+    { "7-9",            RESOURCECOUNT_FLAG_SHORT,  "7-9" },
+    { "1,7-9",          RESOURCECOUNT_FLAG_SHORT,  "1,7-9" },
+    { "1,7-9,16",       RESOURCECOUNT_FLAG_SHORT,  "1,7-9,16" },
+    { "1,7-9,14,16",    RESOURCECOUNT_FLAG_SHORT,  "1,7-9,14,16" },
+    { "1-3,7-9,14,16",  RESOURCECOUNT_FLAG_SHORT,  "1-3,7-9,14,16" },
+    { "2,3,4,5",        RESOURCECOUNT_FLAG_SHORT,  "2-5" },
 
-    { "2",              COUNT_FLAG_SHORT|COUNT_FLAG_BRACKETS, "2" },
-    { "7-9",            COUNT_FLAG_SHORT|COUNT_FLAG_BRACKETS, "[7-9]" },
-    { "1,7-9",          COUNT_FLAG_SHORT|COUNT_FLAG_BRACKETS, "[1,7-9]" },
-    { "1,7-9,16",       COUNT_FLAG_SHORT|COUNT_FLAG_BRACKETS, "[1,7-9,16]" },
-    { "1,7-9,14,16",    COUNT_FLAG_SHORT|COUNT_FLAG_BRACKETS, "[1,7-9,14,16]" },
-    { "1-3,7-9,14,16",  COUNT_FLAG_SHORT|COUNT_FLAG_BRACKETS, "[1-3,7-9,14,16]"},
-    { "2,3,4,5",        COUNT_FLAG_SHORT|COUNT_FLAG_BRACKETS, "[2-5]" },
+    { "2",
+      RESOURCECOUNT_FLAG_SHORT|RESOURCECOUNT_FLAG_BRACKETS,
+      "2" },
+    { "7-9",
+      RESOURCECOUNT_FLAG_SHORT|RESOURCECOUNT_FLAG_BRACKETS,
+      "[7-9]" },
+    { "1,7-9",
+      RESOURCECOUNT_FLAG_SHORT|RESOURCECOUNT_FLAG_BRACKETS,
+      "[1,7-9]" },
+    { "1,7-9,16",
+      RESOURCECOUNT_FLAG_SHORT|RESOURCECOUNT_FLAG_BRACKETS,
+      "[1,7-9,16]" },
+    { "1,7-9,14,16",
+      RESOURCECOUNT_FLAG_SHORT|RESOURCECOUNT_FLAG_BRACKETS,
+      "[1,7-9,14,16]" },
+    { "1-3,7-9,14,16",
+      RESOURCECOUNT_FLAG_SHORT|RESOURCECOUNT_FLAG_BRACKETS,
+      "[1-3,7-9,14,16]"},
+    { "2,3,4,5",
+      RESOURCECOUNT_FLAG_SHORT|RESOURCECOUNT_FLAG_BRACKETS,
+      "[2-5]" },
 
     /* ranges */
     { "3-3",            0,                                    "3" },
@@ -67,18 +81,30 @@ struct inout test_codec_inputs[] = {
     { "[2-5:1:+]",      0,                                    "2-5:1:+"},
     { "[2-8:2:*]",      0,                                    "2-8:2:*" },
     { "[25-133:17:+]",  0,                                    "25-133:17:+"},
-    { "3-3",            COUNT_FLAG_SHORT,                     "3" },
-    { "2+",             COUNT_FLAG_SHORT,                     "2+" },
-    { "2-5:3",          COUNT_FLAG_SHORT,                     "2-5:3" },
-    { "2-5:1:+",        COUNT_FLAG_SHORT,                     "2-5" },
-    { "2-8:2:*",        COUNT_FLAG_SHORT,                     "2-8:2:*" },
-    { "25-133:17:+",    COUNT_FLAG_SHORT,                     "25-133:17"},
-    { "3-3",            COUNT_FLAG_SHORT|COUNT_FLAG_BRACKETS, "3" },
-    { "2+",             COUNT_FLAG_SHORT|COUNT_FLAG_BRACKETS, "[2+]" },
-    { "2-5:3",          COUNT_FLAG_SHORT|COUNT_FLAG_BRACKETS, "[2-5:3]" },
-    { "2-5:1:+",        COUNT_FLAG_SHORT|COUNT_FLAG_BRACKETS, "[2-5]" },
-    { "2-8:2:*",        COUNT_FLAG_SHORT|COUNT_FLAG_BRACKETS, "[2-8:2:*]" },
-    { "25-133:17:+",    COUNT_FLAG_SHORT|COUNT_FLAG_BRACKETS, "[25-133:17]"},
+    { "3-3",            RESOURCECOUNT_FLAG_SHORT,                     "3" },
+    { "2+",             RESOURCECOUNT_FLAG_SHORT,                     "2+" },
+    { "2-5:3",          RESOURCECOUNT_FLAG_SHORT,                     "2-5:3" },
+    { "2-5:1:+",        RESOURCECOUNT_FLAG_SHORT,                     "2-5" },
+    { "2-8:2:*",        RESOURCECOUNT_FLAG_SHORT,                     "2-8:2:*" },
+    { "25-133:17:+",    RESOURCECOUNT_FLAG_SHORT,                     "25-133:17"},
+    { "3-3",
+      RESOURCECOUNT_FLAG_SHORT|RESOURCECOUNT_FLAG_BRACKETS,
+      "3" },
+    { "2+",
+      RESOURCECOUNT_FLAG_SHORT|RESOURCECOUNT_FLAG_BRACKETS,
+      "[2+]" },
+    { "2-5:3",
+      RESOURCECOUNT_FLAG_SHORT|RESOURCECOUNT_FLAG_BRACKETS,
+      "[2-5:3]" },
+    { "2-5:1:+",
+      RESOURCECOUNT_FLAG_SHORT|RESOURCECOUNT_FLAG_BRACKETS,
+      "[2-5]" },
+    { "2-8:2:*",
+      RESOURCECOUNT_FLAG_SHORT|RESOURCECOUNT_FLAG_BRACKETS,
+      "[2-8:2:*]" },
+    { "25-133:17:+",
+      RESOURCECOUNT_FLAG_SHORT|RESOURCECOUNT_FLAG_BRACKETS,
+      "[25-133:17]"},
 
     /* ranges as JSON strings */
     { "{\"min\": 3, \"max\": 3}",                                      0, "3" },
@@ -90,40 +116,40 @@ struct inout test_codec_inputs[] = {
       0,
       "25-133:17:+" },
     { "{\"min\": 3, \"max\": 3}",
-      COUNT_FLAG_SHORT,
+      RESOURCECOUNT_FLAG_SHORT,
       "3" },
     { "{\"min\": 2}",
-      COUNT_FLAG_SHORT,
+      RESOURCECOUNT_FLAG_SHORT,
       "2+" },
     { "{\"min\": 2, \"max\": 5, \"operand\": 3}",
-      COUNT_FLAG_SHORT,
+      RESOURCECOUNT_FLAG_SHORT,
       "2-5:3" },
     { "{\"min\": 2, \"max\": 5, \"operand\": 1, \"operator\": \"+\"}",
-      COUNT_FLAG_SHORT,
+      RESOURCECOUNT_FLAG_SHORT,
       "2-5" },
     { "{\"min\": 2, \"max\": 8, \"operand\": 2, \"operator\": \"*\"}",
-      COUNT_FLAG_SHORT,
+      RESOURCECOUNT_FLAG_SHORT,
       "2-8:2:*" },
     { "{\"min\": 25, \"max\": 133, \"operand\": 17, \"operator\": \"+\"}",
-      COUNT_FLAG_SHORT,
+      RESOURCECOUNT_FLAG_SHORT,
       "25-133:17" },
     { "{\"min\": 3, \"max\": 3}",
-      COUNT_FLAG_SHORT|COUNT_FLAG_BRACKETS,
+      RESOURCECOUNT_FLAG_SHORT|RESOURCECOUNT_FLAG_BRACKETS,
       "3" },
     { "{\"min\": 2}",
-      COUNT_FLAG_SHORT|COUNT_FLAG_BRACKETS,
+      RESOURCECOUNT_FLAG_SHORT|RESOURCECOUNT_FLAG_BRACKETS,
       "[2+]" },
     { "{\"min\": 2, \"max\": 5, \"operand\": 3}",
-      COUNT_FLAG_SHORT|COUNT_FLAG_BRACKETS,
+      RESOURCECOUNT_FLAG_SHORT|RESOURCECOUNT_FLAG_BRACKETS,
       "[2-5:3]" },
     { "{\"min\": 2, \"max\": 5, \"operand\": 1, \"operator\": \"+\"}",
-      COUNT_FLAG_SHORT|COUNT_FLAG_BRACKETS,
+      RESOURCECOUNT_FLAG_SHORT|RESOURCECOUNT_FLAG_BRACKETS,
       "[2-5]" },
     { "{\"min\": 2, \"max\": 8, \"operand\": 2, \"operator\": \"*\"}",
-      COUNT_FLAG_SHORT|COUNT_FLAG_BRACKETS,
+      RESOURCECOUNT_FLAG_SHORT|RESOURCECOUNT_FLAG_BRACKETS,
       "[2-8:2:*]" },
     { "{\"min\": 25, \"max\": 133, \"operand\": 17, \"operator\": \"+\"}",
-      COUNT_FLAG_SHORT|COUNT_FLAG_BRACKETS,
+      RESOURCECOUNT_FLAG_SHORT|RESOURCECOUNT_FLAG_BRACKETS,
       "[25-133:17]" },
 
     /* expected failures */
@@ -177,38 +203,37 @@ void test_codec (void)
     struct inout *ip;
 
     for (ip = &test_codec_inputs[0]; ip->in != NULL; ip++) {
-        struct count *count;
+        struct resourcecount *count;
 
         errno = 0;
-        count = count_decode (ip->in);
+        count = resourcecount_decode (ip->in);
         if (ip->out == NULL) { // expected fail
             if (count != NULL) {
-                char *s = count_encode (count, ip->flags);
+                char *s = resourcecount_encode (count, ip->flags);
                 ok (s == NULL && errno == EINVAL,
-                    "count_encode flags=0x%x '%s' fails with EINVAL",
+                    "resourcecount_encode flags=0x%x '%s' fails with EINVAL",
                     ip->flags, ip->in);
                 free (s);
             } else {
                 ok (count == NULL && errno == EINVAL,
-                    "count_decode '%s' fails with EINVAL",
+                    "resourcecount_decode '%s' fails with EINVAL",
                     ip->in);
             }
         }
         else {
-            ok (count != NULL,
-                "count_decode '%s' works", ip->in);
+            ok (count != NULL, "resourcecount_decode '%s' works", ip->in);
             if (count != NULL) {
-                char *s = count_encode (count, ip->flags);
+                char *s = resourcecount_encode (count, ip->flags);
                 bool match = (s && streq (s, ip->out));
                 ok (match == true,
-                    "count_encode flags=0x%x '%s'->'%s' works",
+                    "resourcecount_encode flags=0x%x '%s'->'%s' works",
                     ip->flags, ip->in, ip->out);
                 if (!match)
                     diag ("%s", s ? s : "NULL");
                 free (s);
             }
         }
-        count_destroy (count);
+        resourcecount_destroy (count);
     }
 }
 
@@ -227,7 +252,7 @@ struct inout test_iteration_inputs[] = {
     /* expected failures */
     { "[-1]", 0, NULL },
     { "[\"13-\"]", 0, NULL },
-    
+
     { NULL, 0, NULL },
 };
 
@@ -239,41 +264,40 @@ void test_iteration (void)
     for (ip = &test_iteration_inputs[0]; ip->in != NULL; ip++) {
         json_error_t error;
         json_t *json_in;
-        struct count *count;
-        
+        struct resourcecount *count;
+
         if (!(json_in = json_loads (ip->in, 0, &error))) {
             diag ("json_loads '%s' fails with error '%s'", ip->in, error.text);
             continue;
         }
         /* extract first element of array to get actual JSON of interest */
-        count = count_create (json_array_get (json_in, 0), &error);
+        count = resourcecount_create (json_array_get (json_in, 0), &error);
         if (ip->out == NULL) { // expected fail
             ok (count == NULL,
-                "count_create '%s' fails with error '%s'",
+                "resourcecount_create '%s' fails with error '%s'",
                 ip->in, error.text);
         }
         else {
-            ok (count != NULL,
-                "count_create '%s' works", ip->in);
+            ok (count != NULL, "resourcecount_create '%s' works", ip->in);
             if (!count)
                 diag ("error '%s'", error.text);
             if (count != NULL) {
                 int i = 0;
-                int value = count_first (count);
-                while (value != COUNT_INVALID_VALUE) {
+                int value = resourcecount_first (count);
+                while (value != RESOURCECOUNT_INVALID_VALUE) {
                     i += sprintf (s+i, "%u,", value);
-                    value = count_next (count, value);
+                    value = resourcecount_next (count, value);
                 }
                 s[i-1] = '\0';
                 bool match = streq (s, ip->out);
                 ok (match == true,
-                    "count iteration '%s'->'%s' works",
+                    "resourcecount iteration '%s'->'%s' works",
                     ip->in, ip->out);
                 if (!match)
                     diag ("%s", s);
             }
         }
-        count_destroy (count);
+        resourcecount_destroy (count);
         json_decref (json_in);
     }
 }
