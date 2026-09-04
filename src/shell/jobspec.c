@@ -175,6 +175,7 @@ struct jobspec *jobspec_parse (const char *jobspec,
     struct jobspec *job;
     json_t *resources;
     json_t *count;
+    json_t *task;
     bool is_node_specified;
     const char *type;
 
@@ -198,17 +199,32 @@ struct jobspec *jobspec_parse (const char *jobspec,
     if (json_unpack_ex (job->jobspec,
                         error,
                         0,
-                        "{s:i s:o s:[{s:o s:o}] s:{s?{s?s s?O s?{s?O}}}}",
+                        "{s:i s:o s:o s:{s?{s?s s?O s?{s?O}}}}",
                         "version", &job->version,
                         "resources", &resources,
-                        "tasks",
-                            "command", &job->command,
-                            "count", &count,
+                        "tasks", &job->tasks,
                         "attributes",
                             "system",
                                 "cwd", &job->cwd,
                                 "environment", &job->environment,
                                 "shell", "options", &job->options) < 0) {
+        goto error;
+    }
+    /* Parse the first task's command and count. A jobspec may carry multiple
+     * tasks, each bound to a slot label; jobspec_resolve_task_command() may
+     * later repoint job->command to the task matching the scheduler's chosen
+     * slot. Until then (and for single-task jobspecs) tasks[0] is the default.
+     */
+    if (!(task = json_array_get (job->tasks, 0))) {
+        set_error (error, "tasks array is empty");
+        goto error;
+    }
+    if (json_unpack_ex (task,
+                        error,
+                        0,
+                        "{s:o s:o}",
+                        "command", &job->command,
+                        "count", &count) < 0) {
         goto error;
     }
     if (job->environment && !json_is_object (job->environment)) {
@@ -300,6 +316,35 @@ struct jobspec *jobspec_parse (const char *jobspec,
 error:
     jobspec_destroy (job);
     return NULL;
+}
+
+int jobspec_resolve_task_command (struct jobspec *job, const char *label)
+{
+    size_t index;
+    json_t *task;
+
+    /* No matched label: leave job->command at the tasks[0] default. This is
+     * the path for single-task jobspecs and for schedulers/formats that do
+     * not report a matched slot label (e.g. match-format=rv1_nosched).
+     */
+    if (!label || *label == '\0')
+        return 0;
+
+    json_array_foreach (job->tasks, index, task) {
+        const char *slot = NULL;
+        json_t *command = NULL;
+        if (json_unpack (task, "{s:s s:o}", "slot", &slot, "command", &command)
+                == 0
+            && streq (slot, label)) {
+            /* command is borrowed from job->jobspec, same as job->command;
+             * no reference count change is needed to repoint.
+             */
+            job->command = command;
+            return 0;
+        }
+    }
+    errno = ENOENT;
+    return -1;
 }
 
 /*

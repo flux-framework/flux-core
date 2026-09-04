@@ -36,6 +36,7 @@ struct shell_info {
     struct idset *taskids;
     struct hostlist *hostlist;
     char *hwloc_xml;
+    char *matched_slot_label;   // slot label matched for this rank, or NULL
     flux_future_t *R_watch_future;
 };
 
