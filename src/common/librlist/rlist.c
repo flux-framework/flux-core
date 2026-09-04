@@ -382,6 +382,19 @@ int rlist_remove_ranks (struct rlist *rl, const struct idset *ranks)
     return count;
 }
 
+int rlist_set_remap (struct rlist *rl, const char *name, bool remap)
+{
+    if (!rl || !name) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (remap)
+        zhashx_delete (rl->noremap, name);
+    else if (zhashx_insert (rl->noremap, name, (void *) name) < 0)
+        return 0;   /* already present */
+    return 0;
+}
+
 int rlist_remap (struct rlist *rl)
 {
     uint32_t rank = 0;
