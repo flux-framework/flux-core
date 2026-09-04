@@ -324,25 +324,36 @@ struct remap_test {
     const char *cores;
     const char *gpus;
     const char *hosts;
+    int remap_gpus;
 
     const char *result;
 };
 
 struct remap_test remap_tests[] = {
     {
-        "1,7,9,53", "0-3", NULL, "foo[1,7,9,53]",
+        "1,7,9,53", "0-3", NULL, "foo[1,7,9,53]", 0,
         "rank[0-3]/core[0-3]",
     },
     {
-        "1,7,9,53", "1,5,7,9", "1,3", "foo[1,7,9,53]",
+        "1,7,9,53", "1,5,7,9", "1,3", "foo[1,7,9,53]", 0,
         "rank[0-3]/core[0-3],gpu[1,3]",
+    },
+    {
+        "1,7,9,53", "1,5,7,9", "1,3", "foo[1,7,9,53]", 1,
+        "rank[0-3]/core[0-3],gpu[0-1]",
     },
     { 0 },
 };
 
 void test_remap ()
 {
+    struct rlist *rl, *cpy;
+    char *s;
+    char *R;
     struct remap_test *t = remap_tests;
+
+    ok (rlist_set_remap (NULL, NULL, false) < 0 && errno == EINVAL,
+        "rlist_set_remap(NULL, NULL, false) fails with EINVAL)");
 
     while (t && t->ranks) {
         char *before;
@@ -355,6 +366,12 @@ void test_remap ()
             BAIL_OUT ("rlist_from_R failed");
 
         before = rlist_dumps (rl);
+        if (t->remap_gpus) {
+            ok (rlist_set_remap (rl, NULL, false) < 0 && errno == EINVAL,
+                "rlist_set_remap(rl, NULL, false) fails with EINVAL)");
+            ok (rlist_set_remap (rl, "gpu", true) == 0,
+                "rlist_set_remap (gpu, true)");
+        }
         ok (rlist_remap (rl) == 0,
                 "rlist_remap (%s)", before);
         after = rlist_dumps (rl);
@@ -368,15 +385,51 @@ void test_remap ()
 
         t++;
     }
+
+    /*  Ensure remap settings survive rlist_copy_empty()
+     */
+    R = R_create ("0-3", "4-7", "1,3", "host[0-3]", NULL);
+    if (!R)
+        BAIL_OUT ("R_create failed");
+
+    if (!(rl = rlist_from_R (R)))
+        BAIL_OUT ("rlist_from_R failed");
+    ok (rlist_set_remap (rl, "gpu", true) == 0,
+        "rlist_set_remap (gpu, true)");
+    if (!(cpy = rlist_copy_empty (rl)))
+        BAIL_OUT ("rlist_copy_empty failed");
+    ok (rlist_remap (cpy) == 0,
+        "rlist_remap of copy works");
+    s = rlist_dumps (cpy);
+    is (s, "rank[0-3]/core[0-3],gpu[0-1]",
+        "gpu remap setting survived rlist_copy_empty()");
+    free (s);
+    rlist_destroy (rl);
+    rlist_destroy (cpy);
+
+    /*  "core" is remapped by default. Check that it can be disabled
+     */
+    if (!(rl = rlist_from_R (R)))
+        BAIL_OUT ("rlist_from_R failed");
+    ok (rlist_set_remap (rl, "core", false) == 0,
+        "rlist_set_remap (core, false)");
+    ok (rlist_remap (rl) == 0,
+        "rlist_remap works");
+    s = rlist_dumps (rl);
+    is (s, "rank[0-3]/core[4-7],gpu[1,3]",
+        "core ids were not remapped");
+    rlist_destroy (rl);
+    free (s);
+    free (R);
 }
 
 struct remap_test assign_hosts_tests[] = {
     {
-        "1,7,9,53", "0-3", NULL, "foo[1,7,9,53]",
+        "1,7,9,53", "0-3", NULL, "foo[1,7,9,53]", 0,
         "rank[0-3]/core[0-3]",
     },
     {
-        "1,7,9,53", "1,5,7,9", "1,3", "foo[1,7,9,53]",
+        "1,7,9,53", "1,5,7,9", "1,3", "foo[1,7,9,53]", 0,
         "rank[0-3]/core[0-3],gpu[1,3]",
     },
     { 0 },
