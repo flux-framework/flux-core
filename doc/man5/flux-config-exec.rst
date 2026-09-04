@@ -182,6 +182,7 @@ exec.sdexec-constrain-resources
 
    **Requirements:**
 
+   - ``exec.service = "sdexec"``
    - cgroups v2 (unified hierarchy)
    - cpuset cgroup controller delegated to user systemd instance
    - flux-security >= 0.14.0
@@ -199,7 +200,8 @@ exec.sdexec-constrain-resources
 
 exec.sdexec-properties
    (optional) A table of systemd properties to set for all jobs. All values
-   must be strings. See :ref:`sdexec_properties` below.
+   must be strings. See :ref:`sdexec_properties` below. It is an error to
+   specify systemd properties if ``exec.service`` is not set to ``sdexec``.
 
 exec.sdexec-stop-timer-sec
    (optional) Configure the length of time in seconds after a unit enters

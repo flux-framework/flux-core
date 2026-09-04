@@ -381,6 +381,30 @@ int config_setup (flux_t *h,
         }
     }
 
+    /*  sdexec-properties requires exec.service = "sdexec"
+     */
+    if (tmpconf.sdexec_properties
+        && !streq (tmpconf.exec_service, "sdexec")) {
+        errprintf (errp,
+                   "exec.sdexec-properties requires "
+                   "exec.service=\"sdexec\", got exec.service=\"%s\"",
+                   tmpconf.exec_service);
+        errno = EINVAL;
+        return -1;
+    }
+
+    /*  sdexec-constrain-resources requires exec.service = "sdexec"
+     */
+    if (tmpconf.sdexec_constrain_resources
+        && !streq (tmpconf.exec_service, "sdexec")) {
+        errprintf (errp,
+                   "exec.sdexec-constrain-resources requires "
+                   "exec.service=\"sdexec\", got exec.service=\"%s\"",
+                   tmpconf.exec_service);
+        errno = EINVAL;
+        return -1;
+    }
+
     exec_conf = tmpconf;
     return 0;
 }
