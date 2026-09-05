@@ -119,6 +119,26 @@ error:
     return -1;
 }
 
+/* Check for flux.constrained-resources, which indicates this instance
+ * is booting under Flux with resource containment. If not found, set to
+ * "0" to simplify use of the attribute.
+ */
+static int setattr_constrained_resources (struct bootstrap *boot,
+                                          flux_error_t *errp)
+{
+    char *val;
+    int rc;
+
+    val = lookup (boot->upmi, "flux.constrained-resources");
+    rc = setattr (boot->ctx->attrs,
+                  "constrained-resources",
+                  val ? val : "0",
+                  errp);
+    free (val);
+
+    return rc;
+}
+
 /* Initialize some broker attributes using information obtained during
  * bootstrap, such as pre-put values from the PMI KVS.
  */
@@ -183,6 +203,9 @@ static int bootstrap_setattrs_early (struct bootstrap *boot,
                 return -1;
         }
     }
+
+    if (setattr_constrained_resources (boot, errp) < 0)
+        return -1;
 
     if (setattr_broker_mapping (boot, errp) < 0)
         return -1;
