@@ -13,11 +13,11 @@ SYNOPSIS
    #include <errno.h>
 
    int flux_shell_get_info (flux_shell_t *shell,
-                           char **json_str);
+                            char **json_str);
 
    int flux_shell_info_unpack (flux_shell_t *shell,
-                              const char *fmt,
-                              ...);
+                               const char *fmt,
+                               ...);
 
    int flux_shell_get_rank_info (flux_shell_t *shell,
                                  int shell_rank,
@@ -42,8 +42,8 @@ with the following layout:
    "instance_owner":i,
    "rank":i,
    "size":i,
-   "ntasks";i,
-   "service";s,
+   "ntasks":i,
+   "service":s,
    "options": { "verbose":b, "standalone":b },
    "constrained_resources":b,
    "jobspec":o,
@@ -72,8 +72,8 @@ string with the following layout:
    "id":i,
    "name":s,
    "broker_rank":i,
-   "ntasks":i
-   "taskids":s
+   "ntasks":i,
+   "taskids":s,
    "resources": { "ncores":i, "cores":s, ... }
 
 where :var:`id` is the shell rank, :var:`name` is the hostname of that shell
@@ -84,7 +84,7 @@ tasks (an RFC 22 idset string), and :var:`resources` is a dictionary of
 resource name to resource ids assigned to the shell rank.
 
 :func:`flux_shell_info_unpack` and :func:`flux_shell_rank_info_unpack`
-accomplished the same thing with Jansson-style formatting arguments.
+accomplish the same thing with Jansson-style formatting arguments.
 
 If :var:`shell_rank` is set to -1, the current shell rank is used.
 
