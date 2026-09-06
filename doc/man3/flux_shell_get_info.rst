@@ -45,8 +45,24 @@ with the following layout:
    "ntasks";i,
    "service";s,
    "options": { "verbose":b, "standalone":b },
+   "constrained_resources":b,
    "jobspec":o,
    "R":o
+
+where :var:`constrained_resources` indicates that the job's access to
+resources has been constrained to its allocation, as configured by
+``exec.sdexec-constrain-resources`` in :man5:`flux-config-exec`. The value
+is always present.
+
+Resource ids in :var:`R` and in the rank info object are not affected by
+this setting: they are always the ids assigned by the enclosing instance.
+When resources are constrained, however, tools and libraries that enumerate
+devices see only the subset available to the job and index them from zero,
+so those ids are not valid indices within the library. A plugin that
+translates resource ids from :var:`R` into identifiers for use outside
+Flux must account for this. For example, the builtin ``gpu-affinity``
+plugin sets :envvar:`CUDA_VISIBLE_DEVICES` to the position of each allocated
+GPU within the rank's allocation rather than to its id from :var:`R`.
 
 :func:`flux_shell_get_rank_info` returns shell rank information as a json
 string with the following layout:
