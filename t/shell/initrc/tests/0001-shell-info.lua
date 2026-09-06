@@ -44,6 +44,9 @@ R = shell.info.R
 type_ok (R, "table",
     "shell.info.R is a table")
 
+type_ok (shell.info.constrained_resources, "boolean",
+    "shell.info.constrained_resources is a boolean")
+
 rankinfo = shell.rankinfo
 type_ok (rankinfo, "table",
     "shell.rankinfo is a table")
