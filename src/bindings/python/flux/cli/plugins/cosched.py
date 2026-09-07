@@ -20,6 +20,11 @@ class CoSchedPlugin(CLIPlugin):
     """
     def __init__(self, prog, prefix=None):
         super().__init__(prog, prefix=prefix)
+        self.add_option(
+                    "--no-spread",
+                    action="store_true",
+                    help="Disable spread allocation that enables proper coscheduling on user request",
+                )
 
     def _node_type(self, node):
         metadata = node.get("metadata", {})
@@ -121,7 +126,7 @@ class CoSchedPlugin(CLIPlugin):
     def modify_jobspec(self, args, jobspec):
         try:
             handle = Flux()
-            if handle.conf_get('cosched.allowed') == True:
+            if handle.conf_get('cosched.allowed') == True and args.no_spread != True:
                 if len(jobspec.tasks) != 1:
                     # Multiple slot labels in the same request are not allowed for co-scheduling
                     return
