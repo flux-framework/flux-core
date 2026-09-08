@@ -24,6 +24,9 @@
  *                               "init", or "starting"
  *    "barrier-timeout":F      - Specify timeout for start barrier in floating
  *                               point seconds.
+ *    "sdexec-test-expected-cpus":s
+ *                             - Set the sdexec expected-cpus option for
+ *                               post-start check testing purposes.
  * }
  *
  */
