@@ -1363,6 +1363,7 @@ class JobspecV1(Jobspec):
         jobspec.setattr_shell_option("mpi", "none")
         #  Default exit-timeout=none
         jobspec.setattr_shell_option("exit-timeout", "none")
+        jobspec.setattr_shell_option("pmi", "simple")
         if conf is not None:
             jobspec.add_file("conf.json", conf)
         return jobspec
