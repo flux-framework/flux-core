@@ -344,7 +344,7 @@ err:
     return NULL;
 }
 
-static void subprocess_destroy_finish (flux_future_t *f, void *arg)
+static void bulk_exec_subprocess_destroy_finish (flux_future_t *f, void *arg)
 {
     flux_subprocess_t *p = arg;
     if (flux_future_get (f, NULL) < 0) {
@@ -358,12 +358,15 @@ static void subprocess_destroy_finish (flux_future_t *f, void *arg)
     flux_future_destroy (f);
 }
 
-static int subprocess_destroy (flux_t *h, flux_subprocess_t *p)
+static int bulk_exec_subprocess_destroy (flux_t *h, flux_subprocess_t *p)
 {
     flux_future_t *f = flux_subprocess_kill (p, SIGKILL);
     if (!f
         || flux_subprocess_aux_set (p, "flux_t", h, NULL) < 0
-        || flux_future_then (f, -1., subprocess_destroy_finish, p) < 0) {
+        || flux_future_then (f,
+                             -1.,
+                             bulk_exec_subprocess_destroy_finish,
+                             p) < 0) {
         flux_future_destroy (f);
         return -1;
     }
@@ -419,7 +422,7 @@ static int exec_start_cmd (struct bulk_exec *exec,
             return -1;
         if (flux_subprocess_aux_set (p, "job-exec::exec", exec, NULL) < 0
            || zlist_append (exec->processes, p) < 0) {
-            if (subprocess_destroy (exec->h, p) < 0)
+            if (bulk_exec_subprocess_destroy (exec->h, p) < 0)
                 flux_log_error (exec->h, "Unable to destroy pid %ju",
                         (uintmax_t) flux_subprocess_pid (p));
             return -1;
