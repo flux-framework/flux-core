@@ -427,9 +427,10 @@ static int exec_start_cmd (struct bulk_exec *exec,
                         (uintmax_t) flux_subprocess_pid (p));
             return -1;
         }
-        zlist_freefn (exec->processes, p,
-                     (zlist_free_fn *) flux_subprocess_destroy,
-                     true);
+        zlist_freefn (exec->processes,
+                      p,
+                      (zlist_free_fn *) flux_subprocess_destroy,
+                      true);
 
         idset_clear (cmd->ranks, rank);
         rank = idset_next (cmd->ranks, rank);
