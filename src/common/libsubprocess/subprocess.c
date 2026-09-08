@@ -13,7 +13,6 @@
 #endif
 
 #include <sys/types.h>
-#include <sys/socket.h>
 #include <sys/wait.h>
 #include <unistd.h>
 #include <errno.h>
@@ -200,18 +199,6 @@ static flux_subprocess_t *subprocess_create (
      * (i.e. fd == 0)
      */
     init_pair_fds (p->sync_fds);
-
-    /* set CLOEXEC on sync_fds, so on exec(), child sync_fd is closed
-     * and seen by parent */
-#if SOCK_CLOEXEC
-    if (socketpair (PF_LOCAL, SOCK_STREAM | SOCK_CLOEXEC, 0, p->sync_fds) < 0)
-        goto error;
-#else
-    if (socketpair (PF_LOCAL, SOCK_STREAM, 0, p->sync_fds) < 0
-        || fd_set_cloexec (p->sync_fds[0]) < 0
-        || fd_set_cloexec (p->sync_fds[1]) < 0)
-        goto error;
-#endif
 
     if (!(p->channels = zhash_new ())
         || !(p->msgchans = zhash_new ()))

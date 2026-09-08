@@ -12,6 +12,7 @@
 # include "config.h"
 #endif
 
+#include <sys/socket.h>
 #include <sys/wait.h>
 #include <unistd.h>
 #include <signal.h>
@@ -282,6 +283,17 @@ static int local_exec (flux_subprocess_t *p)
 
 int create_process_fork (flux_subprocess_t *p)
 {
+    /* set CLOEXEC on sync_fds, so on exec(), child sync_fd is closed
+     * and seen by parent */
+#if SOCK_CLOEXEC
+    if (socketpair (PF_LOCAL, SOCK_STREAM | SOCK_CLOEXEC, 0, p->sync_fds) < 0)
+        return -1;
+#else
+    if (socketpair (PF_LOCAL, SOCK_STREAM, 0, p->sync_fds) < 0
+        || fd_set_cloexec (p->sync_fds[0]) < 0
+        || fd_set_cloexec (p->sync_fds[1]) < 0)
+        return -1;
+#endif
     if ((p->pid = fork ()) < 0)
         return -1;
 
