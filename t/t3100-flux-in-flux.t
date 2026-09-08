@@ -161,4 +161,16 @@ test_expect_success 'flux_open(3) accepts path-like URIs: "/", "../.." etc' '
 	EOF
 	flux alloc -n1 flux alloc -n1 flux alloc -n1 flux python ./flux_open.py
 '
+test_expect_success 'constrained-resources attr is set to 0 by default' '
+	flux alloc -n1 flux getattr constrained-resources \
+		>constrained-resources-default.out &&
+	test_debug "cat constrained-resources-default.out" &&
+	test "$(cat constrained-resources-default.out)" = "0"
+'
+test_expect_success 'constrained-resources attr is passed from shell to broker' '
+	flux alloc -n1 --setattr=exec.bulkexec.test-constrained-resources=1 \
+		flux getattr constrained-resources >constrained-resources.out &&
+	test_debug "cat constrained-resources.out" &&
+	test "$(cat constrained-resources.out)" = "1"
+'
 test_done
