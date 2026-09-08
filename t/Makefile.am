@@ -58,6 +58,7 @@ LONGTESTSCRIPTS = \
 	t2801-top-cmd.t \
 	t2808-shutdown-cmd.t \
 	t2712-python-cli-alloc.t \
+	t2719-python-cli-alloc-pmi.t \
 	t2714-python-cli-batch.t
 
 # This list is included in both TESTS and dist_check_SCRIPTS.
