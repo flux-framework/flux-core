@@ -630,6 +630,14 @@ test_expect_success 'broker fails gracefully when local-uri in unwritable dir' '
 test_expect_success 'broker broker.pid attribute is immutable' '
 	test_must_fail flux start ${ARGS} --setattr=broker.pid=1234 flux getattr broker.pid
 '
+test_expect_success 'constrained-resources attr defaults to 0' '
+	flux start ${ARGS} flux getattr constrained-resources >cr.out &&
+	test "$(cat cr.out)" = "0"
+'
+test_expect_success 'constrained-resources attr is immutable' '
+	test_must_fail flux start ${ARGS} --setattr=constrained-resources=1 \
+		flux getattr constrained-resources
+'
 test_expect_success 'broker --verbose option works' '
 	flux start ${ARGS} -o,-v true
 '
