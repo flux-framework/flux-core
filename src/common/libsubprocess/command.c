@@ -137,6 +137,7 @@ static int argz_appendv (char **argzp,
     if (vasprintf (&s, fmt, ap) < 0)
         return -1;
     if ((e = argz_add (argzp, argz_lenp, s))) {
+        free (s);
         errno = e;
         return -1;
     }
