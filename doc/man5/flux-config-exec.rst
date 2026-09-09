@@ -198,6 +198,12 @@ exec.sdexec-constrain-resources
       service = "sdexec"
       sdexec-constrain-resources = true
 
+   If this setting is enabled in an instance which is itself running under
+   resource containment, that instance must be started with
+   ``resource.rediscover=true``. Otherwise GPU ids in **R** are relative to
+   the enclosing allocation while the instance topology describes the entire
+   node, and jobs will be constrained to devices they cannot access.
+
 exec.sdexec-properties
    (optional) A table of systemd properties to set for all jobs. All values
    must be strings. See :ref:`sdexec_properties` below. It is an error to
