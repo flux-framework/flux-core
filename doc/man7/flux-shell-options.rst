@@ -349,6 +349,14 @@ GPU AFFINITY
 
     Task 0 sees GPU 0, task 1 sees GPU 1.
 
+  When the job's resources are constrained to its allocation (see
+  ``exec.sdexec-constrain-resources`` in :man5:`flux-config-exec`), the GPU
+  runtime enumerates only the devices available to the job. In that case
+  ``CUDA_VISIBLE_DEVICES`` contains the position of each allocated GPU
+  within the job's allocation rather than its id from **R** -- a job
+  allocated GPU id 7 of 8 gets ``CUDA_VISIBLE_DEVICES=0``. Ids given in
+  ``map:LIST`` are used as-is and are never translated.
+
 INPUT/OUTPUT
 ============
 
