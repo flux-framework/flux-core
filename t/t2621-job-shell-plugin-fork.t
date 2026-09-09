@@ -1,5 +1,7 @@
 #!/bin/sh
 #
+# ci=asan
+
 test_description='Test flux-shell behavior when plugin calls fork(2)'
 
 . `dirname $0`/sharness.sh

@@ -1,5 +1,7 @@
 #!/bin/sh
 #
+# ci=asan
+
 test_description='Test parallel debugger support in emulation mode'
 
 . `dirname $0`/sharness.sh

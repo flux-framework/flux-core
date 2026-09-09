@@ -1,4 +1,6 @@
 #!/bin/sh
+#
+# ci=asan
 
 test_description='test scheduler generator protocol and stats-get RPC'
 

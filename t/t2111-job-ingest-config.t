@@ -1,4 +1,7 @@
 #!/bin/sh
+#
+# ci=asan
+
 test_description='Test job ingest config file'
 
 . $(dirname $0)/sharness.sh

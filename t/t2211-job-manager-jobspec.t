@@ -1,4 +1,7 @@
 #!/bin/sh
+#
+# ci=asan
+
 test_description='Checkout job manager redacted jobspec'
 
 . $(dirname $0)/sharness.sh
