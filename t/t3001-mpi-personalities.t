@@ -16,6 +16,7 @@ run_program() {
 	run_timeout $timeout flux run $OPTS -n${ntasks} -N${nnodes} $*
 }
 
+# N.B. set NO_ASAN, we are modifying LD_PRELOAD
 test_expect_success NO_ASAN "spectrum mpi only enabled with option" '
 	LD_PRELOAD_saved=${LD_PRELOAD} &&
 	unset LD_PRELOAD &&
@@ -28,6 +29,7 @@ test_expect_success NO_ASAN "spectrum mpi only enabled with option" '
 	grep /opt/ibm/spectrum spectrum.out
 '
 
+# N.B. set NO_ASAN, we are modifying LD_PRELOAD
 test_expect_success NO_ASAN "spectrum mpi also enabled with spectrum@version" '
 	LD_PRELOAD_saved=${LD_PRELOAD} &&
 	unset LD_PRELOAD &&
