@@ -491,7 +491,10 @@ static void content_load_completion (flux_future_t *f, void *arg)
     }
 
     if (content_load_get (f, &data, &size) < 0) {
-        flux_log_error (ctx->h, "%s: content_load_get", __FUNCTION__);
+        flux_log_error (ctx->h,
+                        "%s: content_load_get %s",
+                        __FUNCTION__,
+                        blobref);
         content_load_cache_entry_error (ctx, entry, errno, blobref);
         goto done;
     }
