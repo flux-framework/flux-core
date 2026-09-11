@@ -98,7 +98,12 @@ def restore(context):
         return
     print(f"restoring content from {dumpfile}")
     if dumpfile.exists():
-        cmd = f"flux restore --sd-notify --quiet --checkpoint --size-limit=100M {dumpfile}"
+        # Restore straight to the backing store with a wide request window to
+        # keep it busy (content-sqlite coalesces the burst into few commits).
+        cmd = (
+            "flux restore --sd-notify --quiet --checkpoint --size-limit=100M "
+            f"--no-cache --maxreqs=100000 {dumpfile}"
+        )
         context.bash(cmd)
         context.set("dump_restored", True)
     if dumplink and dumplink.exists():
