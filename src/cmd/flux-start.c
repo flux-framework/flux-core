@@ -402,7 +402,7 @@ static void state_cb (flux_subprocess_t *p, flux_subprocess_state_t state)
             }
             break;
         }
-        case FLUX_SUBPROCESS_STOPPED:
+        case FLUX_SUBPROCESS_STOPPED: /* deprecated */
             /* ignore */
             break;
     }
