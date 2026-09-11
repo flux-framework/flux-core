@@ -309,13 +309,14 @@ GPU AFFINITY
 
 .. option:: gpu-affinity=OPT
 
-  Control GPU device visibility via ``CUDA_VISIBLE_DEVICES``. If unspecified,
-  defaults to ``on`` (each task sees all GPUs allocated to the job).
+  Control GPU device visibility via :envvar:`CUDA_VISIBLE_DEVICES`. If
+  unspecified, defaults to ``on`` (each task sees all GPUs allocated to
+  the job).
 
   *OPT* may be:
 
   **on**
-    Set ``CUDA_VISIBLE_DEVICES`` to include all GPUs allocated to the job.
+    Set :envvar:`CUDA_VISIBLE_DEVICES` to include all GPUs allocated to the job.
     All tasks see the same GPU set.
 
     .. code-block:: console
@@ -323,7 +324,7 @@ GPU AFFINITY
       $ flux run -o gpu-affinity=on myapp
 
   **off**
-    Disable the gpu-affinity plugin. ``CUDA_VISIBLE_DEVICES`` will not be
+    Disable the gpu-affinity plugin. :envvar:`CUDA_VISIBLE_DEVICES` will not be
     set by the shell.
 
     .. code-block:: console
@@ -332,7 +333,7 @@ GPU AFFINITY
 
   **per-task**
     Divide allocated GPUs evenly among local tasks. Each task's
-    ``CUDA_VISIBLE_DEVICES`` includes only its assigned GPUs. If there are
+    :envvar:`CUDA_VISIBLE_DEVICES` includes only its assigned GPUs. If there are
     more tasks than GPUs, tasks share GPUs as evenly as possible.
 
     .. code-block:: console
@@ -348,6 +349,14 @@ GPU AFFINITY
       $ flux run -n 2 -o 'gpu-affinity=map:0;1' myapp
 
     Task 0 sees GPU 0, task 1 sees GPU 1.
+
+  When the job's resources are constrained to its allocation (see
+  ``exec.sdexec-constrain-resources`` in :man5:`flux-config-exec`), the GPU
+  runtime enumerates only the devices available to the job. In that case
+  :envvar:`CUDA_VISIBLE_DEVICES` contains the position of each allocated GPU
+  within the job's allocation rather than its id from **R** -- a job
+  allocated GPU id 7 of 8 gets :envvar:`CUDA_VISIBLE_DEVICES=0`. Ids given in
+  ``map:LIST`` are used as-is and are never translated.
 
 INPUT/OUTPUT
 ============
@@ -649,7 +658,7 @@ HWLOC CONFIGURATION
 
   This allows tasks to query the hardware topology without scanning the
   system directly. Also unsets :envvar:`HWLOC_COMPONENTS` which may
-  interfere with ``HWLOC_XMLFILE``.
+  interfere with :envvar:`HWLOC_XMLFILE`.
 
   .. code-block:: console
 

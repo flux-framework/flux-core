@@ -795,6 +795,13 @@ static int init_attrs_post_boot (attr_t *attrs, flux_error_t *errp)
      */
     unsetenv ("FLUX_PROXY_REMOTE");
 
+    /* FLUX_EXEC_CONSTRAINED_RESOURCES should never be set in the broker
+     * environment, but clear it now in case that somehow happens. This
+     * prevents the variable from leaking to the job shell via the job-exec
+     * module, or to the initial program/rc environment.
+     */
+    unsetenv ("FLUX_EXEC_CONSTRAINED_RESOURCES");
+
     if (instance_is_job) {
         val = getenv ("FLUX_KVS_NAMESPACE");
         if (attr_set (attrs, "parent-kvs-namespace", val) < 0) {

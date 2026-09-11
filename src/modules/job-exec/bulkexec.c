@@ -24,6 +24,12 @@
  *                               "init", or "starting"
  *    "barrier-timeout":F      - Specify timeout for start barrier in floating
  *                               point seconds.
+ *    "sdexec-test-expected-cpus":s
+ *                             - Set the sdexec expected-cpus option for
+ *                               post-start check testing purposes.
+ *    "test-constrained-resources":i
+ *                             - Force FLUX_EXEC_CONSTRAINED_RESOURCES=1
+ *                               for testing purposes
  * }
  *
  */
@@ -52,6 +58,11 @@ struct exec_ctx {
 
     const char * mock_exception;   /* fake exception */
     const char *sdexec_test_expected_cpus; /* override for post-start check */
+
+    /*  If non-zero force setting of FLUX_EXEC_CONSTRAINED_RESOURCES in
+     *  the job shell environment for testing purposes.
+     */
+    int test_constrained_resources;
 
     /*  Shells enter a sequence of barriers during startup.  Only the first
      *  is timed; on completion the current barrier is destroyed and a fresh
@@ -101,7 +112,7 @@ static struct exec_ctx *exec_ctx_create (struct jobinfo *job,
     if (json_unpack_ex (job->jobspec,
                         &error,
                         0,
-                        "{s?{s?{s?{s?{s?s s?s s?s s?F !}}}}}",
+                        "{s?{s?{s?{s?{s?s s?s s?s s?i s?F !}}}}}",
                         "attributes",
                           "system",
                             "exec",
@@ -110,6 +121,8 @@ static struct exec_ctx *exec_ctx_create (struct jobinfo *job,
                                 "mock_exception", &ctx->mock_exception,
                                 "sdexec-test-expected-cpus",
                                     &ctx->sdexec_test_expected_cpus,
+                                "test-constrained-resources",
+                                    &ctx->test_constrained_resources,
                                 "barrier-timeout", &ctx->barrier_timeout) < 0) {
         errprintf (errp,
                    "failed to unpack system.exec.bulkexec for %s: %s",
@@ -498,6 +511,19 @@ static int exec_init (struct jobinfo *job)
     }
     if (!(cmd = job_shell_cmd_create (job, service)))
         goto err;
+    /* If testing with FLUX_EXEC_CONSTRAINED_RESOURCES, set it here before
+     * commands are pushed into bulk-exec:
+     */
+    if (ctx->test_constrained_resources
+        && flux_cmd_setenvf (cmd,
+                             1,
+                             "FLUX_EXEC_CONSTRAINED_RESOURCES",
+                             "1") < 0) {
+        flux_log_error (job->h,
+                        "Failed to set FLUX_EXEC_CONSTRAINED_RESOURCES=1");
+        goto err;
+    }
+
     /* When per-rank sdexec options are needed, push one cmd per rank so
      * each transient unit can be configured for its own allocation.
      * Otherwise push a single command covering all ranks (the common case).

@@ -311,6 +311,13 @@ static int set_flux_tbon_interface_hint (struct shell_pmi *pmi)
     return 0;
 }
 
+static int set_flux_constrained_resources (struct shell_pmi *pmi)
+{
+    if (pmi->shell->info->constrained_resources)
+        put_dict (pmi->locals, "flux.constrained-resources", "1");
+    return 0;
+}
+
 static int set_flux_instance_level (struct shell_pmi *pmi)
 {
     char *p;
@@ -457,6 +464,7 @@ static struct shell_pmi *pmi_create (flux_shell_t *shell, json_t *config)
         goto error;
     if (set_flux_instance_level (pmi) < 0
         || set_flux_tbon_interface_hint (pmi) < 0
+        || set_flux_constrained_resources (pmi) < 0
         || (!nomap && set_flux_taskmap (pmi) < 0))
         goto error;
     return pmi;

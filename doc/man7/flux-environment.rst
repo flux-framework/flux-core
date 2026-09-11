@@ -610,6 +610,24 @@ MISCELLANEOUS
    helper program when this variable is set to its path.  It is set by the
    job-exec system in the IMP environment at job launch.
 
+.. envvar:: FLUX_EXEC_CONSTRAINED_RESOURCES
+
+   Set to ``1`` by the job execution system in the job shell environment
+   when the job's resources are constrained to its allocation, as configured
+   by ``exec.sdexec-constrain-resources``. See :man5:`flux-config-exec`.
+
+   This variable is internal to the job shell, which uses it to set the
+   :var:`constrained_resources` member of the shell info object. Shell
+   plugins should use :man3:`flux_shell_info_unpack` rather than reading
+   this variable directly. The shell's PMI server additionally publishes
+   ``flux.constrained-resources`` so that a Flux instance launched as a job
+   sets the ``constrained-resources`` broker attribute, which broker modules
+   can query. See :man7:`flux-broker-attributes`.
+
+   This variable is not passed to the job environment, and the broker clears
+   it at startup so that a value inherited from the enclosing environment
+   cannot affect jobs run by the instance. Setting it manually has no effect.
+
 .. _sub_command_environment:
 
 SUB-COMMAND ENVIRONMENT

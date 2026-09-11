@@ -85,7 +85,17 @@ test_expect_success 'exec.sdexec-constrain-resources is set' '
 test_expect_success 'sdexec-mapper module is running' '
 	flux ping -c 1 sdexec-mapper
 '
-
+test_expect_success 'shell info reports constrained_resources' '
+	cat >info.lua <<-EOT &&
+	print(shell.info.constrained_resources)
+	EOT
+	flux run -n1 -c1 -o initrc=$(pwd)/info.lua true >info.out 2>&1 &&
+	grep true info.out
+'
+test_expect_success 'nested instance sets constrained-resources attribute' '
+	flux alloc -n1 -c1 flux getattr constrained-resources >nested.out &&
+	test "$(cat nested.out)" = "1"
+'
 #
 # basic: cpuset.cpus.effective is set and non-empty for a constrained job
 #
@@ -504,7 +514,17 @@ test_expect_success MULTICORE \
 	./getcpus.sh >unconstrained.expected &&
 	test_cmp unconstrained.expected cpus1unconstrained.out
 '
-
+test_expect_success 'shell info reports constrained_resources=false' '
+	cat >info.lua <<-EOT &&
+	print(shell.info.constrained_resources)
+	EOT
+	flux run -n1 -c1 -o initrc=$(pwd)/info.lua true >info2.out 2>&1 &&
+	grep false info2.out
+'
+test_expect_success 'nested instance shows constrained-resources=0' '
+	flux alloc -n1 -c1 flux getattr constrained-resources >nested2.out &&
+	test "$(cat nested2.out)" = "0"
+'
 #
 # Diagnostic CLI: flux python -m flux.sdexec.map
 #

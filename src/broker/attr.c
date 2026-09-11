@@ -95,6 +95,7 @@ static struct registered_attr attrtab[] = {
     { "local-uri", ATTR_IMMUTABLE },
     { "parent-uri", ATTR_READONLY | ATTR_IMMUTABLE },
     { "instance-level", ATTR_READONLY | ATTR_IMMUTABLE },
+    { "constrained-resources", ATTR_READONLY | ATTR_IMMUTABLE },
     { "jobid", ATTR_READONLY | ATTR_IMMUTABLE },
     { "jobid-path", ATTR_READONLY | ATTR_IMMUTABLE },
     { "parent-kvs-namespace", ATTR_READONLY | ATTR_IMMUTABLE },

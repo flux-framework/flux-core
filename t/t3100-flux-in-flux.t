@@ -161,4 +161,41 @@ test_expect_success 'flux_open(3) accepts path-like URIs: "/", "../.." etc' '
 	EOF
 	flux alloc -n1 flux alloc -n1 flux alloc -n1 flux python ./flux_open.py
 '
+test_expect_success 'constrained-resources attr is set to 0 by default' '
+	flux alloc -n1 flux getattr constrained-resources \
+		>constrained-resources-default.out &&
+	test_debug "cat constrained-resources-default.out" &&
+	test "$(cat constrained-resources-default.out)" = "0"
+'
+test_expect_success 'constrained-resources attr is passed from shell to broker' '
+	flux alloc -n1 --setattr=exec.bulkexec.test-constrained-resources=1 \
+		flux getattr constrained-resources >constrained-resources.out &&
+	test_debug "cat constrained-resources.out" &&
+	test "$(cat constrained-resources.out)" = "1"
+'
+test_expect_success 'broker does not remap GPUs when constrained-resources=0' '
+	flux jobtap load alloc-bypass.so &&
+	flux R encode --cores=4-7 --gpus=4-7 > R.gpu4-7 &&
+	flux alloc -N1 --setattr=alloc-bypass.R="$(cat R.gpu4-7)" \
+		-o cpu-affinity=off \
+		-o gpu-affinity=off \
+		--conf=resource.noverify=true \
+		flux resource R > R-norerank.json &&
+	test_debug "cat R-norerank.json" &&
+	GPUS="$(jq -rS .execution.R_lite[0].children.gpu <R-norerank.json)" &&
+	test_debug "echo got GPUs=$GPUS" &&
+	test "$GPUS" = "4-7"
+'
+test_expect_success 'broker remaps GPUs when constrained-resources=1' '
+	flux alloc -N1 --setattr=alloc-bypass.R="$(cat R.gpu4-7)" \
+		--setattr=exec.bulkexec.test-constrained-resources=1 \
+		-o cpu-affinity=off \
+		-o gpu-affinity=off \
+		--conf=resource.noverify=true \
+		flux resource R > R-rerank.json &&
+	test_debug "cat R-rerank.json" &&
+	GPUS="$(jq -rS .execution.R_lite[0].children.gpu <R-rerank.json)" &&
+	test_debug "echo got GPUs=$GPUS" &&
+	test "$GPUS" = "0-3"
+'
 test_done

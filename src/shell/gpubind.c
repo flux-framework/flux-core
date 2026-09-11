@@ -50,6 +50,7 @@ static struct gpu_affinity *gpu_affinity_create (flux_shell_t *shell)
 {
     const char *gpu_list = NULL;
     struct gpu_affinity *ctx = calloc (1, sizeof (*ctx));
+
     if (!ctx)
         return NULL;
     if (flux_shell_rank_info_unpack (shell,
@@ -66,6 +67,43 @@ static struct gpu_affinity *gpu_affinity_create (flux_shell_t *shell)
         goto error;
     }
     ctx->ngpus = idset_count (ctx->gpus);
+
+    /*  Under device containment the cgroup denies access to the device
+     *  nodes of unallocated GPUs, and the GPU runtimes enumerate only
+     *  the devices they can open, indexing them from zero. Verified with
+     *  ROCm and CUDA on AMD MI300X and NVIDIA H100 systems.
+     *  (see flux-framework/flux-core#7790).
+     */
+    if (ctx->ngpus > 0) {
+        int constrained = 0;
+
+        if (flux_shell_info_unpack (shell,
+                                   "{s:b}",
+                                   "constrained_resources",
+                                   &constrained) < 0) {
+            shell_log_errno ("flux_shell_info_unpack");
+            goto error;
+        }
+        if (constrained) {
+            struct idset *rel;
+
+            if (!(rel = idset_create (0, IDSET_FLAG_AUTOGROW))) {
+                shell_log_errno ("idset_create");
+                goto error;
+            }
+            if (idset_range_set (rel, 0, ctx->ngpus - 1) < 0) {
+                shell_log_errno ("idset_range_set");
+                idset_destroy (rel);
+                goto error;
+            }
+            shell_debug ("device containment active: remap gpus: %s to %d-%d",
+                         gpu_list,
+                         0,
+                         ctx->ngpus - 1);
+            idset_destroy (ctx->gpus);
+            ctx->gpus = rel;
+        }
+    }
     return ctx;
 error:
     gpu_affinity_destroy (ctx);

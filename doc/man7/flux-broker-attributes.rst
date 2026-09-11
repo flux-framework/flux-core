@@ -105,6 +105,17 @@ parent-kvs-namespace :ref:`[readonly] <attr_readonly>`
    This is the KVS namespace assigned to this Flux instance by its enclosing
    instance, if it was launched by Flux as a job.
 
+constrained-resources :ref:`[readonly] <attr_readonly>`
+   Set to ``1`` if this broker's access to resources is constrained to the
+   allocation of the job that launched it, or ``0`` otherwise. The value is
+   obtained from the ``flux.constrained-resources`` PMI key published by the
+   enclosing instance's job shell.
+
+   Note that this describes a constraint imposed *on* this instance, not one
+   that this instance imposes on its own jobs. For example, if resources are
+   constrained, resource ids in **R** may refer only to the devices and CPUs
+   available to this instance rather than to all of those present on the node.
+
 hostlist
    An RFC 29 hostlist in broker rank order.  This value may be used to
    translate between broker ranks and hostnames.

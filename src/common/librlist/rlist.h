@@ -91,6 +91,11 @@ int rlist_remove_ranks (struct rlist *rl, const struct idset *ranks);
  */
 int rlist_remap (struct rlist *rl);
 
+/*  Enable or disable remap of resources named 'name' during rlist_remap().
+ *   By default, type "gpu" is the only resource type not remapped.
+ */
+int rlist_set_remap (struct rlist *rl, const char *name, bool remap);
+
 /*  Re-assign hostnames to rlist 'rl'. The number of hosts in the "hosts"
  *   hostlist expression must match the size of rlist 'rl'.
  */

@@ -300,6 +300,108 @@ test_expect_success 'flux-shell: gpu-affinity bad arg is ignored' '
 	test_debug "cat ${name}.err" >&2 &&
 	grep "Failed to get gpu-affinity shell option" ${name}.err
 '
+test_expect_success 'flux-shell: create multi-gpu R with non-zero origin ids' '
+	flux R encode --cores=0-1 --gpus=4-7 >R.gpu4-7
+'
+test_expect_success 'flux-shell: gpu-affinity uses absolute ids when unconstrained' '
+	name=gpu-unconstrained &&
+	flux run -N1 -n2 \
+		--label-io \
+		--setattr=alloc-bypass.R="$(cat R.gpu4-7)" \
+		printenv CUDA_VISIBLE_DEVICES >${name}.output 2>${name}.err &&
+	cat >${name}.expected <<-EOF  &&
+	0: 4,5,6,7
+	1: 4,5,6,7
+	EOF
+	test_debug "cat ${name}.output ${name}.err" &&
+	sort -k1,1n ${name}.output > ${name}.out &&
+	test_cmp ${name}.expected ${name}.out
+'
+test_expect_success 'flux-shell: gpu-affinity reindexes from 0 when constrained' '
+	name=gpu-constrained &&
+	flux run -N1 -n2 \
+		--label-io \
+		--setattr=alloc-bypass.R="$(cat R.gpu4-7)" \
+		--setattr=exec.bulkexec.test-constrained-resources=1 \
+		printenv CUDA_VISIBLE_DEVICES >${name}.output 2>${name}.err &&
+	cat >${name}.expected <<-EOF  &&
+	0: 0,1,2,3
+	1: 0,1,2,3
+	EOF
+	test_debug "cat ${name}.output ${name}.err" &&
+	sort -k1,1n ${name}.output > ${name}.out &&
+	test_cmp ${name}.expected ${name}.out
+'
+test_expect_success 'flux-shell: constrained gpu-affinity is a no-op for zero-origin ids' '
+	name=gpu-constrained-noop &&
+	flux run -N1 -n2 \
+		--label-io \
+		--setattr=alloc-bypass.R="$(cat R.gpu)" \
+		--setattr=exec.bulkexec.test-constrained-resources=1 \
+		printenv CUDA_VISIBLE_DEVICES >${name}.output 2>${name}.err &&
+	cat >${name}.expected <<-EOF  &&
+	0: 0,1,2,3
+	1: 0,1,2,3
+	EOF
+	test_debug "cat ${name}.output ${name}.err" &&
+	sort -k1,1n ${name}.output > ${name}.out &&
+	test_cmp ${name}.expected ${name}.out
+'
+test_expect_success 'flux-shell: constrained gpu-affinity=per-task' '
+	name=gpu-constrained-per-task &&
+	flux run -N1 -n2 \
+		--label-io \
+		--setattr=alloc-bypass.R="$(cat R.gpu4-7)" \
+		--setattr=exec.bulkexec.test-constrained-resources=1 \
+		-o gpu-affinity=per-task \
+		printenv CUDA_VISIBLE_DEVICES >${name}.output 2>${name}.err &&
+	cat >${name}.expected <<-EOF  &&
+	0: 0,1
+	1: 2,3
+	EOF
+	test_debug "cat ${name}.output ${name}.err" &&
+	sort -k1,1n ${name}.output > ${name}.out &&
+	test_cmp ${name}.expected ${name}.out
+'
+test_expect_success 'flux-shell: constrained gpu-affinity=map: is not reindexed' '
+	name=gpu-constrained-map &&
+	flux run -N1 -n2 \
+		--label-io \
+		--setattr=alloc-bypass.R="$(cat R.gpu4-7)" \
+		--setattr=exec.bulkexec.test-constrained-resources=1 \
+		-o gpu-affinity="map:7;4-6" \
+		printenv CUDA_VISIBLE_DEVICES >${name}.output 2>${name}.err &&
+	cat >${name}.expected <<-EOF  &&
+	0: 7
+	1: 4,5,6
+	EOF
+	test_debug "cat ${name}.output ${name}.err" &&
+	sort -k1,1n ${name}.output > ${name}.out &&
+	test_cmp ${name}.expected ${name}.out
+'
+test_expect_success 'flux-shell: constrained gpu-affinity=off sets nothing' '
+	name=gpu-constrained-off &&
+	test_expect_code 1 flux run -N1 -n2 \
+		--label-io \
+		--setattr=alloc-bypass.R="$(cat R.gpu4-7)" \
+		--setattr=exec.bulkexec.test-constrained-resources=1 \
+		-o gpu-affinity=off \
+		--env=-CUDA_VISIBLE_DEVICES \
+		printenv CUDA_VISIBLE_DEVICES >${name}.output 2>${name}.err &&
+	cat >${name}.expected <<-EOF  &&
+	EOF
+	test_debug "cat ${name}.output ${name}.err" &&
+	sort -k1,1n ${name}.output > ${name}.out &&
+	test_cmp ${name}.expected ${name}.out
+'
+test_expect_success 'flux-shell: constrained job with no GPUs still gets -1' '
+	name=gpu-constrained-none &&
+	flux run \
+		--setattr=exec.bulkexec.test-constrained-resources=1 \
+		printenv CUDA_VISIBLE_DEVICES >${name}.out 2>&1 &&
+	test_debug "cat ${name}.out" &&
+	grep "^-1" ${name}.out
+'
 test_expect_success 'flux-shell: create multi-node multi-gpu R' '
 	cat >R2.gpu <<-EOF
 	{
