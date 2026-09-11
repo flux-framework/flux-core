@@ -139,15 +139,20 @@ int bulk_exec_write (struct bulk_exec *exec,
 {
     flux_subprocess_t *p;
 
-    if (!exec || !stream || !buf || len <= 0) {
+    if (!exec || !stream || !buf || len == 0) {
         errno = EINVAL;
         return -1;
     }
 
     p = zlist_first (exec->processes);
     while (p) {
-        if (flux_subprocess_write (p, stream, buf, len) < len)
+        int n = flux_subprocess_write (p, stream, buf, len);
+        if (n < 0)
             return -1;
+        if ((size_t)n < len) {
+            errno = ENOSPC;
+            return -1;
+        }
         p = zlist_next (exec->processes);
     }
     return 0;
@@ -339,7 +344,7 @@ err:
     return NULL;
 }
 
-static void subprocess_destroy_finish (flux_future_t *f, void *arg)
+static void bulk_exec_subprocess_destroy_finish (flux_future_t *f, void *arg)
 {
     flux_subprocess_t *p = arg;
     if (flux_future_get (f, NULL) < 0) {
@@ -353,12 +358,15 @@ static void subprocess_destroy_finish (flux_future_t *f, void *arg)
     flux_future_destroy (f);
 }
 
-static int subprocess_destroy (flux_t *h, flux_subprocess_t *p)
+static int bulk_exec_subprocess_destroy (flux_t *h, flux_subprocess_t *p)
 {
     flux_future_t *f = flux_subprocess_kill (p, SIGKILL);
     if (!f
         || flux_subprocess_aux_set (p, "flux_t", h, NULL) < 0
-        || flux_future_then (f, -1., subprocess_destroy_finish, p) < 0) {
+        || flux_future_then (f,
+                             -1.,
+                             bulk_exec_subprocess_destroy_finish,
+                             p) < 0) {
         flux_future_destroy (f);
         return -1;
     }
@@ -414,14 +422,15 @@ static int exec_start_cmd (struct bulk_exec *exec,
             return -1;
         if (flux_subprocess_aux_set (p, "job-exec::exec", exec, NULL) < 0
            || zlist_append (exec->processes, p) < 0) {
-            if (subprocess_destroy (exec->h, p) < 0)
+            if (bulk_exec_subprocess_destroy (exec->h, p) < 0)
                 flux_log_error (exec->h, "Unable to destroy pid %ju",
                         (uintmax_t) flux_subprocess_pid (p));
             return -1;
         }
-        zlist_freefn (exec->processes, p,
-                     (zlist_free_fn *) flux_subprocess_destroy,
-                     true);
+        zlist_freefn (exec->processes,
+                      p,
+                      (zlist_free_fn *) flux_subprocess_destroy,
+                      true);
 
         idset_clear (cmd->ranks, rank);
         rank = idset_next (cmd->ranks, rank);
@@ -530,9 +539,10 @@ struct bulk_exec * bulk_exec_create (struct bulk_exec_ops *ops,
     exec->ops = sp_ops;
     exec->handlers = ops;
     exec->arg = arg;
-    exec->processes = zlist_new ();
-    exec->commands = zlist_new ();
-    exec->exit_batch = idset_create (0, IDSET_FLAG_AUTOGROW);
+    if (!(exec->processes = zlist_new ())
+        || !(exec->commands = zlist_new ())
+        || !(exec->exit_batch = idset_create (0, IDSET_FLAG_AUTOGROW)))
+        goto error;
     exec->max_start_per_loop = 1;
 
     return exec;
