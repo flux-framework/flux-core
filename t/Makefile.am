@@ -112,6 +112,7 @@ TESTSCRIPTS = \
 	t0043-content-sqlite-gc.t \
 	t0044-gc-cmd.t \
 	t0045-check-json-pack.t \
+	t0046-gc-emptydir.t \
 	t0090-content-enospc.t \
 	t0099-admin-system-scripts.t \
 	t0100-modprobe.t \

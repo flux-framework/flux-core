@@ -22,6 +22,7 @@
 #include "src/common/libkvs/kvs_treewalk.h"
 #include "src/common/libutil/blobref.h"
 #include "src/common/libcontent/content.h"
+#include "src/common/libutil/errno_safe.h"
 #include "ccan/str/str.h"
 
 #include "builtin.h"
@@ -540,6 +541,62 @@ done:
     return rc;
 }
 
+/* Protect the canonical RFC 11 empty directory object.
+ * See flux-framework/flux-core#7808.
+ *
+ * The KVS stores this blob once at initialization and assumes it persists
+ * until the next offline gc; an online gc that swept it would break the next
+ * namespace create with a dangling reference.
+ */
+static int protect_empty_dir (flux_t *h, int64_t *markedp)
+{
+    const char *hash_name;
+    json_t *dir = NULL;
+    char *data = NULL;
+    char blobref[BLOBREF_MAX_STRING_SIZE];
+    json_t *hashes = NULL;
+    flux_future_t *f = NULL;
+    int marked;
+    int rc = -1;
+
+    if (!(hash_name = flux_attr_get (h, "content.hash")))
+        return -1;
+    if (!(dir = treeobj_create_dir ())
+        || !(data = treeobj_encode (dir)))
+        goto done;
+    if (blobref_hash (hash_name,
+                      data,
+                      strlen (data),
+                      blobref,
+                      sizeof (blobref)) < 0)
+        goto done;
+    if (!(hashes = json_pack ("[s]", blobref))) {
+        errno = ENOMEM;
+        goto done;
+    }
+    if (!(f = flux_rpc_pack (h,
+                             "content-backing.mark",
+                             0,
+                             0,
+                             "{s:I s:O}",
+                             "epoch", horizon_epoch,
+                             "hashes", hashes)))
+        goto done;
+    if (flux_rpc_get_unpack (f, "{s:i}", "marked", &marked) < 0)
+        goto done;
+    /* N.B. marked may come back 0 or 1, depending on whether any action
+     * was taken.
+     */
+    *markedp += marked;
+    rc = 0;
+done:
+    flux_future_destroy (f);
+    ERRNO_SAFE_WRAP (json_decref, hashes);
+    ERRNO_SAFE_WRAP (free, data);
+    ERRNO_SAFE_WRAP (json_decref, dir);
+    return rc;
+}
+
 /* Flush the final partial batch and wait for every outstanding mark RPC to
  * complete.  Called once, after all roots have been walked; the walk itself
  * cannot drain because mark_reap must not stop the reactor mid-walk.
@@ -724,6 +781,14 @@ int cmd_gc (optparse_t *p, int argc, char **argv)
     /* Mark phase */
     if (mark_all_roots (h, roots, &marked) < 0)
         log_err_exit ("mark phase failed");
+
+    /* The empty-dir blob (root of every fresh namespace) is referenced by
+     * none of the enumerated roots once startup empty-dirs age out; protect it
+     * always.  Part of the mark phase, so it runs before the test-mark-only
+     * stop below.
+     */
+    if (protect_empty_dir (h, &marked) < 0)
+        log_err_exit ("failed to protect empty-dir blob");
 
     /* Stop after the mark phase (testing only).  This is the same state a
      * crash between mark and sweep would leave: the mark phase is complete
