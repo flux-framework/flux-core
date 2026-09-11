@@ -1265,10 +1265,12 @@ static void server_disconnect_cb (flux_t *h,
                 else
                     server_kill (p, SIGKILL);
             }
-            if (p->waiter
-                && streq (flux_msg_route_first (p->waiter), sender)) {
-                flux_msg_decref (p->waiter);
-                p->waiter = NULL;
+            if (p->waiter) {
+                const char *wsender = flux_msg_route_first (p->waiter);
+                if (wsender && streq (wsender, sender)) {
+                    flux_msg_decref (p->waiter);
+                    p->waiter = NULL;
+                }
             }
             p = zlistx_next (s->subprocesses);
         }
