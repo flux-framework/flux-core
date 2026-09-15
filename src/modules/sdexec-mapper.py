@@ -14,7 +14,7 @@
 Provides the ``sdexec-mapper.lookup`` RPC, called by the sdexec module
 to translate Flux logical resource IDs (cores, GPUs) to systemd
 transient unit properties (AllowedCPUs, AllowedMemoryNodes,
-AllowedDevices).
+DeviceAllow).
 
 The mapper is initialized lazily on first use by fetching the hwloc
 topology XML from ``resource.topo-get``.  Each lookup request supplies
@@ -122,9 +122,10 @@ class SdexecMapModule(BrokerModule):
         resources allocated to the job.  The local broker rank's resources are
         extracted from R and passed to the mapper.
 
-        Response payload: dict of systemd unit property names to values,
-        e.g. ``{"AllowedCPUs": "0-3", "AllowedMemoryNodes": "0",
-        "AllowedDevices": ["char /dev/dri/renderD128 rw"]}``.
+        Response payload: dict of systemd unit property names to string
+        values, e.g. ``{"AllowedCPUs": "0-3", "AllowedMemoryNodes": "0",
+        "DeviceAllow": "/dev/dri/renderD128 rw"}``.  Values must be strings;
+        multi-valued properties like ``DeviceAllow`` are comma-separated.
         """
         try:
             if self._mapper is None:

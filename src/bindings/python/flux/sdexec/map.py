@@ -12,7 +12,12 @@
 
 This module maps Flux resource IDs (logical core and GPU indices) to systemd
 transient unit properties such as ``AllowedCPUs``, ``AllowedMemoryNodes``, and
-``AllowedDevices``.
+``DeviceAllow``.
+
+Property values must be strings: the sdexec module rejects a mapper result
+whose values are not strings, failing the job before anything reaches systemd.
+Properties that take a list in systemd (such as ``DeviceAllow``) are encoded as
+a comma-separated string.
 
 Overview
 --------
@@ -62,7 +67,7 @@ and NUMA-node mapping is inherited unchanged::
         def map_gpus(self, gpus):
             # custom discovery, e.g. vendor-specific sysfs
             ...
-            return {"AllowedDevices": [...]}
+            return {"DeviceAllow": "/dev/foo rw,/dev/bar rw"}
 
 **Add a new resource type** — subclass :class:`HwlocMapper` (or
 :class:`ResourceMapper`) and add a ``map_<type>`` method.  The dispatcher
@@ -71,7 +76,7 @@ picks it up automatically when that key appears in the resources dict::
     class FpgaMapper(HwlocMapper):
         def map_fpgas(self, fpgas):
             ...
-            return {"AllowedDevices": [...]}
+            return {"DeviceAllow": "/dev/fpga0 rw,/dev/fpga1 rw"}
 
 **Replace the implementation entirely** — subclass :class:`ResourceMapper`
 directly and implement all required ``map_<type>`` methods.  Point the sdexec
@@ -383,7 +388,7 @@ class HwlocMapper(ResourceMapper):
     """hwloc-based resource mapper.
 
     Uses hwloc topology XML to map logical core IDs to ``AllowedCPUs`` and
-    ``AllowedMemoryNodes``, and logical GPU IDs to ``AllowedDevices`` entries
+    ``AllowedMemoryNodes``, and logical GPU IDs to ``DeviceAllow`` entries
     resolved via sysfs.
 
     Args:
