@@ -228,10 +228,16 @@ The mapper module provides runtime statistics via ``flux module stats sdexec-map
    {
      "config": {
        "mapper_class": "flux.sdexec.map.HwlocMapper",
-       "mapper_searchpath": ""
+       "mapper_searchpath": "",
+       "allowed_device_patterns": [ "/dev/cxi*" ],
+       "allowed_devices": [ "/dev/cxi0 rw", "/dev/cxi1 rw" ]
      },
      "requests": 42
    }
+
+``allowed_device_patterns`` is the configured ``sdexec.allowed-devices`` list
+and ``allowed_devices`` is that list expanded against the local ``/dev``, so
+the two together show which patterns matched hardware on this node.
 
 Configuration
 =============
