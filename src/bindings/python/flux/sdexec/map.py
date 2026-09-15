@@ -146,8 +146,8 @@ _SCALED_MEMORY_PROPS = (
 def _parse_size(s):
     """Parse a systemd memory size string.
 
-    Accepts absolute sizes with IEC binary suffixes (K, M, G, T, P, E),
-    plain byte counts, percentage values, or "infinity".
+    Accepts absolute sizes with IEC binary suffixes (K, M, G, T), plain
+    byte counts, percentage values, or "infinity".
 
     Returns:
         (value: float, is_percent: bool). For absolute sizes value is in
