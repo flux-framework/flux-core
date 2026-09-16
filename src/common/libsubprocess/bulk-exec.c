@@ -530,9 +530,10 @@ struct bulk_exec * bulk_exec_create (struct bulk_exec_ops *ops,
     exec->ops = sp_ops;
     exec->handlers = ops;
     exec->arg = arg;
-    exec->processes = zlist_new ();
-    exec->commands = zlist_new ();
-    exec->exit_batch = idset_create (0, IDSET_FLAG_AUTOGROW);
+    if (!(exec->processes = zlist_new ())
+        || !(exec->commands = zlist_new ())
+        || !(exec->exit_batch = idset_create (0, IDSET_FLAG_AUTOGROW)))
+        goto error;
     exec->max_start_per_loop = 1;
 
     return exec;

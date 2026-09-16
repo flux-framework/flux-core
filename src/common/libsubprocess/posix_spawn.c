@@ -148,6 +148,13 @@ int create_process_spawn (flux_subprocess_t *p)
     char **env = cmd_env_expand (p->cmd);
     char **argv = cmd_argv_expand (p->cmd);
 
+    if (!env || !argv) {
+        free (env);
+        free (argv);
+        errno = ENOMEM;
+        return -1;
+    }
+
     posix_spawnattr_init (&attr);
     posix_spawn_file_actions_init (&file_actions);
 
@@ -163,7 +170,8 @@ int create_process_spawn (flux_subprocess_t *p)
 
     /*  Setup file descriptors in file_actions
      */
-    spawn_setup_fds (p, &file_actions);
+    if (spawn_setup_fds (p, &file_actions) < 0)
+        goto out;
 
     /*  Attempt to spawn a new child process */
     retval = posix_spawnp (&p->pid, argv[0], &file_actions, &attr, argv, env);

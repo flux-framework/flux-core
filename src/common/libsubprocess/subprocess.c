@@ -107,8 +107,10 @@ struct idset *subprocess_childfds (flux_subprocess_t *p)
     if (!(ids = idset_decode ("0-2")))
         return NULL;
 
-    if (p->sync_fds[1] > 0)
-        idset_set (ids, p->sync_fds[1]);
+    if (p->sync_fds[1] > 0) {
+        if (idset_set (ids, p->sync_fds[1]) < 0)
+            goto error;
+    }
 
     c = zhash_first (p->channels);
     while (c) {
@@ -117,7 +119,8 @@ struct idset *subprocess_childfds (flux_subprocess_t *p)
             if (streq (c->name, stdchan[i]))
                 goto next;
         }
-        idset_set (ids, c->child_fd);
+        if (idset_set (ids, c->child_fd) < 0)
+            goto error;
 next:
         c = zhash_next (p->channels);
     }
@@ -125,11 +128,15 @@ next:
     // protect any message channel file descriptors to be passed to subproc
     mch = zhash_first (p->msgchans);
     while (mch) {
-        idset_set (ids, msgchan_get_fd (mch));
+        if (idset_set (ids, msgchan_get_fd (mch)) < 0)
+            goto error;
         mch = zhash_next (p->msgchans);
     }
 
     return ids;
+error:
+    idset_destroy (ids);
+    return NULL;
 }
 
 static void subprocess_free (flux_subprocess_t *p)
@@ -1078,7 +1085,10 @@ static flux_future_t *add_pending_signal (flux_subprocess_t *p, int signum)
         return NULL;
     }
     if ((f = flux_future_create (NULL, NULL))) {
-        flux_subprocess_aux_set (p, "sp::signal_future", f, NULL);
+        if (flux_subprocess_aux_set (p, "sp::signal_future", f, NULL) < 0) {
+            flux_future_destroy (f);
+            return NULL;
+        }
         p->signal_pending = signum;
         /*  Take a reference on the returned future in case the caller
          *  destroys it between now and when the signal is actually sent.
