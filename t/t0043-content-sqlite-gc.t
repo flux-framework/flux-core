@@ -17,6 +17,7 @@ test_under_flux 1 minimal
 
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
 BLOBREF=${FLUX_BUILD_DIR}/t/kvs/blobref
+GC_RACE=${FLUX_BUILD_DIR}/t/kvs/content-gc-race
 
 test_expect_success 'load content and content-sqlite modules' '
 	flux module load content &&
@@ -192,6 +193,31 @@ test_expect_success 'sweep below the new epoch keeps the re-stamped blob, drops 
 	test $(sweep_all 2) -eq 1 &&
 	test "$(flux content load --bypass-cache $(cat J.ref))" = "content-J" &&
 	test_must_fail flux content load --bypass-cache $(cat K.ref)
+'
+
+#
+# mark/sweep must flush an open group-commit batch
+#
+# Group commit holds a sqlite transaction open across a store burst; mark and
+# sweep open their own transaction and must flush that batch first (no nested
+# transactions, and the GC pass must see committed state).  content-gc-race
+# pipelines a store burst immediately followed by a mark/sweep on one handle,
+# so the GC RPC lands while the batch is still open -- something the one-shot
+# rpc tool cannot reproduce.  Run with a short batch timeout so the batch does
+# not simply age out before the GC request is processed.
+#
+
+test_expect_success 'reload content-sqlite with a long batch timeout' '
+	flux module reload content-sqlite truncate batch-timeout=60s
+'
+test_expect_success 'mark flushes an open group-commit batch' '
+	$GC_RACE mark
+'
+test_expect_success 'sweep flushes an open group-commit batch' '
+	$GC_RACE sweep
+'
+test_expect_success 'restore default content-sqlite config' '
+	flux module reload content-sqlite truncate
 '
 
 #
