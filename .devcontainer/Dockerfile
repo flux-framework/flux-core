@@ -1,4 +1,4 @@
-FROM fluxrm/testenv:focal
+FROM fluxrm/testenv:noble
 
 LABEL maintainer="Vanessasaurus <@vsoch>"
 
@@ -11,12 +11,12 @@ ENV USER_UID=${USER_UID}
 ENV USER_GID=${USER_GID}
 
 # Pip not provided in this version
-RUN apt-get update
+RUN apt-get update && apt-get install -y python3-pip
 COPY scripts/requirements-dev.txt /requirements.txt
 
 # For easier Python development.
-RUN python3 -m pip install IPython && \
-    python3 -m pip install -r /requirements.txt
+RUN python3 -m pip install --break-system-packages IPython && \
+    python3 -m pip install --break-system-packages -r /requirements.txt
 
 # Assuming installing to /usr/local
 ENV LD_LIBRARY_PATH=/usr/local/lib
