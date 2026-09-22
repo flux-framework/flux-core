@@ -5,26 +5,28 @@ from math import ceil
 from flux import Flux
 from flux.cli.plugin import CLIPlugin
 
+
 class CoSchedPlugin(CLIPlugin):
     """Flux CLI plugin for co-scheduling.
 
     Modifies the jobspec to request slots grouped under a configured
     resource type, e.g. numanode, socket, or ccd.
     To enable this plugin, set the allowed parameter under the cosched key in flux config as true.
-    e.g. 
+    e.g.
     [cosched]
     allowed=true
     n_way=2
     resource_type="numanode"
     Also the flux resource graph (jgf) should be defined for the plugin to work.
     """
+
     def __init__(self, prog, prefix=None):
         super().__init__(prog, prefix=prefix)
         self.add_option(
-                    "--no-spread",
-                    action="store_true",
-                    help="Disable spread allocation that enables proper coscheduling on user request",
-                )
+            "--no-spread",
+            action="store_true",
+            help="Disable spread allocation that enables proper coscheduling on user request",
+        )
 
     def _node_type(self, node):
         metadata = node.get("metadata", {})
@@ -128,55 +130,66 @@ class CoSchedPlugin(CLIPlugin):
             return
         try:
             handle = Flux()
-        except OSError:
-            # Dry runs can generate jobspecs without a running Flux instance.
-            # Without its configuration, co-scheduling is not enabled.
-            return
-        try:
-            if handle.conf_get('cosched.allowed') == True:
+            if handle.conf_get("cosched.allowed") and not args.no_spread:
                 if len(jobspec.tasks) != 1:
                     # Multiple slot labels in the same request are not allowed for co-scheduling
                     return
-                task_count = jobspec.tasks[0]['count']
+                task_count = jobspec.tasks[0]["count"]
                 ntasks = 0
                 nslots = 1
                 label = ""
                 per_resource = {}
                 for parent, resource, count in jobspec.resource_walk():
-                    if parent and parent['type'] != 'slot':
+                    if parent and parent["type"] != "slot":
                         # if the jobspec specifies more resources than slots don't bother to co-schedule
                         return
-                    if resource['type'] == 'slot':
-                        label = resource['label']
+                    if resource["type"] == "slot":
+                        label = resource["label"]
                         for ttype, tcount in task_count.items():
-                            if ttype == 'per_slot':
+                            if ttype == "per_slot":
                                 ntasks = tcount * count
                                 nslots = count
-                            elif ttype == 'per_resource':
+                            elif ttype == "per_resource":
                                 for rtype, rcount in tcount.items():
                                     per_resource[rtype] = rcount
                                 nslots = count
                             else:
                                 ntasks = tcount
                                 nslots = count
-                    if resource['type'] in per_resource:
-                        ntasks += per_resource[resource['type']] * count
+                    if resource["type"] in per_resource:
+                        ntasks += per_resource[resource["type"]] * count
 
-                resource_type = handle.conf_get('cosched.resource_type', default='numanode')
-                waste_threshold = handle.conf_get('cosched.waste_threshold', default=0.3)
-                n = handle.conf_get('cosched.n_way', default=2)
+                resource_type = handle.conf_get(
+                    "cosched.resource_type", default="numanode"
+                )
+                waste_threshold = handle.conf_get(
+                    "cosched.waste_threshold", default=0.3
+                )
+                n = handle.conf_get("cosched.n_way", default=2)
                 cores_per_resource = self.find_cores_per_resource(resource_type)
                 slots_per_resource = max(1, cores_per_resource // n)
                 resource_count = ceil(nslots / slots_per_resource)
                 slots_inside_resource = min(slots_per_resource, nslots)
-                if cores_per_resource > 0 and ((resource_count * slots_inside_resource) / ntasks - 1) <= waste_threshold:
+                if (
+                    cores_per_resource > 0
+                    and ((resource_count * slots_inside_resource) / ntasks - 1)
+                    <= waste_threshold
+                ):
                     jobspec.resources.clear()
-                    jobspec.resources.append({'type': resource_type, 'count': resource_count,
-                                               'with': [{'type': 'slot', 'count' : slots_inside_resource,
-                                                         'with': [{'type': 'core', 'count': 1}],
-                                                         'label': label
-                                                        }]
-                                            })
-                    jobspec.tasks[0]['count'] = {'total': ntasks}
+                    jobspec.resources.append(
+                        {
+                            "type": resource_type,
+                            "count": resource_count,
+                            "with": [
+                                {
+                                    "type": "slot",
+                                    "count": slots_inside_resource,
+                                    "with": [{"type": "core", "count": 1}],
+                                    "label": label,
+                                }
+                            ],
+                        }
+                    )
+                    jobspec.tasks[0]["count"] = {"total": ntasks}
         except KeyError as e:
             print(f"Error in allocation type plugin: {e}")
