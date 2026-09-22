@@ -6,6 +6,25 @@ test_description='Test cosched plugin jobspec transformation'
 
 VALIDATOR="${SHARNESS_TEST_SRCDIR}/cli-plugins/cosched/validate_transformation.py"
 
+for command in submit run; do
+	test_expect_success "flux $command dry-run works without a broker" '
+		FLUX_URI=local:///no/such/path \
+			flux $command --dry-run -n2 hostname >offline.json &&
+		jq -e "
+			.resources[0].type == \"slot\" and
+			.resources[0].count == 2 and
+			.tasks[0].count.per_slot == 1
+		" offline.json
+	'
+	test_expect_success "flux $command --no-spread works without a broker" '
+		FLUX_URI=local:///no/such/path \
+			flux $command --dry-run --no-spread -n2 hostname >optout.json &&
+		jq -S "del(.attributes)" offline.json >expected.json &&
+		jq -S "del(.attributes)" optout.json >actual.json &&
+		test_cmp expected.json actual.json
+	'
+done
+
 test_expect_success 'normal transformation: 20 tasks across sockets' '
 	python3 ${VALIDATOR} \
 		--allowed \

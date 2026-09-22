@@ -124,9 +124,16 @@ class CoSchedPlugin(CLIPlugin):
         return counts[0]
 
     def modify_jobspec(self, args, jobspec):
+        if getattr(args, "no_spread", False):
+            return
         try:
             handle = Flux()
-            if handle.conf_get('cosched.allowed') == True and args.no_spread != True:
+        except OSError:
+            # Dry runs can generate jobspecs without a running Flux instance.
+            # Without its configuration, co-scheduling is not enabled.
+            return
+        try:
+            if handle.conf_get('cosched.allowed') == True:
                 if len(jobspec.tasks) != 1:
                     # Multiple slot labels in the same request are not allowed for co-scheduling
                     return
