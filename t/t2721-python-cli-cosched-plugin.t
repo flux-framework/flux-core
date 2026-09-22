@@ -27,6 +27,23 @@ test_expect_success 'normal transformation: 20 tasks across sockets' '
 	" actual.json
 '
 
+test_expect_success 'co-scheduling is disabled upon user determination' '
+	python3 ${VALIDATOR} \
+		--no-allowed \
+		--ntasks 20 \
+		--command hostname >expected.json &&
+	python3 ${VALIDATOR} \
+		--allowed \
+		--no-spread \
+		--ntasks 20 \
+		--resource-type socket \
+		--n-way 4 \
+		--cores-per-resource 16 \
+		--waste-threshold 0.3 \
+		--command hostname >actual.json &&
+	test_cmp expected.json actual.json
+'
+
 test_expect_success 'exact resource boundary uses one parent resource' '
 	python3 ${VALIDATOR} \
 		--allowed \

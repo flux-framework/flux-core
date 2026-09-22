@@ -2,7 +2,6 @@
 
 import argparse
 import json
-from types import SimpleNamespace
 from unittest.mock import patch
 
 from flux.job import JobspecV1
@@ -20,10 +19,12 @@ class FakeFlux:
         return self.config.get(key, default)
 
 
-def parse_args():
+def parse_args(plugin):
     parser = argparse.ArgumentParser(
         description="Test the cosched jobspec transformation."
     )
+    for option in plugin.options:
+        parser.add_argument(option.name, **option.kwargs)
 
     parser.add_argument(
         "--ntasks",
@@ -86,7 +87,8 @@ def parse_args():
 
 
 def main():
-    args = parse_args()
+    plugin = cosched.CoSchedPlugin("submit")
+    args = parse_args(plugin)
 
     config = {
         "cosched.resource_type": args.resource_type,
@@ -102,8 +104,6 @@ def main():
         num_tasks=args.ntasks,
     )
 
-    plugin = object.__new__(cosched.CoSchedPlugin)
-
     fake_flux_factory = lambda: FakeFlux(config)
 
     with patch.object(cosched, "Flux", fake_flux_factory):
@@ -113,7 +113,7 @@ def main():
             return_value=args.cores_per_resource,
         ):
             plugin.modify_jobspec(
-                args=SimpleNamespace(),
+                args=args,
                 jobspec=jobspec,
             )
 
