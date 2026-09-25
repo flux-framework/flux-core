@@ -77,6 +77,8 @@ libutil_la_SOURCES = \
 	fluid.h \
 	aux.c \
 	aux.h \
+	instance_name.c \
+	instance_name.h \
 	fdutils.c \
 	fdutils.h \
 	fsd.c \
