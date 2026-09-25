@@ -191,6 +191,79 @@ test_expect_success 'plugin is primed with an object at load time' '
 	flux jobtap remove queues-update.so &&
 	flux jobtap load ${PLUGINPATH}/queues-update.so
 '
+#
+# The same plugin rejects any config naming a queue "rejectme". After such
+# a rejection, the queue table, the instance config, and every other plugin
+# must be as they were before the reload.
+#
+# N.B. the rejecting plugin is loaded at runtime, so it is ordered after the
+# builtin limit-job-size, which caches the proposed limits before the
+# rejection. The limits it enforces afterwards show whether it was rolled
+# back.
+#
+test_expect_success 'baseline limit is enforced before the rejected reload' '
+	flux submit --queue=batch -N1 true &&
+	test_must_fail flux submit --queue=batch -N4 true
+'
+test_expect_success 'a config rejected by a plugin fails the reload' '
+	test_must_fail flux config load <<-EOT 2>reject.err &&
+	[queues.batch.policy.limits]
+	job-size.max.nnodes = 7
+	[queues.rejectme]
+	EOT
+	grep "rejecting this config" reject.err
+'
+test_expect_success 'the rejected queue table change was rolled back' '
+	flux queue list -no "{queue}" >postreject.out &&
+	grep batch postreject.out &&
+	test_must_fail grep rejectme postreject.out
+'
+test_expect_success 'the rejected config was not committed' '
+	flux config get queues >postreject.conf &&
+	test_must_fail grep 7 postreject.conf &&
+	test_must_fail grep rejectme postreject.conf
+'
+test_expect_success 'plugins that accepted before the rejection were rolled back' '
+	test_must_fail flux submit --queue=batch -N4 true
+'
+test_expect_success 'a job can be submitted to a restored queue' '
+	flux run --queue=batch -N1 true
+'
+test_expect_success 'a subsequent good reload still works' '
+	flux config load <<-EOT &&
+	[queues.batch.policy.limits]
+	job-size.max.nnodes = 4
+	EOT
+	flux queue start --all &&
+	flux submit --queue=batch -N4 true
+'
+#
+# Same rejection, but with a virtual queue configured. The rollback must
+# restore the vqueue with a working parent link: the inherited limit is
+# still enforced and jobs still run through it.
+#
+test_expect_success 'configure a vqueue, then fail a reload' '
+	flux config load <<-EOT &&
+	[queues.batch.policy.limits]
+	job-size.max.nnodes = 1
+	[queues.expedite]
+	parent = "batch"
+	EOT
+	flux queue start --all &&
+	test_must_fail flux config load <<-EOT
+	[queues.batch.policy.limits]
+	job-size.max.nnodes = 1
+	[queues.expedite]
+	parent = "batch"
+	[queues.rejectme]
+	EOT
+'
+test_expect_success 'the restored vqueue still enforces the inherited limit' '
+	test_must_fail flux submit --queue=expedite -N2 true
+'
+test_expect_success 'a job can be submitted to the restored vqueue' '
+	flux run --queue=expedite -N1 true
+'
 test_expect_success 'remove queues-update test plugin' '
 	flux jobtap remove queues-update.so
 '

@@ -607,6 +607,7 @@ check_LTLIBRARIES = \
 	job-manager/plugins/create-reject.la \
 	job-manager/plugins/perilog-test.la \
 	job-manager/plugins/config.la \
+	job-manager/plugins/conf-cache.la \
 	job-manager/plugins/queues-update.la \
 	job-manager/plugins/jobspec-update.la \
 	job-manager/plugins/jobspec-update-job-list.la \
@@ -1156,6 +1157,15 @@ job_manager_plugins_config_la_CPPFLAGS = \
 job_manager_plugins_config_la_LDFLAGS = \
 	$(fluxplugin_ldflags) -module -rpath /nowhere
 job_manager_plugins_config_la_LIBADD = \
+	$(top_builddir)/src/common/libflux-core.la
+
+job_manager_plugins_conf_cache_la_SOURCES = \
+	job-manager/plugins/conf-cache.c
+job_manager_plugins_conf_cache_la_CPPFLAGS = \
+	$(test_cppflags)
+job_manager_plugins_conf_cache_la_LDFLAGS = \
+	$(fluxplugin_ldflags) -module -rpath /nowhere
+job_manager_plugins_conf_cache_la_LIBADD = \
 	$(top_builddir)/src/common/libflux-core.la
 
 job_manager_plugins_queues_update_la_SOURCES = \

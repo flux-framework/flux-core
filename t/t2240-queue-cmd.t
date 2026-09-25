@@ -605,5 +605,82 @@ test_expect_success 'configured queues survive a failed config load' '
 	flux queue list -n >queues_after_badconf.out &&
 	test $(wc -l < queues_after_badconf.out) -eq 2
 '
+#
+# A config callback that fails after the queue callback succeeded must not
+# leave the queue table holding a configuration that was never committed.
+# job-manager.housekeeping.release-after is the lever: it is parsed by a
+# callback registered after the queue one, and conf_policy_validate() does
+# not check it, so a bad FSD value fails the reload at exactly that point.
+#
+# The rollback must also preserve administrative state - the enable/start
+# bits and operator reasons - which a queue removed and re-added by config
+# alone would lose. Set all of it up first.
+#
+test_expect_success 'set up administrative state on the configured queues' '
+	flux queue start --all &&
+	flux queue disable -m "gone fishing" batch &&
+	flux queue stop -m "maintenance" debug &&
+	flux queue list -no "{queue}:{submission}:{scheduling}" >admin_before.out &&
+	test_debug "cat admin_before.out"
+'
+test_expect_success 'a config load that fails after the queue callback fails' '
+	test_must_fail flux config load 2>lateconf.err <<-EOT &&
+	[job-manager.housekeeping]
+	command = ["true"]
+	release-after = "bogus-fsd"
+	[queues.batch]
+	EOT
+	grep "release-after" lateconf.err
+'
+test_expect_success 'the queue table was rolled back' '
+	flux queue list -no "{queue}" >queues_after_lateconf.out &&
+	grep batch queues_after_lateconf.out &&
+	grep debug queues_after_lateconf.out
+'
+test_expect_success 'queue administrative state survived the rollback' '
+	flux queue list -no "{queue}:{submission}:{scheduling}" >admin_after.out &&
+	test_debug "cat admin_after.out" &&
+	test_cmp admin_before.out admin_after.out
+'
+test_expect_success 'queue disable and stop reasons survived the rollback' '
+	flux queue status >status_after_lateconf.out &&
+	grep "submission is disabled: gone fishing" status_after_lateconf.out &&
+	grep "Scheduling is stopped: maintenance" status_after_lateconf.out
+'
+test_expect_success 'restored queues accept administrative commands and jobs' '
+	flux queue enable batch &&
+	flux queue start batch &&
+	run_timeout 60 flux run --queue=batch true
+'
+test_expect_success 'a subsequent good config load still works' '
+	flux config load <<-EOT &&
+	[queues.batch]
+	[queues.debug]
+	EOT
+	flux queue list -no "{queue}" >queues_after_goodconf.out &&
+	test $(wc -l < queues_after_goodconf.out) -eq 2
+'
+test_expect_success 'a reload that fails against the initial config rolls back' '
+	mkdir -p initial.d &&
+	cat >initial.d/queues.toml <<-EOT &&
+	[queues.batch]
+	[queues.debug]
+	EOT
+	cat >badconf.toml <<-EOT &&
+	[job-manager.housekeeping]
+	command = ["true"]
+	release-after = "bogus-fsd"
+	[queues.batch]
+	EOT
+	cat >initial.sh <<-EOT &&
+	#!/bin/sh
+	flux queue start --all || exit 1
+	flux config load <badconf.toml && exit 1
+	test \$(flux queue list -n | wc -l) -eq 2 || exit 1
+	flux run --queue=debug true
+	EOT
+	chmod +x initial.sh &&
+	run_timeout 120 flux start --config-path=$(pwd)/initial.d ./initial.sh
+'
 
 test_done

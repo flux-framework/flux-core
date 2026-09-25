@@ -571,6 +571,51 @@ test_expect_success 'reloading invalid configuration fails' '
 test_expect_success 'job-manager: and produces reasonable error for humans' '
 	grep "Error parsing" reload.err
 '
+#
+# The conf.update stack walk stops at the first rejection, so plugins ahead
+# of the rejecting one have already cached a configuration the instance then
+# declines to commit. They are unwound by the rollback replaying the
+# committed config to the jobtap callback, which re-delivers it to every
+# plugin.
+#
+test_expect_success 'set up two plugins, the second of which rejects a config' '
+	cat >config/test.toml <<-EOT &&
+	[testconfig]
+	testkey = "good"
+	EOT
+	flux config reload &&
+	flux jobtap load --remove=all ${PLUGINPATH}/conf-cache.so &&
+	flux jobtap load ${PLUGINPATH}/config.so
+'
+test_expect_success 'the first plugin cached the accepted config' '
+	flux jobtap query conf-cache.so >cache-good.json &&
+	jq -e ".testconfig.testkey == \"good\"" <cache-good.json
+'
+test_expect_success 'a config the second plugin rejects fails the reload' '
+	cat >config/test.toml <<-EOT &&
+	[testconfig]
+	testkey = 42
+	EOT
+	test_must_fail flux config reload 2>rewind.err &&
+	grep "Error parsing" rewind.err
+'
+test_expect_success 'the first plugin was rewound to the committed config' '
+	flux jobtap query conf-cache.so >cache-after.json &&
+	test_debug "jq -S . <cache-after.json" &&
+	jq -e ".testconfig.testkey == \"good\"" <cache-after.json
+'
+test_expect_success 'a job can be submitted after the failed reload' '
+	run_timeout 60 flux run true
+'
+test_expect_success 'a subsequent good reload still reaches both plugins' '
+	cat >config/test.toml <<-EOT &&
+	[testconfig]
+	testkey = "better"
+	EOT
+	flux config reload &&
+	flux jobtap query conf-cache.so >cache-better.json &&
+	jq -e ".testconfig.testkey == \"better\"" <cache-better.json
+'
 test_expect_success 'job-manager: run a job then purge all inactives' '
 	flux jobtap load --remove=all ${PLUGINPATH}/args.so &&
 	flux dmesg -C &&

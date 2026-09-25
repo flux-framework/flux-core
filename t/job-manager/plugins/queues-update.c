@@ -17,11 +17,37 @@
  * The unpack below uses "s:o" rather than "s?o" deliberately, so a missing
  * key fails here rather than downstream. A JSON null would satisfy that
  * unpack, so it is rejected explicitly by the json_is_object() check.
+ *
+ * The plugin also rejects any configuration containing a queue named
+ * "rejectme". Rejecting on queue name rather than on an invalid config is
+ * what makes the rejection path reachable from a test:
+ * conf_policy_validate() rejects an invalid config before any plugin is
+ * consulted.
+ *
+ * This plugin is loaded at runtime, so it is ordered after the builtin
+ * limit-* plugins. The limits a builtin enforces after a rejection show
+ * whether it was rolled back.
  */
 
 #include <jansson.h>
 #include <flux/core.h>
 #include <flux/jobtap.h>
+
+#include "ccan/str/str.h"
+
+static bool has_queue (json_t *queues, const char *name)
+{
+    size_t index;
+    json_t *entry;
+
+    json_array_foreach (queues, index, entry) {
+        const char *s;
+        if (json_unpack (entry, "{s:s}", "name", &s) == 0
+            && streq (s, name))
+            return true;
+    }
+    return false;
+}
 
 static int queues_update_cb (flux_plugin_t *p,
                              const char *topic,
@@ -52,6 +78,10 @@ static int queues_update_cb (flux_plugin_t *p,
                                   args,
                                   "queues-update: conf.queues is not an"
                                   " array");
+    if (has_queue (queues, "rejectme"))
+        return flux_jobtap_error (p,
+                                  args,
+                                  "queues-update: rejecting this config");
     return 0;
 }
 
