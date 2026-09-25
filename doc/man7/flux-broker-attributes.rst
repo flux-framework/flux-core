@@ -90,6 +90,21 @@ instance-level :ref:`[readonly] <attr_readonly>`
    The nesting level of this Flux instance, or ``0`` if there is no enclosing
    Flux instance.
 
+instance-name
+   A short name identifying this Flux instance uniquely among those running
+   as the same user on a node.  A conforming name may be up to 63 letters,
+   digits, dashes, underscores, and periods.  The name may be set on the
+   command line (fatal error if non-conforming), otherwise is chosen
+   contextually, e.g. ``sys``, a system instance; ``test-STARTPID``, a test
+   instance; ``single-BROKERPID``, a singleton PMI bootstrap; and the name
+   assigned by the launcher when Flux is started by a foreign resource manager.
+   A subinstance appends its job ID recursively, e.g. ``sys-SUBJOBID``,
+   ``sys-SUBJOBID-SUBSUBJOBID``.
+
+   Not all contextually chosen names are stable across an instance restart.
+   This matters if the name is used to identify processes or resources that
+   are reattached by name.
+
 jobid :ref:`[readonly] <attr_readonly>`
    The Flux job ID of this Flux instance, if it was launched by Flux as a job.
    The value is obtained from ``PMI_KVS_Get_my_name()`` which may be something
