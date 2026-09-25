@@ -18,6 +18,7 @@
 #include <flux/taskmap.h>
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libutil/errno_safe.h"
+#include "src/common/libutil/instance_name.h"
 #include "ccan/str/str.h"
 
 #include "attr.h"
@@ -185,6 +186,34 @@ static int bootstrap_setattrs_early (struct bootstrap *boot,
      */
     if (boot->under_flux) {
         if (setattr (attrs, "jobid", boot->ctx->info.name, errp))
+            return -1;
+    }
+
+    /* The PMI KVS name identifies this instance to whatever launched it, so
+     * use it for instance-name, unless one was set on the command line.
+     * Sanitize it first: the name must be usable where a program element
+     * name is expected, such as a systemd unit name (see the sdexec module),
+     * and a KVS name may contain characters that are not, such as the "ƒ"
+     * of the F58 job ID encoding.
+     *
+     * A name from the command line is checked rather than sanitized, so that
+     * whoever set it can rely on finding that same name later.
+     */
+    const char *cmdline_name = getattr (attrs, "instance-name");
+
+    if (cmdline_name) {
+        if (!instance_name_valid (cmdline_name)) {
+            return errprintf (errp,
+                              "instance-name must be 1-%d characters of"
+                              " [A-Za-z0-9_.-]",
+                              INSTANCE_NAME_MAX);
+        }
+    }
+    else {
+        char name[INSTANCE_NAME_MAX + 1];
+
+        instance_name_sanitize (boot->ctx->info.name, name, sizeof (name));
+        if (setattr (attrs, "instance-name", name, errp) < 0)
             return -1;
     }
 
