@@ -140,6 +140,7 @@ TESTS = test_sha1.t \
 	test_cidr.t \
 	test_fluid.t \
 	test_aux.t \
+	test_instance_name.t \
 	test_fdutils.t \
 	test_fsd.t \
 	test_intree.t \
@@ -261,6 +262,10 @@ test_fluid_t_LDADD = $(test_ldadd)
 test_aux_t_SOURCES = test/aux.c
 test_aux_t_CPPFLAGS = $(test_cppflags)
 test_aux_t_LDADD = $(test_ldadd)
+
+test_instance_name_t_SOURCES = test/instance_name.c
+test_instance_name_t_CPPFLAGS = $(test_cppflags)
+test_instance_name_t_LDADD = $(test_ldadd)
 
 test_fdutils_t_SOURCES = test/fdutils.c
 test_fdutils_t_CPPFLAGS = $(test_cppflags)
