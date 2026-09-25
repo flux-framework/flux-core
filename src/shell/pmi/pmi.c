@@ -70,6 +70,7 @@
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libpmi/simple_server.h"
 #include "src/common/libutil/errno_safe.h"
+#include "src/common/libutil/instance_name.h"
 #include "ccan/str/str.h"
 
 #include "builtins.h"
@@ -412,7 +413,10 @@ static struct shell_pmi *pmi_create (flux_shell_t *shell, json_t *config)
     struct shell_pmi *pmi;
     struct shell_info *info = shell->info;
     int flags = shell->verbose ? PMI_SIMPLE_SERVER_TRACE : 0;
-    char kvsname[32];
+    char kvsname[SIMPLE_KVS_NAME_MAX];
+    char name[256];
+    char jobid[32];
+    const char *instance_name;
     const char *kvs = "exchange";
     int exchange_k = 0; // 0=use default tree fanout
     int nomap = 0;      // avoid generation of PMI_process_mapping
@@ -436,16 +440,37 @@ static struct shell_pmi *pmi_create (flux_shell_t *shell, json_t *config)
         goto error;
     }
 
-    /* Use F58 representation of jobid for "kvsname", since the broker
-     * will pull the kvsname and use it as the broker 'jobid' attribute.
-     * This allows the broker attribute to be in the "common" user-facing
-     * jobid representation.
+    /* Use this instance's name for "kvsname", since the broker pulls the
+     * kvsname and uses it for both the 'instance-name' attribute (the whole
+     * name) and the 'jobid' attribute (its last component).  The name is
+     * formed by appending this job ID to the enclosing instance's name, so
+     * that unique names at the top level stay unique at every depth: a job
+     * ID alone can repeat across instances with different parents.
+     *
+     * Sanitize the result, which keeps the name free of the path separator
+     * and the multi-byte "f" of the F58 encoding, and bounds it to the PMI
+     * maximum.  The kvsname is handed to any PMI client in the job,
+     * including MPI implementations that may use it to construct a file or
+     * shared memory segment name, so it must be a portable program element
+     * name.
      */
-    if (flux_job_id_encode (shell->jobid,
-                            "f58",
-                            kvsname,
-                            sizeof (kvsname)) < 0)
+    if (!(instance_name = flux_attr_get (shell->h, "instance-name")))
         goto error;
+    if (flux_job_id_encode (shell->jobid,
+                            "f58plain",
+                            jobid,
+                            sizeof (jobid)) < 0)
+        goto error;
+    if (snprintf (name,
+                  sizeof (name),
+                  "%s-%s",
+                  instance_name,
+                  jobid) >= (int)sizeof (name)) {
+        shell_log_error ("instance name buffer overflow");
+        errno = EOVERFLOW;
+        goto error;
+    }
+    instance_name_sanitize (name, kvsname, sizeof (kvsname));
     if (!(pmi->server = pmi_simple_server_create (shell_pmi_ops,
                                                   0, // appnum
                                                   info->total_ntasks,

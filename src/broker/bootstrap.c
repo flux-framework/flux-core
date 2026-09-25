@@ -182,10 +182,22 @@ static int bootstrap_setattrs_early (struct bootstrap *boot,
             return -1;
     }
 
-    /* If running under Flux, setattr jobid to PMI KVS name.
+    /* If running under Flux, setattr jobid from the PMI KVS name.  Flux
+     * sets the KVS name to this instance's sanitized job ID path, so the
+     * job ID is its last dash-separated component, in the f58plain
+     * encoding.  Re-encode it as F58 so the attribute keeps the "common"
+     * user-facing representation.
      */
     if (boot->under_flux) {
-        if (setattr (attrs, "jobid", boot->ctx->info.name, errp))
+        const char *cp = strrchr (boot->ctx->info.name, '-');
+        const char *s = cp ? cp + 1 : boot->ctx->info.name;
+        char jobid[64];
+        flux_jobid_t id;
+
+        if (flux_job_id_parse (s, &id) < 0
+            || flux_job_id_encode (id, "f58", jobid, sizeof (jobid)) < 0)
+            return errprintf (errp, "error decoding job ID from PMI name");
+        if (setattr (attrs, "jobid", jobid, errp))
             return -1;
     }
 
