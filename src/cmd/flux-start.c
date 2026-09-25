@@ -62,6 +62,7 @@ static struct {
     optparse_t *opts;
     int verbose;
     int test_size;
+    const char *instance_name;
     int exit_rc;
     struct {
         zhash_t *kvs;
@@ -150,6 +151,9 @@ static struct optparse_option opts[] = {
     { .group = 2,
       .name = "test-rundir-cleanup", .has_arg = 0,
       .usage = "Clean up --test-rundir DIR upon flux-start completion", },
+    { .group = 2,
+      .name = "test-instance-name", .has_arg = 1, .arginfo = "NAME",
+      .usage = "Set the instance-name broker attribute for the session", },
     { .group = 2,
       .name = "test-pmi-clique",
       .has_arg = 1,
@@ -787,7 +791,7 @@ void pmi_server_initialize (int flags)
                                             appnum,
                                             ctx.test_size,
                                             ctx.test_size,
-                                            "-",
+                                            ctx.instance_name,
                                             flags,
                                             NULL);
     if (!ctx.pmi.srv)
@@ -1120,6 +1124,18 @@ int start_session (const char *cmd_argz,
     if (!optparse_hasopt (ctx.opts, "test-rundir")
         || optparse_hasopt (ctx.opts, "test-rundir-cleanup"))
         cleanup_push_string (cleanup_directory_recursive, rundir);
+
+    /* The PMI KVS name identifies the instance (see the broker
+     * instance-name attribute).  flux-start is the launcher here, so it
+     * assigns the name, using its own pid: sessions running at once have
+     * distinct ones, and every broker in a session shares it.  The rundir
+     * is not used for this, since --test-rundir may name a directory that
+     * is not unique.
+     */
+    if (!(ctx.instance_name = optparse_get_str (ctx.opts,
+                                                "test-instance-name",
+                                                NULL)))
+        ctx.instance_name = xasprintf ("test-%ju", (uintmax_t)getpid ());
 
     start_server_initialize (rundir, ctx.verbose >= 1 ? true : false);
 
