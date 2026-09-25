@@ -57,6 +57,14 @@ struct plugin_ctx {
 
 static const char *plugin_name = "config";
 
+/* The KVS name identifies the instance (see the broker instance-name
+ * attribute).  A config bootstrap has no launcher to assign one, and is
+ * conventionally the system instance, so name it accordingly.  N.B. this
+ * is also what a "flux start --recovery" instance reports, since it reads
+ * the same config, so it identifies itself as the instance it recovers.
+ */
+static const char *instance_name = "sys";
+
 static void plugin_ctx_destroy (struct plugin_ctx *ctx)
 {
     if (ctx) {
@@ -271,7 +279,7 @@ static int op_initialize (flux_plugin_t *p,
                               FLUX_PLUGIN_ARG_OUT,
                               "{s:i s:s s:i}",
                               "rank", ctx->rank,
-                              "name", plugin_name, // heh, audit this
+                              "name", instance_name,
                               "size", ctx->size) < 0)
         return -1;
     return 0;
