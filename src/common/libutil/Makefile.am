@@ -89,6 +89,8 @@ libutil_la_SOURCES = \
 	grudgeset.h \
 	jpath.c \
 	jpath.h \
+	jsonlimit.c \
+	jsonlimit.h \
 	uri.c \
 	uri.h \
 	errprintf.c \
@@ -142,6 +144,7 @@ TESTS = test_sha1.t \
 	test_fdwalk.t \
 	test_grudgeset.t \
 	test_jpath.t \
+	test_jsonlimit.t \
 	test_errprintf.t \
 	test_hola.t \
 	test_strstrip.t \
@@ -280,6 +283,10 @@ test_grudgeset_t_LDADD = $(test_ldadd)
 test_jpath_t_SOURCES = test/jpath.c
 test_jpath_t_CPPFLAGS = $(test_cppflags)
 test_jpath_t_LDADD = $(test_ldadd)
+
+test_jsonlimit_t_SOURCES = test/jsonlimit.c
+test_jsonlimit_t_CPPFLAGS = $(test_cppflags)
+test_jsonlimit_t_LDADD = $(test_ldadd)
 
 test_errprintf_t_SOURCES = test/errprintf.c
 test_errprintf_t_CPPFLAGS = $(test_cppflags)

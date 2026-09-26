@@ -29,6 +29,7 @@
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/jpath.h"
+#include "src/common/libutil/jsonlimit.h"
 #include "src/common/libjob/idf58.h"
 
 #include "job.h"
@@ -63,6 +64,14 @@ int annotations_update (struct job *job, const char *path, json_t *annotations)
         errno = EINVAL;
         return -1;
     }
+    /*  Annotations are merged recursively, deep copied, and published to
+     *  journal consumers, so bound their depth and size here. Without this
+     *  a deeply nested object supplied by a plugin, the scheduler, or a
+     *  user memo could exhaust the stack or produce an event that
+     *  consumers are unable to deserialize.
+     */
+    if (json_check_default_limits (annotations, NULL) < 0)
+        return -1;
     if (annotations) {
         if (!job->annotations) {
             if (!(job->annotations = json_object ())) {
@@ -152,6 +161,7 @@ void annotate_memo_request (flux_t *h,
     const char *errstr = NULL;
     int no_commit = 0;
     json_t *tmp = NULL;
+    flux_error_t error;
 
     if (flux_request_unpack (msg,
                              NULL,
@@ -171,6 +181,18 @@ void annotate_memo_request (flux_t *h,
     }
     if (flux_msg_cred_authorize (cred, job->userid) < 0) {
         errstr = "guests can only add a memo to their own jobs";
+        goto error;
+    }
+    /*  The memo is written to the job eventlog verbatim, so validate it
+     *  here rather than when the event is later applied.
+     */
+    if (!json_is_object (memo)) {
+        errstr = "memo must be an object";
+        errno = EINVAL;
+        goto error;
+    }
+    if (json_check_default_limits (memo, &error) < 0) {
+        errstr = error.text;
         goto error;
     }
     if (event_job_post_pack (ctx->event,

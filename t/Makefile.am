@@ -166,6 +166,7 @@ TESTSCRIPTS = \
 	t2222-job-manager-limit-job-size.t \
 	t2223-job-manager-queue-priority-order-limited.t \
 	t2224-job-manager-queue-priority-order-unlimited.t \
+	t2225-job-manager-plugin-validate.t \
 	t2226-housekeeping.t \
 	t2230-job-info-lookup.t \
 	t2231-job-info-eventlog-watch.t \
@@ -605,6 +606,7 @@ check_LTLIBRARIES = \
 	job-manager/plugins/config.la \
 	job-manager/plugins/jobspec-update.la \
 	job-manager/plugins/jobspec-update-job-list.la \
+	job-manager/plugins/validate-limits.la \
 	job-manager/plugins/resource-update-expiration.la \
 	job-manager/plugins/update-test.la \
 	job-manager/plugins/project-bank-validate.la \
@@ -1178,6 +1180,16 @@ job_manager_plugins_jobspec_update_job_list_la_CPPFLAGS = \
 job_manager_plugins_jobspec_update_job_list_la_LDFLAGS = \
 	$(fluxplugin_ldflags) -module -rpath /nowhere
 job_manager_plugins_jobspec_update_job_list_la_LIBADD = \
+	$(top_builddir)/src/common/libflux-internal.la \
+	$(top_builddir)/src/common/libflux-core.la
+
+job_manager_plugins_validate_limits_la_SOURCES = \
+	job-manager/plugins/validate-limits.c
+job_manager_plugins_validate_limits_la_CPPFLAGS = \
+	$(test_cppflags)
+job_manager_plugins_validate_limits_la_LDFLAGS = \
+	$(fluxplugin_ldflags) -module -rpath /nowhere
+job_manager_plugins_validate_limits_la_LIBADD = \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la
 

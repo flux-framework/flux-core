@@ -526,6 +526,7 @@ static void update_handle_request (flux_t *h,
     json_t *updates;
     struct flux_msg_cred cred;
     const char *errstr = NULL;
+    flux_error_t error;
 
     if (flux_request_unpack (msg,
                              NULL,
@@ -537,8 +538,8 @@ static void update_handle_request (flux_t *h,
     /*  Validate updates object, currently all updates MUST
      *  start with `attributes.`:
      */
-    if (!validate_jobspec_updates (updates)) {
-        errstr = "one or more jobspec updates are invalid";
+    if (!validate_jobspec_updates (updates, &error)) {
+        errstr = error.text;
         errno = EINVAL;
         goto error;
     }

@@ -105,6 +105,9 @@ int flux_jobtap_reject_job (flux_plugin_t *p,
  *
  *  A job dependency may only be added to a job once.
  *
+ *  The description may not be empty and may be at most 256 characters
+ *   long.
+ *
  *  Returns 0 on success, or -1 on error with errno set:
  *   - ENOENT: job 'id' not found
  *   - EEXIST: dependency 'description' has already been used
@@ -172,6 +175,9 @@ int flux_jobtap_job_set_flag (flux_plugin_t *p,
 
 
 /*  Raise an exception for job 'id' or current job if FLUX_JOBTAP_CURRENT_JOB
+ *
+ *  'type' may not be empty and may not contain whitespace or '=', and
+ *   'severity' must be in the range 0 to 7.
  */
 int flux_jobtap_raise_exception (flux_plugin_t *p,
                                  flux_jobid_t id,
@@ -185,6 +191,11 @@ int flux_jobtap_raise_exception (flux_plugin_t *p,
  *
  *  If `id` is FLUX_JOBTAP_CURRENT_JOB then the event will be posted to
  *   the current job.
+ *
+ *  The event 'name' may not be empty, may not contain whitespace or '=',
+ *   and may be at most 53 characters long. The context may not nest more
+ *   than 128 levels deep nor exceed 1 MiB when serialized, so that
+ *   consumers of the eventlog and journal are able to deserialize it.
  */
 int flux_jobtap_event_post_pack (flux_plugin_t *p,
                                  flux_jobid_t id,
@@ -204,9 +215,13 @@ int flux_jobtap_event_post_pack (flux_plugin_t *p,
  *                                       "attributes.system.duration", 3600,
  *                                       "attributes.system.queue", "batch");
  *
+ *  Updates accumulate until they are posted as a single jobspec-update
+ *  event, and the accumulated result may not nest more than 128 levels
+ *  deep nor exceed 1 MiB when serialized.
+ *
  *  Returns -1 with errno set to EINVAL for invalid arguments, if there is
- *  no current job, or if the current job is in RUN, CLEANUP, or INACTIVE
- *  states.
+ *  no current job, if the current job is in RUN, CLEANUP, or INACTIVE
+ *  states, or if the update exceeds the limits described above.
  */
 int flux_jobtap_jobspec_update_pack (flux_plugin_t *p, const char *fmt, ...);
 
@@ -263,6 +278,10 @@ void flux_jobtap_job_unsubscribe (flux_plugin_t *p, flux_jobid_t id);
 /*  Post an event to the current job eventlog indicating that a prolog
  *   action has started. This will block the start request to the
  *   execution system until `flux_jobtap_prolog_finish()` is called.
+ *
+ *  As for a dependency, the description may not be empty and may be at
+ *   most 256 characters long. This applies to the epilog functions below
+ *   as well.
  */
 int flux_jobtap_prolog_start (flux_plugin_t *p, const char *description);
 

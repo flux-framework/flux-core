@@ -20,6 +20,7 @@
 #include "src/common/libeventlog/eventlog.h"
 #include "src/common/libutil/grudgeset.h"
 #include "src/common/libutil/jpath.h"
+#include "src/common/libutil/jsonlimit.h"
 #include "src/common/libutil/aux.h"
 #include "src/common/libutil/errprintf.h"
 #include "ccan/str/str.h"
@@ -612,7 +613,7 @@ const char *job_event_queue_print (struct job *job, char *buf, int size)
     return buf;
 }
 
-bool validate_jobspec_updates (json_t *updates)
+bool validate_jobspec_updates (json_t *updates, flux_error_t *errp)
 {
     const char *key;
     json_t *entry;
@@ -622,9 +623,17 @@ bool validate_jobspec_updates (json_t *updates)
             && !streq (key, "resources")
             && !strstarts (key, "resources.")
             && !streq (key, "tasks")
-            && !strstarts (key, "tasks."))
+            && !strstarts (key, "tasks.")) {
+            errprintf (errp, "%s is not a valid jobspec update key", key);
             return false;
+        }
     }
+    /*  Ensure the update is not so deeply nested or so large that the
+     *  resulting jobspec-update event cannot be deserialized by consumers
+     *  of the eventlog or journal.
+     */
+    if (json_check_default_limits (updates, errp) < 0)
+        return false;
     return true;
 }
 

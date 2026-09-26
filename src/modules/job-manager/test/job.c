@@ -11,11 +11,14 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <stdlib.h>
+#include <string.h>
 #include <jansson.h>
 #include <flux/core.h>
 
 #include "src/common/libtap/tap.h"
 #include "src/common/libeventlog/eventlog.h"
+#include "src/common/libutil/jsonlimit.h"
 #include "src/modules/job-manager/job.h"
 #include "ccan/str/str.h"
 
@@ -662,10 +665,51 @@ static void test_jobspec_update (void)
     if (!(o = json_pack ("{s:s}", "dummy", "dummy")))
         BAIL_OUT ("failed to create update");
 
-    ok (validate_jobspec_updates (o) == false,
+    ok (validate_jobspec_updates (o, &error) == false,
         "validate_jobspec_updates fails on bad update keys");
+    diag ("%s", error.text);
 
     json_decref (o);
+
+    /*  An update that is nested too deeply must be rejected, even though
+     *  all of its keys are valid. See flux-framework/flux-core#7815.
+     */
+    if (!(o = json_pack ("{s:{s:[]}}", "attributes.system.constraints",
+                         "and")))
+        BAIL_OUT ("failed to create constraint update");
+    for (int i = 0; i < 200; i++) {
+        json_t *inner = json_object_get (o, "attributes.system.constraints");
+        json_t *n;
+        if (!(n = json_pack ("{s:[O]}", "and", inner)))
+            BAIL_OUT ("failed to wrap constraint update");
+        if (json_object_set_new (o,
+                                 "attributes.system.constraints",
+                                 n) < 0)
+            BAIL_OUT ("failed to set constraint update");
+    }
+    ok (validate_jobspec_updates (o, &error) == false,
+        "validate_jobspec_updates fails on deeply nested update");
+    diag ("%s", error.text);
+
+    json_decref (o);
+
+    /*  An update that is too large must also be rejected
+     */
+    {
+        size_t len = JSON_LIMIT_MAX_SIZE + 1;
+        char *buf;
+        if (!(buf = malloc (len + 1)))
+            BAIL_OUT ("out of memory");
+        memset (buf, 'x', len);
+        buf[len] = '\0';
+        if (!(o = json_pack ("{s:s}", "attributes.system.foo", buf)))
+            BAIL_OUT ("failed to create oversize update");
+        ok (validate_jobspec_updates (o, &error) == false,
+            "validate_jobspec_updates fails on oversize update");
+        diag ("%s", error.text);
+        json_decref (o);
+        free (buf);
+    }
 
     if (!(job = job_create()))
         BAIL_OUT ("failed to create empty job");
@@ -695,7 +739,7 @@ static void test_jobspec_update (void)
                          "attributes.system.queue", "foo")))
         BAIL_OUT ("failed to create update");
 
-    ok (validate_jobspec_updates (o) == true,
+    ok (validate_jobspec_updates (o, &error) == true,
         "validate_jobspec_updates success update keys");
 
     ok (job->queue == NULL, "job->queue NULL before update");

@@ -30,7 +30,9 @@
 #include "src/common/libutil/basename.h"
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/errprintf.h"
+#include "src/common/libutil/jsonlimit.h"
 #include "src/common/libutil/aux.h"
+#include "src/common/libeventlog/eventlog.h"
 #include "src/common/libjob/idf58.h"
 #include "ccan/str/str.h"
 
@@ -41,6 +43,21 @@
 #include "raise.h"
 #include "jobtap.h"
 #include "jobtap-internal.h"
+
+/*  Size of the buffer used to build a "job.event.<name>" topic string in
+ *  jobtap_notify_subscribers(), and the resulting maximum length of an
+ *  event name posted by a plugin.
+ */
+#define EVENT_TOPIC_SIZE    64
+#define MAX_EVENT_NAME      (EVENT_TOPIC_SIZE - sizeof ("job.event."))
+
+/*  Maximum length of a dependency or prolog/epilog description.
+ *
+ *  A description is written to the job eventlog, and a dependency
+ *  description is also retained for the life of the job, so bound it
+ *  well above any reasonable use.
+ */
+#define MAX_DESCRIPTION     256
 
 #define FLUX_JOBTAP_PRIORITY_UNAVAIL INT64_C(-2)
 
@@ -762,6 +779,19 @@ static int jobtap_topic_match_count (struct jobtap *jobtap,
     return count;
 }
 
+static void log_update_rejected (struct jobtap *jobtap,
+                                 flux_plugin_t *p,
+                                 struct job *job,
+                                 flux_error_t *errp)
+{
+    flux_log (jobtap->ctx->h,
+              LOG_ERR,
+              "jobtap: %s: %s: rejecting jobspec update: %s",
+              jobtap_plugin_name (p),
+              idf58 (job->id),
+              errp->text);
+}
+
 static int jobtap_post_jobspec_updates (struct jobtap *jobtap,
                                         struct job *job)
 {
@@ -1163,8 +1193,8 @@ int jobtap_notify_subscribers (struct jobtap *jobtap,
                                ...)
 {
     flux_plugin_arg_t *args;
-    char topic [64];
-    int topiclen = 64;
+    char topic [EVENT_TOPIC_SIZE];
+    int topiclen = EVENT_TOPIC_SIZE;
     va_list ap;
     int rc;
 
@@ -1208,6 +1238,7 @@ int jobtap_call (struct jobtap *jobtap,
     json_t *R = NULL;
     flux_plugin_arg_t *args;
     int64_t priority = FLUX_JOBTAP_PRIORITY_UNAVAIL;
+    flux_error_t error;
     va_list ap;
 
     if (jobtap_topic_match_count (jobtap, topic) == 0)
@@ -1268,6 +1299,26 @@ int jobtap_call (struct jobtap *jobtap,
                       "jobtap: %s: %s: R is already set",
                       topic,
                       idf58 (job->id));
+            rc = -1;
+        }
+        else if (json_check_limits (R,
+                                    JSON_LIMIT_MAX_DEPTH,
+                                    0,
+                                    &error) < 0) {
+            /*  R is sent to the execution system and published to journal
+             *  consumers, so bound its depth.
+             *
+             *  No size limit is applied: R for a large or fragmented
+             *  allocation is legitimately big, and unlike the scheduler
+             *  and restart paths this one does not strip the scheduling
+             *  key, which holds a full resource graph.
+             */
+            flux_log (jobtap->ctx->h,
+                      LOG_ERR,
+                      "jobtap: %s: %s: R %s",
+                      topic,
+                      idf58 (job->id),
+                      error.text);
             rc = -1;
         }
         else
@@ -1969,6 +2020,23 @@ static struct job *lookup_job (struct job_manager *ctx, flux_jobid_t id)
     return job;
 }
 
+/*  Check a description supplied by a plugin for a dependency or
+ *  prolog/epilog event. The description is written to the job eventlog,
+ *  so it may not be empty and its length must be bounded.
+ */
+static int check_description (const char *description)
+{
+    size_t len;
+
+    if (!description
+        || (len = strlen (description)) == 0
+        || len > MAX_DESCRIPTION) {
+        errno = EINVAL;
+        return -1;
+    }
+    return 0;
+}
+
 static int jobtap_emit_dependency_event (struct jobtap *jobtap,
                                          struct job *job,
                                          bool add,
@@ -1977,6 +2045,8 @@ static int jobtap_emit_dependency_event (struct jobtap *jobtap,
     int flags = 0;
     const char *event = add ? "dependency-add" : "dependency-remove";
 
+    if (check_description (description) < 0)
+        return -1;
     if (job->state != FLUX_JOB_STATE_DEPEND
         && job->state != FLUX_JOB_STATE_NEW) {
         errno = EINVAL;
@@ -2243,6 +2313,13 @@ int flux_jobtap_raise_exception (flux_plugin_t *p,
         errno = EINVAL;
         return -1;
     }
+    /*  Apply the same checks on exception type and severity that are
+     *  applied to an exception raised via the job-manager.raise RPC.
+     */
+    if (raise_check_type (type) < 0 || raise_check_severity (severity) < 0) {
+        errno = EINVAL;
+        return -1;
+    }
     if (!(job = jobtap_lookup_active_jobid (p, id)))
         return -1;
     va_start (ap, fmt);
@@ -2329,17 +2406,37 @@ int flux_jobtap_event_post_pack (flux_plugin_t *p,
     va_list ap;
     struct jobtap *jobtap;
     struct job *job;
+    json_t *entry;
 
     if (!p || !name
         || !(jobtap = flux_plugin_aux_get (p, "flux::jobtap"))) {
         errno = EINVAL;
         return -1;
     }
+    /*  An event name is written to the job eventlog and is used to key an
+     *  internal hash of event names, so apply the same restrictions used
+     *  for an exception type, plus a length limit.
+     */
+    if (raise_check_type (name) < 0 || strlen (name) > MAX_EVENT_NAME) {
+        errno = EINVAL;
+        return -1;
+    }
     if (!(job = jobtap_lookup_active_jobid (p, id)))
         return -1;
+
+    /*  Build the entry here rather than posting directly so that the
+     *  plugin supplied context can be checked against the standard depth
+     *  and size limits before it is added to the eventlog.
+     */
     va_start (ap, fmt);
-    rc = event_job_post_vpack (jobtap->ctx->event, job, name, 0, fmt, ap);
+    entry = eventlog_entry_vpack (0., name, fmt, ap);
     va_end (ap);
+    if (!entry)
+        return -1;
+    rc = json_check_default_limits (json_object_get (entry, "context"), NULL);
+    if (rc == 0)
+        rc = event_job_post_entry (jobtap->ctx->event, job, 0, entry);
+    ERRNO_SAFE_WRAP (json_decref, entry);
     return rc;
 }
 
@@ -2353,6 +2450,7 @@ int flux_jobtap_jobspec_update_id_pack (flux_plugin_t *p,
     struct jobtap *jobtap;
     struct job *job;
     json_error_t error;
+    flux_error_t errp;
     json_t *update = NULL;
 
     if (!p
@@ -2381,7 +2479,8 @@ int flux_jobtap_jobspec_update_id_pack (flux_plugin_t *p,
         errno = EINVAL;
         return -1;
     }
-    if (!validate_jobspec_updates (update)) {
+    if (!validate_jobspec_updates (update, &errp)) {
+        log_update_rejected (jobtap, p, job, &errp);
         errno = EINVAL;
         goto out;
     }
@@ -2407,6 +2506,7 @@ int flux_jobtap_jobspec_update_pack (flux_plugin_t *p, const char *fmt, ...)
     struct job * job;
     json_t *o = NULL;
     json_error_t error;
+    flux_error_t errp;
 
     if (!p
         || !(jobtap = flux_plugin_aux_get (p, "flux::jobtap"))
@@ -2424,16 +2524,25 @@ int flux_jobtap_jobspec_update_pack (flux_plugin_t *p, const char *fmt, ...)
         errno = EINVAL;
         return -1;
     }
-    if (!validate_jobspec_updates (o)) {
+    /*  Updates accumulate across calls until they are posted as a single
+     *  jobspec-update event, so validate the accumulated result rather
+     *  than this update alone. Note that the pending updates are merged
+     *  into 'o' rather than the other way around: 'o' is private to this
+     *  call, so a rejected update leaves the pending updates untouched,
+     *  and values from 'o' still take precedence.
+     */
+    if (jobtap->jobspec_update
+        && json_object_update_missing (o, jobtap->jobspec_update) < 0) {
+        errno = ENOMEM;
+        goto out;
+    }
+    if (!validate_jobspec_updates (o, &errp)) {
+        log_update_rejected (jobtap, p, job, &errp);
         errno = EINVAL;
         goto out;
     }
-    if (!jobtap->jobspec_update)
-        jobtap->jobspec_update = json_incref (o);
-    else if (json_object_update (jobtap->jobspec_update, o) < 0) {
-        errno = EINVAL;
-        goto out;
-    }
+    json_decref (jobtap->jobspec_update);
+    jobtap->jobspec_update = json_incref (o);
     rc = 0;
 out:
     saved_errno = errno;
@@ -2490,10 +2599,8 @@ static int jobtap_emit_perilog_event (struct jobtap *jobtap,
     const char *event = prolog ? start ? "prolog-start" : "prolog-finish" :
                                  start ? "epilog-start" : "epilog-finish";
 
-    if (!description) {
-        errno = EINVAL;
+    if (check_description (description) < 0)
         return -1;
-    }
 
     /*  prolog events cannot be emitted after a start request is pending.
      *
@@ -2676,6 +2783,13 @@ int jobtap_job_update (struct jobtap *jobtap,
         if (require_feasibility != NULL)
             *require_feasibility = feasibility;
         if (additional_updates && updates) {
+            /*  Updates returned by a plugin here are posted in a
+             *  jobspec-update event just like those from
+             *  flux_jobtap_jobspec_update_pack(3), so they require the
+             *  same validation.
+             */
+            if (!validate_jobspec_updates (updates, errp))
+                return -1;
             if (*additional_updates == NULL)
                 *additional_updates = json_incref (updates);
             else if (json_object_update (*additional_updates, updates) < 0) {

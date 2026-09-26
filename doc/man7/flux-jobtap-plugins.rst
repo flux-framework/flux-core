@@ -99,6 +99,13 @@ returning a value for the ``annotations`` key::
                          "{s:{s:s}}",
                          "annotations", "test", value);
 
+Data returned to the job manager is bounded so that it stays readable by
+consumers of the job eventlog and the job manager journal, which do not
+all use the same JSON parser. Annotations may not nest more than 128
+levels deep nor exceed 1 MiB when serialized. An ``R`` value returned from
+``job.state.sched`` is limited by depth only, since a resource set for a
+large allocation is legitimately big.
+
 UTILITY FUNCTIONS
 =================
 
@@ -408,6 +415,12 @@ Restrictions:
 - Jobs with readonly eventlogs cannot be updated
 - Updates are subject to ``job.validate`` callbacks
 - Use ``job.update.*`` callbacks to allow/deny specific attribute updates
+- An update that nests more than 128 levels deep, or that exceeds 1 MiB
+  bytes when serialized, is rejected. Since updates accumulate until they
+  are posted as a single ``jobspec-update`` event, the limits apply to the
+  accumulated result, not to an individual call. This prevents a plugin
+  from emitting an event that consumers of the eventlog or journal are
+  unable to deserialize.
 
 Example updating job duration::
 
@@ -790,6 +803,10 @@ API Function
 Raises an exception on job ``id`` with the specified ``type``, ``severity``,
 and formatted message. The ``id`` parameter accepts ``FLUX_JOBTAP_CURRENT_JOB``.
 Returns 0 on success, -1 on failure.
+
+The ``type`` may not be empty and may not contain whitespace or ``=``, and
+``severity`` must be in the range 0 to 7. These are the same restrictions
+applied to an exception raised via the ``job-manager.raise`` RPC.
 
 Severity Levels
 ---------------

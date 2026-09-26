@@ -130,9 +130,16 @@ int job_event_peek (struct job *job, int *flagsp, json_t **entryp);
 bool job_event_is_queued (struct job *job, const char *name);
 const char *job_event_queue_print (struct job *job, char *buf, int size);
 
-/*  Validate updates as valid RFC 21 jobspec-update event context:
+/*  Validate updates as valid RFC 21 jobspec-update event context.
+ *
+ *  In addition to checking that each key is a valid jobspec path, the
+ *  updates object is checked against the standard depth and size limits so
+ *  that an update cannot be posted to an eventlog that downstream consumers
+ *  are unable to deserialize (see flux-framework/flux-core#7815).
+ *
+ *  On failure, 'errp' (if non-NULL) is filled in with the reason.
  */
-bool validate_jobspec_updates (json_t *updates);
+bool validate_jobspec_updates (json_t *updates, flux_error_t *errp);
 
 /*  Apply updates to jobspec
  */
