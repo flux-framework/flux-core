@@ -13,6 +13,8 @@
 #endif
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+#include <inttypes.h>
 #include <jansson.h>
 
 #include "src/common/libtap/tap.h"
@@ -30,6 +32,7 @@ void test_single (void)
     flux_error_t error;
     struct upmi_info info;
     const char *name;
+    char buf[64];
     char *val;
 
     upmi = upmi_create ("single",
@@ -47,8 +50,11 @@ void test_single (void)
         "upmi_initialize sets info.dict to NULL by default");
     ok (info.size == 1 && info.rank == 0,
         "info rank==0, size==1");
-    is (info.name, "single",
-        "info name==single"); // normally jobid but not with spec=single
+    // normally the instance name, but with spec=single there is no
+    // launcher to assign one, so the plugin appends its pid
+    snprintf (buf, sizeof (buf), "single-%ju", (uintmax_t)getpid ());
+    is (info.name, buf,
+        "info name==single-PID");
     name = upmi_describe (upmi);
     is (name, "single",
         "upmi_describe returns single");

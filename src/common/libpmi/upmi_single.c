@@ -13,7 +13,9 @@
 #endif
 #include <stdlib.h>
 #include <errno.h>
+#include <inttypes.h>
 #include <jansson.h>
+#include <unistd.h>
 
 #include "upmi.h"
 #include "upmi_plugin.h"
@@ -121,16 +123,30 @@ static int op_abort (flux_plugin_t *p,
     return 0;
 }
 
+/* The KVS name identifies the instance (see the broker instance-name
+ * attribute).  A singleton has no launcher to assign one and nothing
+ * outside the broker to derive one from, so generate a unique name.  It
+ * differs on each start, which is harmless: a singleton keeps no state
+ * across a restart, so there is no earlier incarnation to be identified
+ * with.
+ */
 static int op_initialize (flux_plugin_t *p,
                           const char *topic,
                           flux_plugin_arg_t *args,
                           void *data)
 {
+    char name[32];
+
+    /* Two singletons running at once have distinct pids, which is all that
+     * is required.  A pid reused later belonged to a broker that has since
+     * exited, so it cannot collide with a live instance.
+     */
+    snprintf (name, sizeof (name), "%s-%ju", plugin_name, (uintmax_t)getpid ());
     if (flux_plugin_arg_pack (args,
                               FLUX_PLUGIN_ARG_OUT,
                               "{s:i s:s s:i}",
                               "rank", 0,
-                              "name", plugin_name,
+                              "name", name,
                               "size", 1) < 0)
         return -1;
     return 0;
