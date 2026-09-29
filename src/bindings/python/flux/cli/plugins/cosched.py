@@ -135,8 +135,8 @@ class CoSchedPlugin(CLIPlugin):
                     # Multiple slot labels in the same request are not allowed for co-scheduling
                     return
                 task_count = jobspec.tasks[0]["count"]
-                ntasks = 0
-                nslots = 1
+                ntasks = None
+                nslots = None
                 label = ""
                 per_resource = {}
                 for parent, resource, count in jobspec.resource_walk():
@@ -150,14 +150,17 @@ class CoSchedPlugin(CLIPlugin):
                                 ntasks = tcount * count
                                 nslots = count
                             elif ttype == "per_resource":
-                                for rtype, rcount in tcount.items():
-                                    per_resource[rtype] = rcount
+                                # RFC 14: per_resource SHALL be a dict with keys: "type" and "count"
+                                per_resource = tcount
                                 nslots = count
                             else:
                                 ntasks = tcount
                                 nslots = count
-                    if resource["type"] in per_resource:
-                        ntasks += per_resource[resource["type"]] * count
+                    if per_resource and resource["type"] == per_resource["type"]:
+                        ntasks = per_resource["count"] * count
+
+                if ntasks is None or nslots is None:
+                    raise ValueError("Unable to determine task and slot counts from jobspec resources")
 
                 resource_type = handle.conf_get(
                     "cosched.resource_type", default="numanode"
@@ -175,8 +178,7 @@ class CoSchedPlugin(CLIPlugin):
                     and ((resource_count * slots_inside_resource) / ntasks - 1)
                     <= waste_threshold
                 ):
-                    jobspec.resources.clear()
-                    jobspec.resources.append(
+                    jobspec.resources[:] = [
                         {
                             "type": resource_type,
                             "count": resource_count,
@@ -189,7 +191,8 @@ class CoSchedPlugin(CLIPlugin):
                                 }
                             ],
                         }
-                    )
+                    ]
+                    
                     jobspec.tasks[0]["count"] = {"total": ntasks}
         except KeyError as e:
             print(f"Error in allocation type plugin: {e}")
