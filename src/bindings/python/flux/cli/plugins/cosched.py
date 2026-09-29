@@ -165,7 +165,9 @@ class CoSchedPlugin(CLIPlugin):
                         ntasks = per_resource["count"] * count
 
                 if ntasks is None or nslots is None:
-                    raise ValueError("Unable to determine task and slot counts from jobspec resources")
+                    raise ValueError(
+                        "Unable to determine task and slot counts from jobspec resources"
+                    )
 
                 resource_type = handle.conf_get(
                     "coscheduling-cpu.resource_type", default="numanode"
@@ -197,7 +199,7 @@ class CoSchedPlugin(CLIPlugin):
                             ],
                         }
                     ]
-                    
+
                     jobspec.tasks[0]["count"] = {"total": ntasks}
         except KeyError as e:
             print(f"Error in allocation type plugin: {e}")
