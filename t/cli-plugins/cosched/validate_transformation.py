@@ -91,13 +91,13 @@ def main():
     args = parse_args(plugin)
 
     config = {
-        "cosched.resource_type": args.resource_type,
-        "cosched.waste_threshold": args.waste_threshold,
-        "cosched.n_way": args.n_way,
+        "coscheduling-cpu.resource_type": args.resource_type,
+        "coscheduling-cpu.waste_threshold": args.waste_threshold,
+        "coscheduling-cpu.n_way": args.n_way,
     }
 
     if args.allowed is not None:
-        config["cosched.allowed"] = args.allowed
+        config["coscheduling-cpu.allowed"] = args.allowed
 
     jobspec = JobspecV1.from_command(
         args.command,

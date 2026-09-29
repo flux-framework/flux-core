@@ -13,7 +13,7 @@ class CoSchedPlugin(CLIPlugin):
     resource type, e.g. numanode, socket, or ccd.
     To enable this plugin, set the allowed parameter under the cosched key in flux config as true.
     e.g.
-    [cosched]
+    [coscheduling-cpu]
     allowed=true
     n_way=2
     resource_type="numanode"
@@ -130,7 +130,12 @@ class CoSchedPlugin(CLIPlugin):
             return
         try:
             handle = Flux()
-            if handle.conf_get("cosched.allowed") and not args.no_spread:
+        except OSError:
+            # Dry runs can generate jobspecs without a running Flux instance.
+            # Without its configuration, co-scheduling is not enabled.
+            return
+        try:
+            if handle.conf_get("coscheduling-cpu.allowed"):
                 if len(jobspec.tasks) != 1:
                     # Multiple slot labels in the same request are not allowed for co-scheduling
                     return
@@ -163,12 +168,12 @@ class CoSchedPlugin(CLIPlugin):
                     raise ValueError("Unable to determine task and slot counts from jobspec resources")
 
                 resource_type = handle.conf_get(
-                    "cosched.resource_type", default="numanode"
+                    "coscheduling-cpu.resource_type", default="numanode"
                 )
                 waste_threshold = handle.conf_get(
-                    "cosched.waste_threshold", default=0.3
+                    "coscheduling-cpu.waste_threshold", default=0.3
                 )
-                n = handle.conf_get("cosched.n_way", default=2)
+                n = handle.conf_get("coscheduling-cpu.n_way", default=2)
                 cores_per_resource = self.find_cores_per_resource(resource_type)
                 slots_per_resource = max(1, cores_per_resource // n)
                 resource_count = ceil(nslots / slots_per_resource)
