@@ -1120,19 +1120,32 @@ static struct sdproc *sdproc_create (struct sdexec_ctx *ctx,
                       &proc->stop.kill_signal) < 0)
         proc->stop.kill_signal = SIGKILL;
     /* Set SDEXEC_NAME for sdexec_start_transient_unit().
-     * If unset, use a truncated uuid as the name.
+     * Precedence: an explicit SDEXEC_NAME option wins; otherwise derive the
+     * unit name from the subprocess label as "<label>.service" so the unit
+     * name equals the label job-exec uses to look up and recover the unit;
+     * otherwise fall back to a truncated uuid.
      */
     if (get_dict (proc->cmd, "opts", "SDEXEC_NAME", &name) < 0) {
-        uuid_t uuid;
-        char uuid_str[UUID_STR_LEN];
+        const char *label;
 
-        uuid_generate (uuid);
-        uuid_unparse (uuid, uuid_str);
-        uuid_str[13] = '\0'; // plenty of uniqueness
-        if (asprintf (&tmp, "%s.service", uuid_str) < 0
-            || set_dict (proc->cmd, "opts", "SDEXEC_NAME", tmp) < 0)
-            goto error;
-        name = tmp;
+        if (json_unpack (proc->cmd, "{s:s}", "label", &label) == 0) {
+            if (asprintf (&tmp, "%s.service", label) < 0
+                || set_dict (proc->cmd, "opts", "SDEXEC_NAME", tmp) < 0)
+                goto error;
+            name = tmp;
+        }
+        else {
+            uuid_t uuid;
+            char uuid_str[UUID_STR_LEN];
+
+            uuid_generate (uuid);
+            uuid_unparse (uuid, uuid_str);
+            uuid_str[13] = '\0'; // plenty of uniqueness
+            if (asprintf (&tmp, "%s.service", uuid_str) < 0
+                || set_dict (proc->cmd, "opts", "SDEXEC_NAME", tmp) < 0)
+                goto error;
+            name = tmp;
+        }
     }
     if (!(proc->unit = sdexec_unit_create (name)))
         goto error;
