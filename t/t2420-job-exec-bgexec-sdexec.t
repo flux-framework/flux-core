@@ -76,7 +76,20 @@ test_expect_success 'job stdout is captured' '
 	flux run -N1 echo hello >stdout.out &&
 	grep hello stdout.out
 '
-
+# Regression: bgexec sets a deterministic label and sdexec builds the
+# transient unit name from it, appending the broker rank (these brokers share
+# a node) and the instance name.  Without a label sdexec falls back to a
+# random uuid name, which no reattach or startup sweep could match.
+test_expect_success 'sdexec transient unit is named after the job (not a uuid)' '
+	iname=$(flux getattr jobid-path | sed -e "s|^/||" -e "s|/|:|g") &&
+	id=$(flux submit -N1 sleep 300) &&
+	test_when_finished "flux cancel $id; flux job wait-event -t 30 $id clean" &&
+	flux job wait-event -t 60 $id start &&
+	fid=$(flux job id --to=f58plain $id) &&
+	systemctl --user list-units --all --type=service >units.out &&
+	test_debug "grep -E \"shell-${fid}\" units.out" &&
+	grep -E "(imp-)?shell-${fid}-[0-9]+:${iname}\.service" units.out
+'
 # ---------------------------------------------------------------------------
 # reattach across a module reload
 #
