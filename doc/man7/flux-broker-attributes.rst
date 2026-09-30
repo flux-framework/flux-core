@@ -96,9 +96,13 @@ jobid :ref:`[readonly] <attr_readonly>`
    other than a Flux job ID if Flux was started by another means.
 
 jobid-path :ref:`[readonly] <attr_readonly>`
-   A ``/``-separated list of job IDs representing the Flux instance hierarchy.
-   The top level Flux instance, which has no Flux job ID, is represented
-   as ``/``, similar to UNIX directories.
+   The position of this Flux instance in its hierarchy, in the form
+   ``/NAME[/JOBID...]``.  ``NAME`` identifies the top level instance and
+   is taken from its PMI KVS name, e.g. ``sys`` for a system instance,
+   ``test-PID`` for a :man1:`flux-start` test instance, or ``single-PID``
+   for a singleton.  A ``/`` in a launcher-assigned name is replaced with
+   ``-``, since ``/`` separates path components.  Each subinstance appends
+   its Flux job ID, e.g. ``/sys/ƒD2e73NP``.
 
 parent-kvs-namespace :ref:`[readonly] <attr_readonly>`
    The value of the broker's :envvar:`FLUX_KVS_NAMESPACE` environment variable.
