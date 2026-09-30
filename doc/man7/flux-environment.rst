@@ -27,10 +27,11 @@ The following are set in the environment of each task spawned by
 
 .. envvar:: FLUX_JOB_ID_PATH
 
-   A list of Flux jobids in F58 form, beginning with the separator ``/``,
-   that uniquely identifies the job's position in the Flux instance hierarchy.
-   For example, a job submitted to a batch job on a Flux system instance might
-   have a path of ``/ƒD2e73NP/ƒDCB6RV``.
+   The job's position in the Flux instance hierarchy: the name of the top
+   level instance followed by a list of Flux jobids in F58 form,
+   ``/``-separated and beginning with ``/``.  For example, a job submitted
+   to a batch job on a Flux system instance might have a path of
+   ``/sys/ƒD2e73NP/ƒDCB6RV``.
 
 .. envvar:: FLUX_ENCLOSING_ID
 

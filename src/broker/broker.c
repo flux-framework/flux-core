@@ -109,7 +109,9 @@ static int init_attrs (attr_t *attrs,
                        struct flux_msg_cred *cred,
                        flux_error_t *error);
 
-static int init_attrs_post_boot (attr_t *attrs, flux_error_t *error);
+static int init_attrs_post_boot (attr_t *attrs,
+                                 const char *instance_name,
+                                 flux_error_t *error);
 
 static int init_attrs_starttime (attr_t *attrs,
                                  double starttime,
@@ -511,7 +513,7 @@ int main (int argc, char *argv[])
     /* Set parent-uri, parent-kvs-namespace, jobid-path.
      * Assumes that 'jobid' was set (if available) by bootstrap_create().
      */
-    if (init_attrs_post_boot (ctx.attrs, &error) < 0) {
+    if (init_attrs_post_boot (ctx.attrs, ctx.info.name, &error) < 0) {
         flux_log (ctx.h, LOG_CRIT, "%s", error.text);
         goto cleanup;
     }
@@ -765,7 +767,9 @@ static int init_attrs_starttime (attr_t *attrs,
 /* Initialize attributes after bootstrap since these attributes may depend
  * on whether this instance is a job or not.
  */
-static int init_attrs_post_boot (attr_t *attrs, flux_error_t *errp)
+static int init_attrs_post_boot (attr_t *attrs,
+                                 const char *instance_name,
+                                 flux_error_t *errp)
 {
     const char *val;
     bool instance_is_job;
@@ -812,11 +816,46 @@ static int init_attrs_post_boot (attr_t *attrs, flux_error_t *errp)
     }
     unsetenv ("FLUX_KVS_NAMESPACE");
 
+    /* jobid-path begins with the name of the top level instance, taken
+     * from its PMI KVS name, so a path both places an instance in a
+     * hierarchy and says which hierarchy.  An instance running under Flux
+     * receives its path from the enclosing instance via the job
+     * environment.
+     */
     val = getenv ("FLUX_JOB_ID_PATH");
-    if (!val || !instance_is_job)
-        val = "/";
-    if (attr_set (attrs, "jobid-path", val) < 0)
-        return errprintf (errp, "setattr jobid-path: %s", strerror (errno));
+    if (val && instance_is_job) {
+        if (attr_set (attrs, "jobid-path", val) < 0)
+            return errprintf (errp,
+                              "setattr jobid-path: %s",
+                              strerror (errno));
+    }
+    else {
+        char *path;
+
+        if (!instance_name)
+            instance_name = "";
+        if (asprintf (&path, "/%s", instance_name) < 0) {
+            return errprintf (errp,
+                              "setattr jobid-path: %s",
+                              strerror (errno));
+        }
+        /* "/" separates path components, so one in a launcher-assigned
+         * name would corrupt the path's structure.  Encode it as a dash.
+         * The mapping is lossy, which is acceptable: names Flux itself
+         * assigns never contain one.
+         */
+        for (char *cp = path + 1; *cp != '\0'; cp++) {
+            if (*cp == '/')
+                *cp = '-';
+        }
+        if (attr_set (attrs, "jobid-path", path) < 0) {
+            ERRNO_SAFE_WRAP (free, path);
+            return errprintf (errp,
+                              "setattr jobid-path: %s",
+                              strerror (errno));
+        }
+        free (path);
+    }
     unsetenv ("FLUX_JOB_ID_PATH");
 
     return 0;
