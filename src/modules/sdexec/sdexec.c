@@ -1164,6 +1164,32 @@ static struct sdproc *sdproc_create (struct sdexec_ctx *ctx,
             goto error;
         name = tmp;
     }
+    /* Provide a default Description for systemctl status readers, unless
+     * the client set one with SDEXEC_PROP_Description.  An SDEXEC_NAME unit
+     * may have no label; fall back to the unit name in that case.
+     */
+    const char *dval;
+
+    if (get_dict (proc->cmd, "opts", "SDEXEC_PROP_Description", &dval) < 0) {
+        const char *dlabel;
+        char *desc;
+
+        if (json_unpack (proc->cmd, "{s:s}", "label", &dlabel) < 0)
+            dlabel = name;
+        if (asprintf (&desc,
+                      "Flux subprocess %s of instance %s",
+                      dlabel,
+                      ctx->instance_name) < 0)
+            goto error;
+        if (set_dict (proc->cmd,
+                      "opts",
+                      "SDEXEC_PROP_Description",
+                      desc) < 0) {
+            ERRNO_SAFE_WRAP (free, desc);
+            goto error;
+        }
+        free (desc);
+    }
     if (!(proc->unit = sdexec_unit_create (name)))
         goto error;
     /* Ensure that FLUX_URI refers to the local broker.
