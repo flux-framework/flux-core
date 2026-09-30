@@ -52,21 +52,21 @@ truncated UUID instead.  A client may override the whole name with the
 
 Where a node hosts more than one broker, those brokers share a systemd user
 instance, so the broker rank is appended to the label and the name becomes
-``<label>-<rank>:<instance>.service``.  sdexec decides this once at load
-time from the RFC 34 taskmap in the ``broker.mapping`` attribute, and
-includes the rank if that attribute is unavailable.  Two properties of the
-system instance are assumed here: only one *sys* instance runs per user per
-node, and a system instance never hosts more than one broker per node, so
-``sys`` alone cannot collide and its units normally carry no rank.
+``<label>-<rank>:<instance>.service``.  A label need only be unique within
+one sdexec, so clients do not put the rank in it.  sdexec decides this once
+at load time from the RFC 34 taskmap in the ``broker.mapping`` attribute,
+and includes the rank if that attribute is unavailable.  Two properties of
+the system instance are assumed here: only one *sys* instance runs per user
+per node, and a system instance never hosts more than one broker per node,
+so ``sys`` alone cannot collide and its units normally carry no rank.
 (The system instance name is fixed: a configurable name was considered
 and deferred, since co-located system instances would also need distinct
 unit files.)
 
-bulk-exec and bgexec label job shells ``<name>-<rank>-<jobid>``, so in the
-system instance a job shell lands in a unit named
-``shell-0-<jobid>:sys.service``.  The rank keeps the name unique when several
-brokers share a node, and the job ID makes it a stable handle for reclaiming
-a leftover unit after a module restart.
+bulk-exec and bgexec label job shells ``<name>-<jobid>``, so in the system
+instance a job shell lands in a unit named ``shell-<jobid>:sys.service``.
+The job ID makes the name a stable handle for reclaiming a leftover unit
+after a module restart.
 
 The systemd user instance is shared by every Flux instance running as this
 user, so the *instance* suffix is what keeps one instance's unit names from

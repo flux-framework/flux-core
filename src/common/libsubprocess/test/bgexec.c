@@ -34,6 +34,7 @@
 #include "ccan/str/str.h"
 #include "src/common/libtap/tap.h"
 #include "src/common/libtestutil/util.h"
+#include "src/common/libtestutil/util_multi.h"
 #include "src/common/libsubprocess/server.h"
 #include "src/common/libsubprocess/subprocess.h"
 #include "src/common/libsubprocess/bgexec.h"
@@ -361,13 +362,13 @@ static void test_kill (flux_t *h)
 /* Build the deterministic label bgexec uses internally, so the test can
  * start a "previous incarnation" process the recovery wait can find.
  */
-static char *make_label (int rank)
+static char *make_label (void)
 {
     char idbuf[21];
     char *label;
     if (flux_job_id_encode (TEST_JOBID, "f58plain", idbuf, sizeof (idbuf)) < 0)
         BAIL_OUT ("flux_job_id_encode failed");
-    if (asprintf (&label, "shell-%d-%s", rank, idbuf) < 0)
+    if (asprintf (&label, "shell-%s", idbuf) < 0)
         BAIL_OUT ("asprintf failed");
     return label;
 }
@@ -379,7 +380,7 @@ static void prior_start (flux_t *h, int rank, char **av, int ac)
 {
     flux_cmd_t *cmd;
     flux_future_t *f;
-    char *label = make_label (rank);
+    char *label = make_label ();
 
     if (!(cmd = flux_cmd_create (ac, av, environ))
         || flux_cmd_set_label (cmd, label) < 0)
@@ -873,7 +874,10 @@ int main (int argc, char *argv[])
     plan (NO_PLAN);
 
     signal (SIGPIPE, SIG_IGN);
-    h = rcmdsrv_create (SERVER_NAME);
+    /* Ranks get their own servers, as under a broker, so a label need only
+     * be unique within one of them.
+     */
+    h = rcmdsrv_create_multi (SERVER_NAME, 4);
 
     diag ("test_basic");
     test_basic (h);
@@ -910,7 +914,7 @@ int main (int argc, char *argv[])
     diag ("test_aux_and_guards");
     test_aux_and_guards (h);
 
-    test_server_stop (h);
+    test_server_stop_multi (h);
     flux_close (h);
 
     done_testing ();

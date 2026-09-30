@@ -373,35 +373,6 @@ static int exec_start_cmd (struct bulk_exec *exec,
     uint32_t rank;
     rank = idset_first (cmd->ranks);
     while (rank != IDSET_INVALID_ID && (max < 0 || count < max)) {
-        /* Set the unit name for the "sdexec" service.  This is done here
-         * for each rank instead of once in bulk_exec_push_cmd() to ensure
-         * the name is unique when there are multiple brokers per node.
-         * Ex: shell-0-fTE9HHdZvi3.service.
-         * (N.B. systemd doesn't like "ƒ" in the unit name hence f58plain).
-         */
-        if (streq (exec->service, "sdexec")) {
-            char idbuf[21];
-            char buf[128];
-            if (flux_job_id_encode (exec->id,
-                                    "f58plain",
-                                    idbuf,
-                                    sizeof (idbuf)) < 0)
-                return -1;
-            snprintf (buf,
-                      sizeof (buf),
-                      "%s-%lu-%s.service",
-                      exec->name,
-                      (unsigned long)rank,
-                      idbuf);
-            if (flux_cmd_setopt (cmd->cmd, "SDEXEC_NAME", buf) < 0)
-                goto opt_error;
-            snprintf (buf,
-                      sizeof (buf),
-                      "User workload for Flux job %s",
-                      idbuf);
-            if (flux_cmd_setopt (cmd->cmd, "SDEXEC_PROP_Description", buf) < 0)
-                goto opt_error;
-        }
         flux_subprocess_t *p = flux_rexec_ex (exec->h,
                                               bulk_exec_service_name (exec),
                                               rank,
@@ -428,9 +399,6 @@ static int exec_start_cmd (struct bulk_exec *exec,
         count++;
     }
     return count;
-opt_error:
-    flux_log_error (exec->h, "Unable to set sdexec options");
-    return -1;
 }
 
 void bulk_exec_stop (struct bulk_exec *exec)
@@ -565,6 +533,30 @@ int bulk_exec_push_cmd (struct bulk_exec *exec,
 
     if (!(c = exec_cmd_create (ranks, cmd, flags)))
         return -1;
+
+    /* Set a label for the "sdexec" service.  sdexec builds the transient
+     * unit name from it, appending the broker rank where a node hosts more
+     * than one broker, and the instance name.
+     * Ex: shell-fTE9HHdZvi3 -> shell-fTE9HHdZvi3:sys.service.
+     * (N.B. systemd doesn't like "ƒ" in the unit name hence f58plain).
+     */
+    if (streq (exec->service, "sdexec")) {
+        char idbuf[21];
+        char buf[128];
+
+        if (flux_job_id_encode (exec->id,
+                                "f58plain",
+                                idbuf,
+                                sizeof (idbuf)) < 0) {
+            exec_cmd_destroy (c);
+            return -1;
+        }
+        snprintf (buf, sizeof (buf), "%s-%s", exec->name, idbuf);
+        if (flux_cmd_set_label (c->cmd, buf) < 0) {
+            exec_cmd_destroy (c);
+            return -1;
+        }
+    }
 
     if (zlist_append (exec->commands, c) < 0) {
         exec_cmd_destroy (c);

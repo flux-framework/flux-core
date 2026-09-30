@@ -23,6 +23,7 @@
 #include "ccan/str/str.h"
 #include "src/common/libtap/tap.h"
 #include "src/common/libtestutil/util.h"
+#include "src/common/libtestutil/util_multi.h"
 #include "src/common/libsubprocess/server.h"
 #include "src/common/libioencode/ioencode.h"
 #include "src/common/libutil/stdlog.h"
@@ -75,6 +76,51 @@ static int test_server (flux_t *h, void *arg)
     rc = 0;
 done:
     return rc;
+}
+
+/* Create this rank's subprocess server and return; the multi-rank harness
+ * runs the reactor, which every rank shares.  The server is attached to the
+ * handle so closing it tears the server down.  The harness has already set
+ * this instance's rank.
+ */
+static int test_server_multi (flux_t *h, void *arg)
+{
+    const char *service_name = arg;
+    subprocess_server_t *srv;
+
+    if (!(srv = subprocess_server_create (h,
+                                          service_name,
+                                          "smurf",
+                                          tap_logger,
+                                          NULL))) {
+        diag ("subprocess_server_create failed");
+        return -1;
+    }
+    if (flux_aux_set (h,
+                      "srv",
+                      srv,
+                      (flux_free_f)subprocess_server_destroy) < 0) {
+        subprocess_server_destroy (srv);
+        return -1;
+    }
+    return 0;
+}
+
+/* Create 'size' subprocess servers, one per rank, reached through a handle
+ * that routes by nodeid.
+ */
+flux_t *rcmdsrv_create_multi (const char *service_name, int size)
+{
+    flux_t *h;
+
+    signal (SIGPIPE, SIG_IGN);
+
+    if (!(h = test_server_create_multi (size,
+                                        0,
+                                        test_server_multi,
+                                        (char *)service_name)))
+        BAIL_OUT ("test_server_create_multi failed");
+    return h;
 }
 
 flux_t *rcmdsrv_create (const char *service_name)

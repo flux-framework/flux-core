@@ -24,6 +24,8 @@ flux_t *rcmdsrv_create_secure (const char *service_name);
 
 /* llog-compatible logger
  */
+flux_t *rcmdsrv_create_multi (const char *service_name, int size);
+
 void tap_logger (void *arg,
                  const char *file,
                  int line,
