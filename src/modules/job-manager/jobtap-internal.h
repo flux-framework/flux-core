@@ -138,6 +138,20 @@ int jobtap_notify_subscribers (struct jobtap *jobtap,
                                const char *fmt,
                                ...);
 
+/*  Deliver the resolved effective queue configuration `conf` to all loaded
+ *  plugins via the `queues.update` callback. `conf` is the "conf" sub-object
+ *  of the job-manager.queue-list response (borrowed). If a plugin rejects
+ *  the update, returns -1 with an error message in `errp`.
+ *
+ *  A NULL `conf` means the caller could not encode the configuration and is
+ *  reported as an error with `errno` left as the caller set it: plugins are
+ *  always delivered an object, never a JSON null. "No queues configured" is
+ *  an object whose "queues" array is empty.
+ */
+int jobtap_notify_queues_update (struct jobtap *jobtap,
+                                 json_t *conf,
+                                 flux_error_t *errp);
+
 #endif /* _FLUX_JOB_MANAGER_JOBTAP_H */
 
 /*

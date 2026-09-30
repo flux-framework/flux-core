@@ -118,5 +118,37 @@ test_expect_success 'configure an invalid queue duration limit' '
 	duration = "xyz123"
 	EOT
 '
+test_expect_success 'configure an RFC 33 vqueue that inherits a parent limit' '
+	flux config load <<-EOT &&
+	[queues.batch.policy.limits]
+	duration = "1h"
+	[queues.debug.policy.limits]
+	duration = "8h"
+	[queues.expedite]
+	parent = "batch"
+	EOT
+	flux queue start --all
+'
+test_expect_success 'vqueue enforces the inherited effective limit' '
+	flux submit --queue=expedite -t 30m true &&
+	test_must_fail flux submit --queue=expedite -t 2h true 2>vq.err &&
+	grep "for queue expedite" vq.err
+'
+test_expect_success 'vqueue does not inherit a non-parent queue limit' '
+	flux submit --queue=debug -t 2h true &&
+	test_must_fail flux submit --queue=expedite -t 2h true
+'
+test_expect_success 'vqueue own limit overrides the inherited parent limit' '
+	flux config load <<-EOT &&
+	[queues.batch.policy.limits]
+	duration = "1h"
+	[queues.expedite]
+	parent = "batch"
+	policy.limits.duration = "4h"
+	EOT
+	flux queue start --all &&
+	flux submit --queue=expedite -t 2h true &&
+	test_must_fail flux submit --queue=expedite -t 5h true
+'
 
 test_done

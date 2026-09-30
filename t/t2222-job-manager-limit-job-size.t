@@ -6,6 +6,8 @@ test_description='Test flux job manager limit-job-size plugin'
 
 test_under_flux 2 full -Slog-stderr-level=1
 
+PLUGINPATH=${FLUX_BUILD_DIR}/t/job-manager/plugins/.libs
+
 test_expect_success 'configure an invalid job-size limit' '
 	test_must_fail flux config load <<-EOT
 	[policy.limits]
@@ -106,5 +108,90 @@ test_expect_success 'configure an invalid queue job-size.min.nnodes object' '
 	[queues.debug.policy.limits]
 	job-size.min.nnodes = "xyz"
 	EOT
+'
+test_expect_success 'configure an RFC 33 vqueue that inherits a parent limit' '
+	flux config load <<-EOT &&
+	[queues.batch.policy.limits]
+	job-size.max.nnodes = 1
+	[queues.debug.policy.limits]
+	job-size.max.nnodes = 2
+	[queues.expedite]
+	parent = "batch"
+	EOT
+	flux queue start --all
+'
+test_expect_success 'vqueue enforces the inherited effective limit' '
+	flux submit --queue=expedite -N1 true &&
+	test_must_fail flux submit --queue=expedite -N2 true 2>vq.err &&
+	grep "for queue expedite" vq.err
+'
+test_expect_success 'vqueue does not inherit a non-parent queue limit' '
+	flux submit --queue=debug -N2 true &&
+	test_must_fail flux submit --queue=expedite -N2 true
+'
+test_expect_success 'vqueue own limit overrides the inherited parent limit' '
+	flux config load <<-EOT &&
+	[queues.batch.policy.limits]
+	job-size.max.nnodes = 1
+	[queues.expedite]
+	parent = "batch"
+	policy.limits.job-size.max.nnodes = 2
+	EOT
+	flux queue start --all &&
+	flux submit --queue=expedite -N2 true &&
+	test_must_fail flux submit --queue=expedite -N3 true
+'
+test_expect_success 'per-queue limit in the initial config is enforced at startup' '
+	mkdir -p prime.d &&
+	cat >prime.d/queues.toml <<-EOT &&
+	[queues.batch.policy.limits]
+	job-size.max.nnodes = 1
+	EOT
+	cat >prime.sh <<-EOT &&
+	#!/bin/sh
+	flux queue start --all || exit 1
+	flux submit --queue=batch -N1 true || exit 1
+	flux submit --queue=batch -N2 true && exit 1
+	exit 0
+	EOT
+	chmod +x ./prime.sh &&
+	flux start --config-path=$(pwd)/prime.d ./prime.sh
+'
+#
+# The job manager always delivers a configuration object to queues.update,
+# never a JSON null and never a missing key: "no queues configured" is an
+# object with an empty "queues" array. The queues-update test plugin fails
+# the callback if that contract is broken, so loading it and reconfiguring
+# is what exercises the contract.
+#
+test_expect_success 'clear queue configuration' '
+	flux config load </dev/null
+'
+test_expect_success 'queues.update delivers an object with no queues configured' '
+	flux jobtap load ${PLUGINPATH}/queues-update.so
+'
+test_expect_success 'queues.update delivers an object when queues are added' '
+	flux config load <<-EOT &&
+	[queues.batch.policy.limits]
+	job-size.max.nnodes = 1
+	[queues.expedite]
+	parent = "batch"
+	EOT
+	flux queue start --all
+'
+test_expect_success 'queues.update delivers an object when queues are removed' '
+	flux config load </dev/null
+'
+test_expect_success 'plugin is primed with an object at load time' '
+	flux config load <<-EOT &&
+	[queues.batch.policy.limits]
+	job-size.max.nnodes = 1
+	EOT
+	flux queue start --all &&
+	flux jobtap remove queues-update.so &&
+	flux jobtap load ${PLUGINPATH}/queues-update.so
+'
+test_expect_success 'remove queues-update test plugin' '
+	flux jobtap remove queues-update.so
 '
 test_done

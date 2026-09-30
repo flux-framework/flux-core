@@ -286,6 +286,39 @@ Return 0 on success, -1 on failure. On failure, optionally set a human
 readable error in the ``errstr`` output argument. Use
 ``flux_jobtap_error()`` for convenience.
 
+QUEUE CONFIGURATION CALLBACK TOPIC
+==================================
+
+Plugins that need per-queue configuration should register a ``queues.update``
+callback rather than deriving queue policy from ``conf.update``. This
+ensures the plugin gets queue configuration directly from the job manager,
+which is the authority for queue configuration. The job manager resolves
+each queue's effective policy (global policy, virtual-queue inheritance,
+and a queue's local policy are all merged) and delivers it under the
+``queues`` key of the ``queues.update`` input arguments as::
+
+   {"queues": [{"name":s, "requires"?:[...], "parent"?:s, "policy"?:{...}},
+               ...],
+    "policy"?: {...},
+    "default_queue"?: s}
+
+Each queue entry's ``policy`` is fully merged, so plugins must not repeat the
+inheritance merge themselves. The top-level ``policy`` is the effective policy
+for a job with no queue, and ``default_queue`` is the configured default queue
+name; both are omitted when unset. When no named queues are configured the
+``queues`` array is empty.
+
+The callback is invoked when:
+
+  - The plugin is first loaded. Failure causes plugin load to fail.
+
+  - The Flux configuration changes. Note that the queue configuration itself
+    may be unchanged, so the delivered object is often identical to the
+    previous one. Failure causes ``flux config reload`` to fail.
+
+Return 0 on success, -1 on failure. On failure, optionally set a human
+readable error with ``flux_jobtap_error()``.
+
 JOB UPDATE CALLBACKS
 ====================
 

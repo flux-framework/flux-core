@@ -21,6 +21,13 @@ void queue_ctx_destroy (struct queue_ctx *qctx);
 json_t *queue_ctx_save (struct queue_ctx *qctx);
 int queue_ctx_restore (struct queue_ctx *qctx, int version, json_t *o);
 
+/* Return the resolved effective queue configuration object (the "conf"
+ * sub-object of the job-manager.queue-list response) for delivery to jobtap
+ * plugins. The returned reference is borrowed (owned by the queues list
+ * cache); the caller must not decref it. Returns NULL on error (ENOMEM).
+ */
+json_t *queue_ctx_get_conf (struct queue_ctx *qctx);
+
 int queue_submit_check (struct queue_ctx *qctx,
                         json_t *jobspec,
                         flux_error_t *error);
