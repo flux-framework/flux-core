@@ -530,6 +530,7 @@ struct exec_implementation testexec = {
     .start =    testexec_start,
     .reattach = testexec_reattach_op,
     .kill =     testexec_kill,
+    .signal =   testexec_kill,
     .stats =    NULL,
 };
 
