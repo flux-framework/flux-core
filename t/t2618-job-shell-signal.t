@@ -17,6 +17,30 @@ check_signal()
 	test_debug "jq $attr < $name.json" &&
 	jq -e "$attr | .signum == $sig and .timeleft == $tleft" < $name.json
 }
+check_timelimit_signal()
+{
+	local spec=$1 &&
+	local sig=$2 &&
+	name=test.tl.${spec} &&
+	flux run --dry-run --signal=$spec hostname >$name.json 2>$name.err &&
+	test_debug "jq .attributes.system < $name.json" &&
+	jq -e ".attributes.system.exec.timelimit_signal == $sig" <$name.json &&
+	jq -e ".attributes.system.shell.options.signal == null" <$name.json
+}
+
+test_expect_success 'cli: --signal=SIG@0 sets exec.timelimit_signal' '
+	check_timelimit_signal TERM@0 15 &&
+	check_timelimit_signal SIGUSR2@0 12 &&
+	check_timelimit_signal 15@0s 15 &&
+	check_timelimit_signal TERM@0.0 15
+'
+test_expect_success 'cli: --signal=@0 sets exec.timelimit_signal to SIGUSR1' '
+	check_timelimit_signal @0 10
+'
+test_expect_success 'cli: --signal with TIME > 0 does not set timelimit_signal' '
+	flux run --dry-run --signal=TERM@1s hostname >tl.nonzero.json &&
+	jq -e ".attributes.system.exec.timelimit_signal == null" <tl.nonzero.json
+'
 
 # Assumptions:
 # SIGUSR1 == 10
