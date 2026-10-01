@@ -763,6 +763,18 @@ static void jobinfo_killtimer_start (struct jobinfo *job, double after)
                                                    max_kill_timer_cb);
 }
 
+static int jobinfo_signal (struct jobinfo *job, int signum)
+{
+    flux_future_t *f;
+
+    if (job->impl->signal)
+        return (*job->impl->signal) (job, signum);
+    if (!(f = flux_job_kill (job->h, job->id, signum)))
+        return -1;
+    flux_future_destroy (f);
+    return 0;
+}
+
 static void timelimit_cb (flux_reactor_t *r,
                           flux_watcher_t *w,
                           int revents,
@@ -783,7 +795,13 @@ static void timelimit_cb (flux_reactor_t *r,
         flux_log_error (job->h,
                         "failed to generate timeout exception for %s",
                         idf58 (job->id));
-    (*job->impl->kill) (job, SIGALRM);
+
+    if (jobinfo_signal (job, SIGALRM) < 0) {
+        flux_log_error (job->h,
+                        "failed to send timelimit signal (%s) for %s",
+                        sigutil_signame (SIGALRM),
+                        idf58 (job->id));
+    }
     flux_watcher_stop (w);
     job->exception_in_progress = 1;
     jobinfo_killtimer_start (job, job->kill_timeout);
