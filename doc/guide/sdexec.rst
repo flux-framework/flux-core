@@ -39,9 +39,31 @@ Each exec request creates an ``sdproc`` that holds:
 Unit Naming
 ===========
 
-Each transient unit is given a unique name derived from a UUID, with the
-Flux job ID embedded for observability.  The name has a ``.service`` suffix
-as required by systemd.
+A transient unit is named ``<label>:<instance>.service``, where *label* is
+the subprocess label supplied by the client and *instance* is the broker's
+``jobid-path`` attribute rendered as a name: the leading separator is
+dropped, further separators become colons, and job IDs take the plain f58
+form, e.g. ``/sys/ƒJOBID`` becomes ``sys:fJOBID``.  A label never contains
+a colon, so the first colon in a unit name separates the label from the
+rendered jobid-path, and a unit name maps back to its instance and job
+mechanically.  Clients that do not set a label get a name derived from a
+truncated UUID instead.  A client may override the whole name with the
+``SDEXEC_NAME`` command option, which is then used verbatim.
+
+bulk-exec and bgexec label job shells ``<name>-<rank>-<jobid>``, so in the
+system instance a job shell lands in a unit named
+``shell-0-<jobid>:sys.service``.  The rank keeps the name unique when several
+brokers share a node, and the job ID makes it a stable handle for reclaiming
+a leftover unit after a module restart.
+
+The systemd user instance is shared by every Flux instance running as this
+user, so the *instance* suffix is what keeps one instance's unit names from
+colliding with those of another: ``jobid-path`` begins with the name of the
+top level instance and is extended at every nesting level, so it is unique
+among the instances running as one user on a node.  It also lets a tool
+match one instance's units, and no others, with the glob
+``*:<instance>.service``.  See :man7:`flux-broker-attributes` for how
+``jobid-path`` is formed.
 
 I/O Channels
 ============
