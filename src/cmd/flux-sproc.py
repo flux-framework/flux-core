@@ -128,8 +128,12 @@ def ps(args):
         "label": "LABEL",
         "rank": "RANK",
         "cmd": "COMMAND",
+        "flags": "FLAGS",
+        "attached": "ATTACHED",
     }
-    fmt = args.format or "{pid:>9} {state:<2} {label:<12} {cmd}"
+    fmt = (
+        args.format or "{pid:>9} {state:<2} {flags:<11} {attached:<8} {label:<16} {cmd}"
+    )
     formatter = flux.util.OutputFormat(fmt, headings=headings)
 
     try:
@@ -139,6 +143,10 @@ def ps(args):
     except OSError as exc:
         LOGGER.error(f"ps: {exc}")
         sys.exit(1)
+    for proc in procs:
+        flags = [n for n, v in (("bg", proc.bg), ("waitable", proc.waitable)) if v]
+        proc.flags = ",".join(flags) if flags else "-"
+        proc.attached = "Y" if proc.attached else "-"
     formatter.print_items(procs, no_header=args.no_header)
 
 
