@@ -20,6 +20,7 @@
 #include "config.h"
 #endif
 #include <sys/types.h>
+#include <ctype.h>
 #include <sys/socket.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -29,6 +30,7 @@
 #define UUID_STR_LEN 37     // defined in later libuuid headers
 #endif
 #include <flux/core.h>
+#include <flux/taskmap.h>
 #if HAVE_FLUX_SECURITY
 #include <flux/security/version.h>
 #endif
@@ -66,6 +68,8 @@ struct sdexec_ctx {
     flux_t *h;
     uint32_t rank;
     char *local_uri;
+    char *instance_name; // unit name suffix, derived from jobid-path
+    bool append_rank;   // node is shared with other brokers (see ctx_create)
     flux_msg_handler_t **handlers;
     zlistx_t *procs; // list of struct sdproc, owned by the module
     struct flux_msglist *kills;
@@ -1083,6 +1087,7 @@ static struct sdproc *sdproc_create (struct sdexec_ctx *ctx,
         | SUBPROCESS_REXEC_CHANNEL;
     const char *name;
     char *tmp = NULL;
+    int rc;
     flux_reactor_t *reactor = flux_get_reactor (ctx->h);
 
     if ((flags & ~valid_flags) != 0) {
@@ -1120,19 +1125,70 @@ static struct sdproc *sdproc_create (struct sdexec_ctx *ctx,
                       &proc->stop.kill_signal) < 0)
         proc->stop.kill_signal = SIGKILL;
     /* Set SDEXEC_NAME for sdexec_start_transient_unit().
-     * If unset, use a truncated uuid as the name.
+     * Precedence: an explicit SDEXEC_NAME option wins and is used verbatim;
+     * otherwise the name is built from the subprocess label so that it can be
+     * mapped back to the label job-exec uses to look up and recover the unit,
+     * falling back to a truncated uuid when there is no label.
+     *
+     * The instance name is appended, so a unit created by this instance is
+     * "<label>-<instance>.service".  Since the systemd user instance is
+     * shared by every Flux instance running as this user, the suffix keeps
+     * names from colliding and gives a startup sweep a glob ("*-<instance>
+     * .service") that matches this instance's units and no others.
+     *
+     * The broker rank is appended too when this node hosts more than one
+     * broker, since those brokers share a systemd user instance and their
+     * labels do not (a label need only be unique within one sdexec).
      */
     if (get_dict (proc->cmd, "opts", "SDEXEC_NAME", &name) < 0) {
         uuid_t uuid;
         char uuid_str[UUID_STR_LEN];
+        const char *label;
 
-        uuid_generate (uuid);
-        uuid_unparse (uuid, uuid_str);
-        uuid_str[13] = '\0'; // plenty of uniqueness
-        if (asprintf (&tmp, "%s.service", uuid_str) < 0
-            || set_dict (proc->cmd, "opts", "SDEXEC_NAME", tmp) < 0)
+        if (json_unpack (proc->cmd, "{s:s}", "label", &label) < 0) {
+            uuid_generate (uuid);
+            uuid_unparse (uuid, uuid_str);
+            uuid_str[13] = '\0'; // plenty of uniqueness
+            label = uuid_str;
+        }
+        if (ctx->append_rank) {
+            rc = asprintf (&tmp,
+                           "%s-%lu:%s.service",
+                           label,
+                           (unsigned long)ctx->rank,
+                           ctx->instance_name);
+        }
+        else
+            rc = asprintf (&tmp, "%s:%s.service", label, ctx->instance_name);
+        if (rc < 0 || set_dict (proc->cmd, "opts", "SDEXEC_NAME", tmp) < 0)
             goto error;
         name = tmp;
+    }
+    /* Provide a default Description for systemctl status readers, unless
+     * the client set one with SDEXEC_PROP_Description.  An SDEXEC_NAME unit
+     * may have no label; fall back to the unit name in that case.
+     */
+    const char *dval;
+
+    if (get_dict (proc->cmd, "opts", "SDEXEC_PROP_Description", &dval) < 0) {
+        const char *dlabel;
+        char *desc;
+
+        if (json_unpack (proc->cmd, "{s:s}", "label", &dlabel) < 0)
+            dlabel = name;
+        if (asprintf (&desc,
+                      "Flux subprocess %s of instance %s",
+                      dlabel,
+                      ctx->instance_name) < 0)
+            goto error;
+        if (set_dict (proc->cmd,
+                      "opts",
+                      "SDEXEC_PROP_Description",
+                      desc) < 0) {
+            ERRNO_SAFE_WRAP (free, desc);
+            goto error;
+        }
+        free (desc);
     }
     if (!(proc->unit = sdexec_unit_create (name)))
         goto error;
@@ -2000,9 +2056,80 @@ static void sdexec_ctx_destroy (struct sdexec_ctx *ctx)
         }
         flux_msglist_destroy (ctx->kills);
         free (ctx->local_uri);
+        free (ctx->instance_name);
         free (ctx);
         errno = saved_errno;
     }
+}
+
+/* Render jobid-path as an instance name usable in a systemd unit name:
+ * the leading separator is dropped, further separators become dashes, the
+ * "ƒ" F58 prefix of each job ID becomes the plain "f" of the f58plain
+ * encoding, and any other character systemd would reject also becomes a
+ * dash, so a root name from a foreign launcher cannot invalidate every
+ * unit name.  The last mapping is lossy, which is acceptable: the names
+ * Flux itself produces never trigger it.
+ * N.B. job IDs are already plain if the enclosing instance encoded the path
+ * with FLUX_F58_FORCE_ASCII set, so both forms yield the same name.
+ * Ex: "/sys/ƒABC" -> "sys-fABC".  Caller must free.
+ */
+static char *unit_name_suffix (const char *path)
+{
+    char *name;
+    char *w;
+    const char *r = path;
+
+    if (!(name = malloc (strlen (path) + 1)))
+        return NULL;
+    if (*r == '/')
+        r++;
+    w = name;
+    while (*r != '\0') {
+        unsigned char c = *r;
+        bool f58_prefix = (c == 0xc6 && (unsigned char)r[1] == 0x92);
+
+        r += f58_prefix ? 2 : 1;
+        if (f58_prefix)
+            *w++ = 'f';
+        else if (isalnum (c) || c == ':' || c == '_' || c == '.')
+            *w++ = c;
+        else
+            *w++ = '-'; // "/", and anything systemd would reject
+    }
+    *w = '\0';
+    return name;
+}
+
+/* Does this node host more than one broker?  If so, those brokers share a
+ * systemd user instance and their unit names must be distinguished by rank.
+ *
+ * The answer comes from the RFC 34 taskmap in the broker.mapping attribute,
+ * decoded once here and cached, since it cannot change while the module is
+ * loaded.  Return true if it is unavailable or cannot be decoded: adding a
+ * rank that was not needed costs a few characters, while omitting one that
+ * was needed lets two brokers collide on a unit name.
+ */
+static bool node_is_shared (flux_t *h, uint32_t rank)
+{
+    const char *s;
+    struct taskmap *map;
+    flux_error_t error;
+    int nodeid;
+    bool shared = true;
+
+    if (!(s = flux_attr_get (h, "broker.mapping")))
+        return true;
+    if (!(map = taskmap_decode (s, &error))) {
+        flux_log (h,
+                  LOG_ERR,
+                  "could not decode broker.mapping: %s",
+                  error.text);
+        return true;
+    }
+    if ((nodeid = taskmap_nodeid (map, rank)) >= 0)
+        shared = taskmap_ntasks (map, nodeid) > 1;
+    taskmap_destroy (map);
+    return shared;
 }
 
 static struct sdexec_ctx *sdexec_ctx_create (flux_t *h)
@@ -2018,6 +2145,14 @@ static struct sdexec_ctx *sdexec_ctx_create (flux_t *h)
     if (!(s = flux_attr_get (h, "local-uri"))
         || !(ctx->local_uri = strdup (s)))
         goto error;
+    /* Derive the unit name suffix from jobid-path once: it is immutable,
+     * and a mid-flight change would strand every unit already named with
+     * the old value.
+     */
+    if (!(s = flux_attr_get (h, "jobid-path"))
+        || !(ctx->instance_name = unit_name_suffix (s)))
+        goto error;
+    ctx->append_rank = node_is_shared (h, ctx->rank);
     if (!(ctx->procs = zlistx_new ())
         || !(ctx->kills = flux_msglist_create ()))
         goto error;

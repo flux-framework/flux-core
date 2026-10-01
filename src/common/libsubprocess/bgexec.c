@@ -547,16 +547,19 @@ static void task_destroy (struct bgexec_task *task)
     }
 }
 
-/*  Build the deterministic per-rank label "<name>-<rank>-<jobid.f58plain>".
+/*  Build the deterministic label "<name>-<jobid.f58plain>".  A label need
+ *  only be unique within one server, and wait and kill are both directed at
+ *  a specific rank, so the rank is not part of it.  Where a unit name must
+ *  also be unique across brokers sharing a node, sdexec appends the rank.
  */
-static char *task_label_create (struct bgexec *bg, int rank)
+static char *task_label_create (struct bgexec *bg)
 {
     char idbuf[21];
     char *label;
 
     if (flux_job_id_encode (bg->id, "f58plain", idbuf, sizeof (idbuf)) < 0)
         return NULL;
-    if (asprintf (&label, "%s-%d-%s", bg->name, rank, idbuf) < 0)
+    if (asprintf (&label, "%s-%s", bg->name, idbuf) < 0)
         return NULL;
     return label;
 }
@@ -574,7 +577,7 @@ static struct bgexec_task *task_create (struct bgexec *bg,
     task->pid = -1;
     task->state = BGEXEC_TASK_PENDING;
     if (!(task->cmd = flux_cmd_copy (cmd))
-        || !(task->label = task_label_create (bg, rank))
+        || !(task->label = task_label_create (bg))
         || flux_cmd_set_label (task->cmd, task->label) < 0)
         goto error;
     return task;
@@ -779,9 +782,9 @@ int bgexec_push_cmd (struct bgexec *bg,
         errno = EINVAL;
         return -1;
     }
-    /*  Per-rank labels are derived from (name, rank, jobid), so a rank may
-     *  appear in only one pushed command; a duplicate would collide on the
-     *  server and double-count bg->total.  Reject an overlap up front.
+    /*  A rank may appear in only one pushed command: a duplicate would
+     *  reuse the same label on that rank's server and double-count
+     *  bg->total.  Reject an overlap up front.
      */
     if (idset_has_intersection (bg->pushed_ranks, ranks)) {
         errno = EEXIST;

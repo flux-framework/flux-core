@@ -179,11 +179,11 @@ test_expect_success 'finalize_properties: configure custom mapper with memoryhig
 
 cat >get_unit_prop.sh <<'GETPROP'
 #!/bin/sh
-# Get a systemd unit property value for the current job
-# Query the property directly from our PID - systemctl will resolve the unit
-rank=$(flux getattr rank)
-jobid=$FLUX_JOB_ID
-systemctl --user show --property "$1" shell-${rank}-${jobid} | cut -d= -f2-
+# Get a systemd unit property value for the current job.
+# The job runs in its unit's cgroup, so the cgroup leaf is the unit name
+# and no name need be constructed here.
+unit=$(basename $(cut -d: -f3- /proc/self/cgroup))
+systemctl --user show --property "$1" "$unit" | cut -d= -f2-
 GETPROP
 chmod +x get_unit_prop.sh
 
@@ -424,9 +424,10 @@ test_expect_success 'AllowedCPUs check failure drains rank with useful message' 
 
 # A post-start check failure must still be reported as a job failure AND must
 # not leave the transient unit behind (sdexec should SIGKILL and reap it).
-# The unit name is shell-<rank>-<f58plain jobid>.service; match that specific
-# unit (the job may land on either broker) rather than a rank glob.  systemd
-# garbage collects the failed transient unit asynchronously, so wait for it.
+# The unit name begins with the shell-<f58plain jobid> label, so match by
+# that prefix glob and stay independent of the rank and instance name parts
+# sdexec appends.  systemd garbage collects the failed transient unit
+# asynchronously, so wait for it.
 test_expect_success 'AllowedCPUs check failure reports failure and reaps unit' '
 	test_when_finished "flux resource drain -no {ranks} | xargs -r flux resource undrain" &&
 	id=$(flux submit -n1 -c1 \
@@ -434,11 +435,10 @@ test_expect_success 'AllowedCPUs check failure reports failure and reaps unit' '
 	    hostname) &&
 	flux job wait-event -vt 60 $id exception &&
 	flux job wait-event -t 60 $id clean &&
-	rank=$(flux jobs -no {ranks} $id) &&
-	unit=shell-${rank}-$(flux job id --to=f58plain $id).service &&
+	unit="shell-$(flux job id --to=f58plain $id)*" &&
 	test_debug "echo waiting for $unit to be reaped" &&
 	test_wait_until "test 0 -eq \$(systemctl --user list-units \
-	    --all --no-legend --type=service $unit | wc -l)"
+	    --all --no-legend --type=service \"$unit\" | wc -l)"
 '
 
 #
