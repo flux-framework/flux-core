@@ -561,7 +561,8 @@ class MiniCmd:
         parser.add_argument(
             "--signal",
             help="Schedule delivery of signal SIG at a defined TIME before "
-            + "job expiration. Default SIG is SIGUSR1, default TIME is 60s.",
+            + "job expiration or replace SIGALRM at expiration if TIME is 0. "
+            + "Default SIG is SIGUSR1, default TIME is 60s.",
             metavar="[SIG][@TIME]",
         )
         parser.add_argument(

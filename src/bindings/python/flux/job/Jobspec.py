@@ -1881,7 +1881,8 @@ class JobspecV1(Jobspec):
                 name or number (default ``SIGUSR1``) and *TIME* is a duration
                 in Flux Standard Duration (default ``60s``). Examples:
                 ``"USR1@30s"``, ``"TERM@2m"``, ``"@2m"`` (SIGUSR1, 2-minute
-                warning).
+                warning). A TIME of ``0`` replaces SIGALRM as the signal sent
+                at the time limit, e.g. ``"TERM@0"`` sends SIGTERM instead.
             time_limit (str or float): Job wall-clock limit as a Flux
                 Standard Duration string (e.g. ``"30s"``, ``"1.5h"``,
                 ``"2d"``) or a plain ``float`` number of seconds. See
@@ -2023,7 +2024,14 @@ class JobspecV1(Jobspec):
 
         # signal
         if merged.signal:
-            self.setattr_shell_option("signal", parse_signal_option(merged.signal))
+            result = parse_signal_option(merged.signal)
+            if result["timeleft"] == 0:
+                # SIG@0 replaces the signal sent by the execution system
+                # at the time limit (default SIGALRM), so set it in
+                # system.exec instead of the shell signal option.
+                self.setattr("system.exec.timelimit_signal", result["signum"])
+            else:
+                self.setattr_shell_option("signal", result)
 
         # taskmap
         if merged.taskmap is not None:
