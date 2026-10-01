@@ -114,10 +114,19 @@ ACTIVE / EXITED with ExecMainCode available
    Send finished response with wait status; call StopUnit.
 
 FAILED
-   Send error response with systemd result code.
+   Send error response with systemd result code; call ResetFailedUnit.
 
 After ``StopUnit`` is called, sdexec waits for stdout and stderr to reach EOF,
 then sends ``ENODATA`` to close the exec stream.
+
+A *waitable* background process's finished unit is not stopped (or reset)
+until a waiter attaches.  While the unit stays loaded, systemd retains the
+exit status - ``RemainAfterExit`` holds a successful unit in the *exited*
+substate, and a nonzero exit or signal death is retained in the failed state
+- so the status survives any number of module restarts until the wait that
+consumes it, at which point the unit is reaped.  The corollary is that a
+status nobody collects persists as a loaded unit in the user systemd
+instance rather than dying with the module.
 
 Stop Timer and Kill Escalation
 ===============================
@@ -190,6 +199,45 @@ its pid, command, label, and state (``R`` while the unit is running, ``Z``
 once it has finished but is retained awaiting a ``wait``).  The
 ``sdexec.kill`` RPC signals a process identified by ``pid`` or, if given,
 ``label``.  Both are surfaced by :man1:`flux-sproc` with ``--service sdexec``.
+
+Recovery After a Module Restart
+===============================
+
+Transient units keep running when the sdexec module is unloaded, so a module
+(or broker) restart can leave units behind.  At startup, sdexec sweeps the
+user systemd instance for leftover units ending in its own name suffix (see
+`Unit Naming`_ above), which finds this instance's units on this rank and no
+others, and adopts each running or failed one as an ordinary tracked
+process, monitored by the same per-unit property watch as a live unit.  A
+recovered process's label is its unit name with the suffix removed, so it is
+the same label the unit was started with.  Its state is seeded from the unit
+list; a ``GetAll`` snapshot then supplies the exit status of a unit that has
+already exited, whether it succeeded (held in the *exited* substate by
+``RemainAfterExit``) or failed (retained by systemd until the unit is
+reset).  Units started waitable carry a marker in their environment; an
+adopted marked unit is held loaded until it is waited (see `Unit
+Lifecycle`_ above), so its status survives repeated restarts, while an
+unmarked leftover, which no client will ever wait on, is reaped when it
+exits (or at adoption, if it already has).
+
+job-exec reclaims a recovered process with a ``wait`` request by label.
+Because the stdio channels died with the previous module instance, no output
+can be retained: the ``wait`` response carries the exit status only.
+A recovered process also has no command line, so ``sdexec.list`` reports
+the unit name in its place.
+
+sdexec owns the *user-bus clean* decision that gates node availability: once
+the startup sweep is complete and no recovered process is an *unreclaimed
+orphan* (still running, with no waiter attached), it sends a one-shot
+``sdmon.user-clean`` request to the sdmon module on the local rank.  A
+reclaimed unit stops blocking as soon as a waiter attaches, so the node comes
+online while the legitimate job keeps running; a true orphan blocks until it
+exits.  sdmon monitors only the system systemd instance (housekeeping,
+prolog, epilog) and joins the ``sdmon.online`` broker group, making the node
+eligible for scheduling when systemd support is enabled (only after its own
+system units are drained *and* the user-clean signal has arrived).  Because a
+request to an unloaded module is lost rather than queued, sdmon must be
+loaded before sdexec (enforced by modprobe ordering).
 
 ********************
 sdexec-mapper Module

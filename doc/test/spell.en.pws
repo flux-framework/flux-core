@@ -1267,3 +1267,5 @@ deserialize
 STARTPID
 BROKERPID
 fJOBID
+sdmon
+unreclaimed
