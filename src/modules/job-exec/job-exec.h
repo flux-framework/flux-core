@@ -141,6 +141,9 @@ struct jobinfo {
     int                   reattach;      /* job-manager reattach attempt */
     int                   wait_status;
     int                   exception_wait_status; /* from exception event, or -1 */
+    /* Signal sent to tasks on job expiration (default SIGALRM)
+     */
+    int                   timelimit_signal;
 
     struct eventlogger *  ev;           /* event batcher */
 

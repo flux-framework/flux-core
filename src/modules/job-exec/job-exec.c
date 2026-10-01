@@ -796,10 +796,10 @@ static void timelimit_cb (flux_reactor_t *r,
                         "failed to generate timeout exception for %s",
                         idf58 (job->id));
 
-    if (jobinfo_signal (job, SIGALRM) < 0) {
+    if (jobinfo_signal (job, job->timelimit_signal) < 0) {
         flux_log_error (job->h,
-                        "failed to send timelimit signal (%s) for %s",
-                        sigutil_signame (SIGALRM),
+                        "failed to send timelimit signal %d for %s",
+                        job->timelimit_signal,
                         idf58 (job->id));
     }
     flux_watcher_stop (w);
@@ -1400,6 +1400,38 @@ done:
     return rc;
 }
 
+/*  Parse any supported system.exec jobspec options and set them here
+ */
+static int jobinfo_parse_exec_options (struct jobinfo *job)
+{
+    json_error_t error;
+    int signum = SIGALRM;
+
+    if (json_unpack_ex (job->jobspec,
+                        &error,
+                        0,
+                        "{s?{s?{s?{s?i}}}}",
+                        "attributes",
+                          "system",
+                            "exec",
+                              "timelimit_signal", &signum) < 0) {
+        jobinfo_fatal_error (job,
+                             EINVAL,
+                             "error parsing system.exec: %s",
+                             error.text);
+        return -1;
+    }
+    if (signum <= 0 || signum >= NSIG) {
+        jobinfo_fatal_error (job,
+                             EINVAL,
+                             "invalid system.exec.timelimit_signal=%d",
+                             signum);
+        return -1;
+    }
+    job->timelimit_signal = signum;
+    return 0;
+}
+
 /*  Completion for jobinfo_start_init (), finish init of jobinfo using
  *   data fetched from KVS
  */
@@ -1417,6 +1449,8 @@ static void jobinfo_start_continue (flux_future_t *f, void *arg)
      *   with startup
      */
     if (job->exception_in_progress)
+        goto done;
+    if (jobinfo_parse_exec_options (job) < 0)
         goto done;
     if (jobinfo_load_implementation (job) < 0) {
         jobinfo_fatal_error (job, errno, "failed to initialize implementation");
@@ -2267,7 +2301,7 @@ static json_t *running_job_stats (struct job_exec_ctx *ctx)
 
 
         entry = json_pack ("{s:s s:s s:s s:i s:i s:i s:i s:i s:i"
-                           " s:f s:f s:i s:i}",
+                           " s:f s:f s:i s:i s:i}",
                            "implementation",
                            job->impl ? job->impl->name : "none",
                            "ns", job->ns,
@@ -2281,7 +2315,8 @@ static json_t *running_job_stats (struct job_exec_ctx *ctx)
                            "expiration", expiration,
                            "kill_timeout", job->kill_timeout,
                            "kill_count", job->kill_count,
-                           "kill_shell_count", job->kill_shell_count);
+                           "kill_shell_count", job->kill_shell_count,
+                           "timelimit_signal", job->timelimit_signal);
 
         free (critical_ranks);
         if (!entry) {
