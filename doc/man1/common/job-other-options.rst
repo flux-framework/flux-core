@@ -99,11 +99,19 @@
    signal name, e.g. ``SIGUSR1`` or ``USR1`` or ``10``. ``TIME`` is
    specified in Flux Standard Duration, e.g. ``30`` for 30s or ``1h`` for
    1 hour. Either parameter may be omitted, with defaults of ``SIGUSR1``
-   and 60s.  For example, :option:`--signal=USR2` will send ``SIGUSR2`` to
+   and 60s. For example, :option:`--signal=USR2` will send ``SIGUSR2`` to
    the job 60 seconds before expiration, and :option:`--signal=@3m` will send
    ``SIGUSR1`` 3 minutes before expiration. Note that if ``TIME`` is
    greater than the remaining time of a job as it starts, the job will
    be signaled immediately.
+
+   A ``TIME`` of 0 instead replaces the signal sent to the job when its
+   time limit is reached, which is ``SIGALRM`` by default. For example,
+   :option:`--signal=TERM@0` will send ``SIGTERM`` instead of ``SIGALRM``
+   at expiration. The default behavior is therefore equivalent to
+   :option:`--signal=ALRM@0`. In either case, if the job has not exited
+   after the execution system ``kill-timeout``, its tasks are sent
+   ``SIGKILL``. See :man5:`flux-config-exec`.
 
    .. note::
       A signal sent to a batch job is delivered to both the batch script and
@@ -112,7 +120,8 @@
       ``trap`` in the script to allow running jobs to handle the signal and
       exit cleanly.
 
-   The default behavior is to not send any warning signal to jobs.
+   The default behavior is to not send any warning signal to jobs before
+   the time limit.
 
 .. option:: --dry-run
 
