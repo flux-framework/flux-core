@@ -50,6 +50,18 @@ mechanically.  Clients that do not set a label get a name derived from a
 truncated UUID instead.  A client may override the whole name with the
 ``SDEXEC_NAME`` command option, which is then used verbatim.
 
+Where a node hosts more than one broker, those brokers share a systemd user
+instance, so the broker rank is appended to the label and the name becomes
+``<label>-<rank>:<instance>.service``.  sdexec decides this once at load
+time from the RFC 34 taskmap in the ``broker.mapping`` attribute, and
+includes the rank if that attribute is unavailable.  Two properties of the
+system instance are assumed here: only one *sys* instance runs per user per
+node, and a system instance never hosts more than one broker per node, so
+``sys`` alone cannot collide and its units normally carry no rank.
+(The system instance name is fixed: a configurable name was considered
+and deferred, since co-located system instances would also need distinct
+unit files.)
+
 bulk-exec and bgexec label job shells ``<name>-<rank>-<jobid>``, so in the
 system instance a job shell lands in a unit named
 ``shell-0-<jobid>:sys.service``.  The rank keeps the name unique when several

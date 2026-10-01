@@ -30,6 +30,7 @@
 #define UUID_STR_LEN 37     // defined in later libuuid headers
 #endif
 #include <flux/core.h>
+#include <flux/taskmap.h>
 #if HAVE_FLUX_SECURITY
 #include <flux/security/version.h>
 #endif
@@ -68,6 +69,7 @@ struct sdexec_ctx {
     uint32_t rank;
     char *local_uri;
     char *instance_name; // unit name suffix, derived from jobid-path
+    bool append_rank;   // node is shared with other brokers (see ctx_create)
     flux_msg_handler_t **handlers;
     zlistx_t *procs; // list of struct sdproc, owned by the module
     struct flux_msglist *kills;
@@ -1085,6 +1087,7 @@ static struct sdproc *sdproc_create (struct sdexec_ctx *ctx,
         | SUBPROCESS_REXEC_CHANNEL;
     const char *name;
     char *tmp = NULL;
+    int rc;
     flux_reactor_t *reactor = flux_get_reactor (ctx->h);
 
     if ((flags & ~valid_flags) != 0) {
@@ -1132,6 +1135,10 @@ static struct sdproc *sdproc_create (struct sdexec_ctx *ctx,
      * shared by every Flux instance running as this user, the suffix keeps
      * names from colliding and gives a startup sweep a glob ("*-<instance>
      * .service") that matches this instance's units and no others.
+     *
+     * The broker rank is appended too when this node hosts more than one
+     * broker, since those brokers share a systemd user instance and their
+     * labels do not (a label need only be unique within one sdexec).
      */
     if (get_dict (proc->cmd, "opts", "SDEXEC_NAME", &name) < 0) {
         uuid_t uuid;
@@ -1144,8 +1151,16 @@ static struct sdproc *sdproc_create (struct sdexec_ctx *ctx,
             uuid_str[13] = '\0'; // plenty of uniqueness
             label = uuid_str;
         }
-        if (asprintf (&tmp, "%s:%s.service", label, ctx->instance_name) < 0
-            || set_dict (proc->cmd, "opts", "SDEXEC_NAME", tmp) < 0)
+        if (ctx->append_rank) {
+            rc = asprintf (&tmp,
+                           "%s-%lu:%s.service",
+                           label,
+                           (unsigned long)ctx->rank,
+                           ctx->instance_name);
+        }
+        else
+            rc = asprintf (&tmp, "%s:%s.service", label, ctx->instance_name);
+        if (rc < 0 || set_dict (proc->cmd, "opts", "SDEXEC_NAME", tmp) < 0)
             goto error;
         name = tmp;
     }
@@ -2059,6 +2074,38 @@ static char *unit_name_suffix (const char *path)
     return name;
 }
 
+/* Does this node host more than one broker?  If so, those brokers share a
+ * systemd user instance and their unit names must be distinguished by rank.
+ *
+ * The answer comes from the RFC 34 taskmap in the broker.mapping attribute,
+ * decoded once here and cached, since it cannot change while the module is
+ * loaded.  Return true if it is unavailable or cannot be decoded: adding a
+ * rank that was not needed costs a few characters, while omitting one that
+ * was needed lets two brokers collide on a unit name.
+ */
+static bool node_is_shared (flux_t *h, uint32_t rank)
+{
+    const char *s;
+    struct taskmap *map;
+    flux_error_t error;
+    int nodeid;
+    bool shared = true;
+
+    if (!(s = flux_attr_get (h, "broker.mapping")))
+        return true;
+    if (!(map = taskmap_decode (s, &error))) {
+        flux_log (h,
+                  LOG_ERR,
+                  "could not decode broker.mapping: %s",
+                  error.text);
+        return true;
+    }
+    if ((nodeid = taskmap_nodeid (map, rank)) >= 0)
+        shared = taskmap_ntasks (map, nodeid) > 1;
+    taskmap_destroy (map);
+    return shared;
+}
+
 static struct sdexec_ctx *sdexec_ctx_create (flux_t *h)
 {
     struct sdexec_ctx *ctx;
@@ -2079,6 +2126,7 @@ static struct sdexec_ctx *sdexec_ctx_create (flux_t *h)
     if (!(s = flux_attr_get (h, "jobid-path"))
         || !(ctx->instance_name = unit_name_suffix (s)))
         goto error;
+    ctx->append_rank = node_is_shared (h, ctx->rank);
     if (!(ctx->procs = zlistx_new ())
         || !(ctx->kills = flux_msglist_create ()))
         goto error;
