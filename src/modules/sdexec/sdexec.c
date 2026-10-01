@@ -1783,11 +1783,15 @@ static void list_cb (flux_t *h,
         state = sdexec_unit_has_finished (proc->unit) ? "Z" : "R";
         (void)json_unpack (proc->cmd, "{s:s}", "label", &label);
         if (json_unpack (proc->cmd, "{s:[s]}", "cmdline", &arg0) == 0
-            && (o = json_pack ("{s:i s:s s:s s:s}",
+            && (o = json_pack ("{s:i s:s s:s s:s s:b s:b s:b}",
                                "pid", sdexec_unit_pid (proc->unit),
                                "cmd", arg0,
                                "label", label ? label : "",
-                               "state", state))) {
+                               "state", state,
+                               "bg", proc->bg,
+                               "waitable", sdproc_is_waitable (proc),
+                               "attached", client_listening (proc)
+                                           || proc->waiter != NULL))) {
             if (json_array_append_new (procs, o) < 0) {
                 // jansson decrefs the new object on failure
                 goto nomem;
