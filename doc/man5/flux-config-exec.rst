@@ -662,8 +662,9 @@ When a job is canceled or gets a fatal exception it is terminated using
 the following sequence:
 
  - The job shells are notified to send ``term-signal`` to job tasks, unless
-   the job is being terminated due to a time limit, in which case ``SIGALRM``
-   is sent instead.
+   the job is being terminated due to a time limit, in which case the
+   ``timelimit_signal`` (``SIGALRM`` by default, see
+   :option:`flux run --signal`) is sent instead.
  - After ``kill-timeout``, job shells are notified to send ``kill-signal`` to
    tasks. This repeats every ``kill-timeout`` seconds.
  - After a delay of ``5*kill-timeout``, the job execution system transitions
