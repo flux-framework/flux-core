@@ -374,16 +374,37 @@ static void sdproc_log_exit (struct sdproc *proc, int status)
                   name, pid, WEXITSTATUS (status));
 }
 
-/* True if a unit is running (not yet reaped) for the purpose of the clean
- * decision below.
+/* A finished waitable process's unit is the durable copy of its exit status:
+ * systemd retains the status as long as the unit stays loaded (RemainAfterExit
+ * holds a successful unit in active.exited; a nonzero exit or signal death is
+ * retained in the failed state), while a status moved to module memory dies
+ * with the module.  Hold the unit - defer its StopUnit/ResetFailedUnit - until
+ * a waiter attaches, so the status survives any number of module restarts
+ * (the startup sweep re-adopts the held unit each time) until it is consumed.
+ * wait_cb() runs the state machine when the waiter attaches to issue the
+ * deferred stop or reset.  A unit with no consumable status (a systemd-level
+ * exec failure) is not held.
+ */
+static bool sdproc_hold_unit (struct sdproc *proc)
+{
+    return sdproc_is_waitable (proc)
+        && proc->waiter == NULL
+        && sdexec_unit_has_finished (proc->unit);
+}
+
+/* True if a unit is running for the purpose of the clean decision below.
+ * An active.exited unit has finished and is merely held loaded by
+ * RemainAfterExit as the durable copy of its exit status (see
+ * sdproc_hold_unit()), so it does not count as running.
  */
 static bool sdproc_is_running (struct sdproc *proc)
 {
     switch (sdexec_unit_state (proc->unit)) {
         case STATE_ACTIVATING:
-        case STATE_ACTIVE:
         case STATE_DEACTIVATING:
             return true;
+        case STATE_ACTIVE:
+            return sdexec_unit_substate (proc->unit) != SUBSTATE_EXITED;
         default:
             return false;
     }
@@ -448,6 +469,16 @@ static void send_user_clean_if_ready (struct sdexec_ctx *ctx)
  */
 static void finalize_exec_request_if_done (struct sdproc *proc)
 {
+    /* A recorded terminal error (wait_errnum) means no further unit events
+     * are guaranteed, e.g. the per-unit watch failed, so the inactive.dead
+     * gate below may never be satisfied.  Once the error has been delivered
+     * to a waiter (waitable cleared), there is nothing left to wait for:
+     * tear down now.
+     */
+    if (proc->wait_errnum && !sdproc_is_waitable (proc)) {
+        zlistx_delete (proc->ctx->procs, proc->list_handle);
+        return;
+    }
     if (proc->stop.timed_out) {
         exec_respond_error (proc,
                             EDEADLK,
@@ -755,10 +786,13 @@ static void sdproc_advance_state (struct sdproc *proc)
      * suppressed, so key off the stored error instead to ensure the unit is
      * still reaped rather than left in active.exited.  A background process
      * likewise sends no finished response, so key off proc->bg as well.
+     * A held unit (sdproc_hold_unit()) is not stopped: it stays loaded as
+     * the durable copy of its exit status until a waiter attaches.
      */
     if (sdexec_unit_state (proc->unit) == STATE_ACTIVE
         && sdexec_unit_substate (proc->unit) == SUBSTATE_EXITED
-        && (proc->finished_response_sent || proc->errnum || proc->bg)) {
+        && (proc->finished_response_sent || proc->errnum || proc->bg)
+        && !sdproc_hold_unit (proc)) {
 
         if (!proc->f_stop) {
             flux_future_t *f2;
@@ -786,9 +820,13 @@ static void sdproc_advance_state (struct sdproc *proc)
      * and stderr to reach eof, and the unit to transition to inactive.dead.
      * We can land here for both a child failure and an exec failure.
      * Start channel output here in case of the latter so it can be finalized.
+     * A held unit (sdproc_hold_unit()) is not reset: it stays loaded as the
+     * durable copy of its exit status until a waiter attaches.  An exec
+     * failure has no consumable status and so is never held.
      */
     if (sdexec_unit_state (proc->unit) == STATE_FAILED
-        && sdexec_unit_substate (proc->unit) == SUBSTATE_FAILED) {
+        && sdexec_unit_substate (proc->unit) == SUBSTATE_FAILED
+        && !sdproc_hold_unit (proc)) {
 
         sdexec_channel_start_output (proc->out);
         sdexec_channel_start_output (proc->err);
@@ -1909,12 +1947,17 @@ static void wait_cb (flux_t *h,
         goto error;
     }
     proc->waiter = flux_msg_incref (msg);
-    /* If the process has already finished, respond now and remove it;
-     * otherwise the parked waiter is answered when the unit is reaped.
+    /* If the process has already finished, respond now; otherwise the parked
+     * waiter is answered when the unit is reaped.  Attaching the waiter also
+     * releases the hold that kept a finished unit loaded in systemd as the
+     * durable copy of its status (see sdproc_hold_unit()), so run the state
+     * machine to issue the deferred stop or reset; the proc is then torn down
+     * by the shared reap path (finalize_exec_request_if_done()) when the unit
+     * reaches inactive.dead, the same as any other background process.
      */
     sdproc_wait_notify (proc);
-    if (!sdproc_is_waitable (proc)) // answered above
-        zlistx_delete (ctx->procs, proc->list_handle);
+    sdproc_advance_state (proc);
+    finalize_exec_request_if_done (proc); // may destroy proc
     /* Reclaiming a recovered orphan (attaching a waiter, or collecting a
      * finished one just now) can clear the last blocker to the user-bus clean
      * decision.
