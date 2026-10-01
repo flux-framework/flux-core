@@ -1177,11 +1177,15 @@ static json_t *process_info (flux_subprocess_t *p)
                   flux_cmd_arg (cmd, 1));
         name = cmdbuf;
     }
-    if (!(info = json_pack ("{s:i s:s s:s s:s}",
+    if (!(info = json_pack ("{s:i s:s s:s s:s s:b s:b s:b}",
                             "pid", flux_subprocess_pid (p),
                             "cmd", name,
                             "label", label ? label : "",
-                            "state", state))) {
+                            "state", state,
+                            "bg", p->bg,
+                            "waitable", is_waitable (p),
+                            "attached", client_listening (p)
+                                        || p->waiter != NULL))) {
         errno = ENOMEM;
         return NULL;
     }
