@@ -42,8 +42,11 @@ List active and zombie subprocesses.
 .. option:: -o, --format=FORMAT
 
    Specify output format using Python's string format syntax. Supported
-   field names include **pid**, **state**, **label**, **rank**, and **cmd**.
-   The default format is ``{pid:>9} {state:<2} {label:<12} {cmd}``.
+   field names include **pid**, **state**, **statex**, **flags**,
+   **attached**, **label**, **rank**, and **cmd**.  The default format is
+   ``{pid:>9} {statex:<3} {flags:<11h} +:{label:<16} {cmd}``.  The special
+   presentation type ``h`` converts an empty value to a hyphen, and a field
+   preceded by ``+:`` expands to the widest value encountered.
 
    .. include:: common/format-sort.rst
 
@@ -52,7 +55,14 @@ List active and zombie subprocesses.
    Suppress printing of header line.
 
 The **state** field shows the subprocess state: **R** for running or **Z**
-for zombie (exited but not yet waited on).
+for zombie (exited but not yet waited on).  The **flags** field lists
+``bg`` for a background process and ``waitable`` for one whose exit status
+is collected with a wait request (empty when neither applies).  A client
+is *attached* when it is receiving output and status: always, for a
+foreground process; for a background one, while a client is attached or a
+wait request is in progress.  The **statex** field is **state** with
+``+`` appended while a client is attached, in the style of ps(1) STAT
+flags; the **attached** field shows the boolean alone.
 
 
 kill
