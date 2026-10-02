@@ -14,9 +14,9 @@ import os
 import threading
 
 try:
-    from dataclasses import dataclass  # novermin
+    from dataclasses import dataclass, fields  # novermin
 except ModuleNotFoundError:
-    from flux.utils.dataclasses import dataclass
+    from flux.utils.dataclasses import dataclass, fields
 
 from flux.constants import FLUX_NODEID_ANY
 from flux.rpc import RPC
@@ -334,10 +334,27 @@ class Subprocess:
     state: str
     label: str
     cmd: str
+    bg: bool = False
+    waitable: bool = False
+    attached: bool = False
 
     def __post_init__(self):
         if not self.label:
             self.label = "-"
+
+    @property
+    def statex(self):
+        """state with a ps(1) style "+" appended while a client is attached"""
+        return self.state + ("+" if self.attached else "")
+
+    @property
+    def flags(self):
+        """comma-separated list of bg and waitable, as applicable"""
+        names = (("bg", self.bg), ("waitable", self.waitable))
+        return ",".join(name for name, value in names if value)
+
+
+_SUBPROCESS_FIELDS = {f.name for f in fields(Subprocess)}
 
 
 class SubprocessListRPC(RPC):
@@ -350,7 +367,13 @@ class SubprocessListRPC(RPC):
         process.
         """
         resp = self.get()
-        return [Subprocess(**x, rank=resp["rank"]) for x in resp["procs"]]
+        return [
+            Subprocess(
+                **{k: v for k, v in x.items() if k in _SUBPROCESS_FIELDS},
+                rank=resp["rank"],
+            )
+            for x in resp["procs"]
+        ]
 
 
 def list(handle, service="rexec", nodeid=FLUX_NODEID_ANY, sign=None):
