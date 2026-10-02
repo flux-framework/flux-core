@@ -55,6 +55,11 @@ struct jobinfo;
  *   - kill:    signal executing job shells, e.g. due to exception or other
  *              fatal error.
  *
+ *   - signal:  (optional) deliver a signal to the job's tasks. If NULL,
+ *              the signal is sent with flux_job_kill(3), which is routed
+ *              through the job manager to the job shells. Implementations
+ *              without job shells (e.g. testexec) should provide this.
+ *
  *   - cancel:  cancel any pending work (i.e. shells yet to be executed)
  *
  *   - stats:   (optional) get json object of exec implementation stats
@@ -85,6 +90,7 @@ struct exec_implementation {
     int  (*start)   (struct jobinfo *job);
     int  (*reattach) (struct jobinfo *job, json_t *eventlog);
     int  (*kill)    (struct jobinfo *job, int signum);
+    int  (*signal)  (struct jobinfo *job, int signum);
     int  (*cancel)  (struct jobinfo *job);
     json_t * (*stats) (struct jobinfo *job);
     struct idset * (*active_ranks) (struct jobinfo *job);
@@ -135,6 +141,9 @@ struct jobinfo {
     int                   reattach;      /* job-manager reattach attempt */
     int                   wait_status;
     int                   exception_wait_status; /* from exception event, or -1 */
+    /* Signal sent to tasks on job expiration (default SIGALRM)
+     */
+    int                   timelimit_signal;
 
     struct eventlogger *  ev;           /* event batcher */
 

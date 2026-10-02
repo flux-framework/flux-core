@@ -111,4 +111,77 @@ test_expect_success 'expiration can be extended via max-start-delay-percent' '
 	flux cancel $jobid &&
 	flux job wait-event -t 30 $jobid clean
 '
+test_expect_success 'job-exec stats report default timelimit_signal SIGALRM' '
+	jobid=$(flux submit -t 1m sleep 300) &&
+	flux job wait-event -t 30 $jobid start &&
+	flux module stats job-exec |
+		jq -e ".jobs.${jobid}.timelimit_signal == 14" &&
+	flux cancel $jobid &&
+	flux job wait-event -t 30 $jobid clean
+'
+test_expect_success 'job-exec stats report timelimit_signal from --signal=SIG@0' '
+	jobid=$(flux submit -t 1m --signal=TERM@0 sleep 300) &&
+	flux job wait-event -t 30 $jobid start &&
+	flux module stats job-exec |
+		jq -e ".jobs.${jobid}.timelimit_signal == 15" &&
+	flux cancel $jobid &&
+	flux job wait-event -t 30 $jobid clean
+'
+test_expect_success 'invalid timelimit_signal raises exec exception' '
+	for val in 0 -1 1000; do
+		jobid=$(flux submit \
+			--setattr=system.exec.timelimit_signal=$val true) &&
+		flux job wait-event -t 30 $jobid exception >tl.inval.$val.out &&
+		grep "type=\"exec\"" tl.inval.$val.out &&
+		grep "invalid system.exec.timelimit_signal" tl.inval.$val.out ||
+		return 1
+	done
+'
+test_expect_success 'non-integer timelimit_signal raises exec exception' '
+	jobid=$(flux submit \
+		--setattr=system.exec.timelimit_signal=\"TERM\" true) &&
+	flux job wait-event -t 30 $jobid exception >tl.string.out &&
+	grep "error parsing system.exec" tl.string.out
+'
+sigterm_at_timelimit_test() {
+	scale=$1
+	timeout=$2
+	kill_timeout=$3
+	flux module reload job-exec kill-timeout=$kill_timeout &&
+	ofile=trap-term.$scale.out &&
+	test_must_fail_or_be_terminated \
+	    flux run --time-limit=${timeout}s --signal=TERM@0 bash -xc \
+		"trap \"echo got SIGTERM>>$ofile\" SIGTERM; \
+		 trap \"echo got SIGALRM>>$ofile\" SIGALRM; \
+		 sleep 10;sleep 15" \
+		>$ofile 2>trap-term.$scale.err &&
+	test_debug "grep . trap-term.*" &&
+	grep "resource allocation expired" trap-term.$scale.err &&
+	grep "got SIGTERM" $ofile &&
+	test_must_fail grep "got SIGALRM" $ofile
+}
+test_expect_success '--signal=TERM@0 sends SIGTERM instead of SIGALRM' '
+	kill_timeout=$(test -z "$FLUX_TEST_VALGRIND" && echo 0.25 || echo 3) &&
+	for scale in 1 2 4 8; do
+	    sigterm_at_timelimit_test \
+	      $scale \
+	      $(perl -E "say $TIMEOUT*$scale") \
+	      $(perl -E "say $kill_timeout*$scale") && break
+	done
+'
+test_expect_success '--signal=USR1@0 kills untrapped job with SIGUSR1' '
+	flux module reload job-exec &&
+	test_expect_code 138 \
+		flux run -t ${TIMEOUT}s --signal=USR1@0 sleep 30 2>usr1.err &&
+	grep "resource allocation expired" usr1.err
+'
+test_expect_success 'result for job with overridden signal is TIMEOUT' '
+	jobid=$(flux job last) &&
+	test "$(flux jobs -no {result} $jobid)" = "TIMEOUT"
+'
+test_expect_success 'testexec job reports timelimit_signal in finish status' '
+	jobid=$(flux submit -t ${TIMEOUT}s --signal=USR2@0 \
+		--setattr=system.exec.test.run_duration=30s true) &&
+	flux job wait-event -t 30 $jobid finish | grep status=12
+'
 test_done
