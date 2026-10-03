@@ -80,13 +80,13 @@ test_expect_success 'non-recoverable job raises exec exception on reattach' '
 test_expect_success 'clean up non-recoverable job' '
 	flux job wait-event -t 60 ${id2} clean
 '
-# The real (bulk-exec) executor does not implement reattach, so the generic
-# gate raises a fatal exception rather than relaunching the shells -- the same
-# terminal behavior as a full restart (t3202), but reached via the module
-# reload / in-place namespace adoption path.  --input=/dev/null avoids the
-# shell's KVS stdin watcher, which is not torn down by a bare module reload
-# but is left in flight otherwise; dropping it keeps the reattach reject the
-# only thing that can fail the job.
+# The real (bulk-exec) executor does not implement reattach, so job-exec
+# fails the job at module unload rather than stranding it for a reattach
+# that can only be rejected -- the same terminal behavior as a full restart
+# (t3202), but reached via the module reload path.  --input=/dev/null avoids
+# the shell's KVS stdin watcher, which is not torn down by a bare module
+# reload but is left in flight otherwise; dropping it keeps the unload-time
+# failure the only thing that can fail the job.
 test_expect_success 'submit a real (bulk-exec) job and wait for start' '
 	id3=$(flux submit --flags=debug --input=/dev/null \
 	                  --wait-event=start sleep 300)
@@ -94,12 +94,12 @@ test_expect_success 'submit a real (bulk-exec) job and wait for start' '
 test_expect_success 'reload job-exec module' '
 	flux module reload job-exec
 '
-test_expect_success 'bulk-exec job raises exec exception on reattach' '
+test_expect_success 'bulk-exec job fails when job-exec unloads' '
 	flux job wait-event -t 60 ${id3} exception &&
 	flux job eventlog ${id3} >eventlog3.out &&
 	test_debug "cat eventlog3.out" &&
 	grep -q "type=\"exec\"" eventlog3.out &&
-	grep -q "reattach to running job is not implemented" eventlog3.out
+	grep -q "bulk-exec execution cannot be reattached" eventlog3.out
 '
 test_expect_success 'clean up bulk-exec job' '
 	flux job wait-event -t 60 ${id3} clean

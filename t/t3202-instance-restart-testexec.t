@@ -57,10 +57,11 @@ test_expect_success 'restart instance, reattach to running job, its finished (ex
 '
 
 # The real (bulk-exec) executor does not implement reattach.  A job that is
-# still running across a restart should get a fatal exception rather than
-# relaunching its shells.  --input=/dev/null avoids the shell's KVS stdin
-# watcher, which would otherwise fail (and fail the job) when the first
-# instance tears down job-info, racing the reattach in the second instance.
+# still running when the first instance shuts down gets a fatal exception at
+# job-exec unload, recording the cause at shutdown time, and replays as
+# already failed after the restart.  --input=/dev/null avoids the shell's
+# KVS stdin watcher, which would otherwise fail (and fail the job) when the
+# first instance tears down job-info, racing the unload-time failure.
 test_expect_success 'run a real job and wait for it to start' '
 	mkdir -p statedir_real &&
 	flux start --setattr=statedir=$(pwd)/statedir_real \
@@ -68,12 +69,12 @@ test_expect_success 'run a real job and wait for it to start' '
 	                 --wait-event=start sleep 300 >id3.out
 '
 
-test_expect_success 'restart instance, bulk-exec reattach raises exception' '
+test_expect_success 'restart instance, bulk-exec job failed at shutdown' '
 	flux start --setattr=statedir=$(pwd)/statedir_real \
 	     sh -c "flux job wait-event -t 60 \$(cat id3.out) exception && \
 	            flux job eventlog \$(cat id3.out) >eventlog_real1.out" &&
 	grep "exception" eventlog_real1.out | grep "type=\"exec\"" &&
-	grep "reattach to running job is not implemented" eventlog_real1.out
+	grep "bulk-exec execution cannot be reattached" eventlog_real1.out
 '
 
 # A running job's guest namespace is grafted into the primary namespace at

@@ -2214,6 +2214,64 @@ static int configure_implementations (flux_t *h, int argc, char **argv)
     return 0;
 }
 
+/*  On module unload, fail each running job whose exec implementation
+ *   cannot reattach.  Such a job cannot continue: its processes are killed
+ *   when this module's disconnect reaches the exec service, and a replay
+ *   after reload or restart can only fail it with "reattach to running job
+ *   is not implemented", timestamped whenever that replay happens and
+ *   silent about the cause.  Fail the job now instead, so its eventlog
+ *   records at unload time that the job could not outlive job-exec.
+ *
+ *  The exception alone is not enough: job-manager then waits for finish
+ *   and release responses that would normally arrive after the kill
+ *   completes, but this module is exiting, so the job would be stuck in
+ *   CLEANUP forever.  Run the completion protocol synchronously instead:
+ *   raise the exception (which also kills, open loop), send the finish
+ *   response, move the guest namespace with a final "done" event (waiting
+ *   on the KVS like graft_running_ns() below does), and send the release.
+ *
+ *  Jobs whose implementation supports reattach are left alone: they are
+ *   expected to continue.  jobinfo_release() may destroy the job and
+ *   remove it from the jobs hash, so rescan from the top after each one
+ *   rather than iterating across the mutation; a processed job no longer
+ *   matches (running is cleared), so the scan terminates.
+ */
+static void fail_unrecoverable_jobs (struct job_exec_ctx *ctx)
+{
+    struct jobinfo *job;
+
+    while (1) {
+        job = zhashx_first (ctx->jobs);
+        while (job) {
+            if (job->running
+                && !job->finalizing
+                && job->impl
+                && !job->impl->reattach)
+                break;
+            job = zhashx_next (ctx->jobs);
+        }
+        if (!job)
+            return;
+        jobinfo_fatal_error (job,
+                             0,
+                             "job-exec unloading: %s execution"
+                             " cannot be reattached",
+                             job->impl->name);
+        jobinfo_complete (job, NULL);
+        job->finalizing = 1;
+        if (job->has_namespace) {
+            flux_future_t *f;
+            if (!(f = ns_move (job, "done", true))
+                || flux_future_wait_for (f, -1.) < 0)
+                flux_log_error (ctx->h,
+                                "%s: failed to move guest namespace",
+                                idf58 (job->id));
+            flux_future_destroy (f);
+        }
+        jobinfo_release (job);
+    }
+}
+
 /*  On module unload, graft each running job's guest namespace into the
  *   primary namespace (as a dirref at job.<id>.guest) without removing the
  *   live namespace, so the content is preserved across a restart: it is
@@ -2263,6 +2321,10 @@ static int unload_implementations (struct job_exec_ctx *ctx)
     struct exec_implementation *impl;
     int i = 0;
     if (ctx && ctx->jobs) {
+        /* Fail jobs that cannot survive this unload so their eventlogs
+         * record the cause now rather than at a later replay.
+         */
+        fail_unrecoverable_jobs (ctx);
         /* Preserve running jobs' guest namespaces across restart via the
          * graft in job.<id>.guest, from which reattach recovers them.
          */
