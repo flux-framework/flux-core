@@ -9,11 +9,43 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
+import importlib.util
+import os
 import unittest
 
-import subflux  # noqa: F401
+import subflux
 from flux.modprobe import DependencySolver, Task, TaskDB
 from pycotap import TAPTestRunner
+
+
+def load_rc1():
+    """Import the installed etc/modprobe/rc1.py as a module"""
+    path = os.path.join(subflux.srcdir, "etc", "modprobe", "rc1.py")
+    spec = importlib.util.spec_from_file_location("flux_rc1", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+class FakeFuture:
+    def get(self):
+        return None
+
+
+class FakeContext:
+    """Minimal modprobe Context stub for exercising rc task functions"""
+
+    def __init__(self, config=None):
+        self.config = config or {}
+        self.pushed = {}
+
+    def conf_get(self, key, default=None):
+        return self.config.get(key, default)
+
+    def rpc(self, topic, payload):
+        if topic == "runat.push":
+            self.pushed[payload["name"]] = payload["commands"]
+        return FakeFuture()
 
 
 class TestTaskDB(unittest.TestCase):
@@ -934,6 +966,71 @@ class TestDependencySolver(unittest.TestCase):
         # This prevents it from being added to active_tasks list and attempted removal in rc3
         result2 = self.solver.resolve_service("test-service", ignore_needs=False)
         self.assertEqual(result2.name, "default-module")
+
+
+CANCEL = "flux cancel --user=all --quiet --states RUN"
+IDLE = "flux queue idle --quiet"
+STOP = "flux queue stop --quiet --all --nocheckpoint"
+MUTE = "flux resource acquire-mute"
+
+
+class TestPushCleanup(unittest.TestCase):
+    """Test the rc1 push-cleanup task command list"""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.rc1 = load_rc1()
+
+    def setUp(self):
+        # push_cleanup honors FLUX_DISABLE_JOB_CLEANUP in the environment
+        self.saved = os.environ.pop("FLUX_DISABLE_JOB_CLEANUP", None)
+
+    def tearDown(self):
+        os.environ.pop("FLUX_DISABLE_JOB_CLEANUP", None)
+        if self.saved is not None:
+            os.environ["FLUX_DISABLE_JOB_CLEANUP"] = self.saved
+
+    def cleanup_commands(self, config=None):
+        ctx = FakeContext(config)
+        self.rc1.push_cleanup.func(ctx)
+        return ctx.pushed.get("cleanup")
+
+    def test_default_cancels_jobs(self):
+        """Default (rexec) cleanup cancels running jobs and waits for idle"""
+        commands = self.cleanup_commands()
+        self.assertIn(CANCEL, commands)
+        self.assertIn(IDLE, commands)
+        self.assertIn(STOP, commands)
+        self.assertIn(MUTE, commands)
+
+    def test_bgexec_without_sdexec_still_cancels(self):
+        """bgexec without sdexec still cancels (rexec dies with the broker)"""
+        commands = self.cleanup_commands({"exec.method": "bgexec"})
+        self.assertIn(CANCEL, commands)
+
+    def test_sdexec_without_bgexec_still_cancels(self):
+        """sdexec without bgexec still cancels.
+
+        Skipping cancel with a non-reattachable method (bulk-exec) would
+        strand running jobs: they cannot be reattached and fail on restart.
+        """
+        commands = self.cleanup_commands({"exec.service": "sdexec"})
+        self.assertIn(CANCEL, commands)
+
+    def test_sdexec_bgexec_preserves_jobs(self):
+        """sdexec+bgexec omits cancel/idle, keeps stop+mute"""
+        commands = self.cleanup_commands(
+            {"exec.service": "sdexec", "exec.method": "bgexec"}
+        )
+        self.assertNotIn(CANCEL, commands)
+        self.assertNotIn(IDLE, commands)
+        self.assertIn(STOP, commands)
+        self.assertIn(MUTE, commands)
+
+    def test_disable_job_cleanup_pushes_nothing(self):
+        """FLUX_DISABLE_JOB_CLEANUP skips the cleanup push entirely"""
+        os.environ["FLUX_DISABLE_JOB_CLEANUP"] = "1"
+        self.assertIsNone(self.cleanup_commands())
 
 
 if __name__ == "__main__":

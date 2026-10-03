@@ -49,12 +49,14 @@
 #include "src/common/libutil/strstrip.h"
 #include "src/common/libutil/basename.h"
 #include "ccan/str/str.h"
+#include "ccan/array_size/array_size.h"
 
 #include "src/common/libsdexec/stop.h"
 #include "src/common/libsdexec/start.h"
 #include "src/common/libsdexec/channel.h"
 #include "src/common/libsdexec/unit.h"
 #include "src/common/libsdexec/property.h"
+#include "src/common/libsdexec/list.h"
 
 #define MODULE_NAME "sdexec"
 
@@ -69,10 +71,15 @@ struct sdexec_ctx {
     uint32_t rank;
     char *local_uri;
     char *instance_name; // unit name suffix, derived from jobid-path
+    char *sweep_suffix;  // "[-<rank>]:<instance>.service" (see sweep_suffix())
     bool append_rank;   // node is shared with other brokers (see ctx_create)
     flux_msg_handler_t **handlers;
     zlistx_t *procs; // list of struct sdproc, owned by the module
     struct flux_msglist *kills;
+    flux_future_t *f_list; // startup sweep for leftover units
+    bool sweep_done;       // startup unit list has been processed
+    int recover_pending;   // recovered procs awaiting their GetAll snapshot
+    bool clean_sent;       // sdmon.user-clean has been sent (one-shot)
 };
 
 enum stop_timer_state {
@@ -110,6 +117,7 @@ struct sdproc {
     uint8_t bg:1;            // background (non-streaming) request
     uint8_t waitable:1;      // status collected later via a wait request
     uint8_t request_done:1;  // no more responses on the exec_request
+    uint8_t recovered:1;     // adopted at startup from a leftover unit
 
     const flux_msg_t *waiter; // parked wait request, or NULL
     json_t *retained_output;  // bounded tail of bg output for wait response
@@ -366,12 +374,111 @@ static void sdproc_log_exit (struct sdproc *proc, int status)
                   name, pid, WEXITSTATUS (status));
 }
 
+/* A finished waitable process's unit is the durable copy of its exit status:
+ * systemd retains the status as long as the unit stays loaded (RemainAfterExit
+ * holds a successful unit in active.exited; a nonzero exit or signal death is
+ * retained in the failed state), while a status moved to module memory dies
+ * with the module.  Hold the unit - defer its StopUnit/ResetFailedUnit - until
+ * a waiter attaches, so the status survives any number of module restarts
+ * (the startup sweep re-adopts the held unit each time) until it is consumed.
+ * wait_cb() runs the state machine when the waiter attaches to issue the
+ * deferred stop or reset.  A unit with no consumable status (a systemd-level
+ * exec failure) is not held.
+ */
+static bool sdproc_hold_unit (struct sdproc *proc)
+{
+    return sdproc_is_waitable (proc)
+        && proc->waiter == NULL
+        && sdexec_unit_has_finished (proc->unit);
+}
+
+/* True if a unit is running for the purpose of the clean decision below.
+ * An active.exited unit has finished and is merely held loaded by
+ * RemainAfterExit as the durable copy of its exit status (see
+ * sdproc_hold_unit()), so it does not count as running.
+ */
+static bool sdproc_is_running (struct sdproc *proc)
+{
+    switch (sdexec_unit_state (proc->unit)) {
+        case STATE_ACTIVATING:
+        case STATE_DEACTIVATING:
+            return true;
+        case STATE_ACTIVE:
+            return sdexec_unit_substate (proc->unit) != SUBSTATE_EXITED;
+        default:
+            return false;
+    }
+}
+
+/* True if this proc keeps the user bus from being declared clean: a leftover
+ * unit adopted at startup that is still running and that no client has
+ * reclaimed with a wait request.  A freshly-started proc (recovered == 0) is
+ * this instance's own doing and never blocks; a reclaimed unit (waiter set)
+ * stops blocking, so the node comes online while the legitimate job keeps
+ * running; a true orphan blocks until it exits on its own.
+ */
+static bool sdproc_blocks_clean (struct sdproc *proc)
+{
+    return proc->recovered && sdproc_is_running (proc) && proc->waiter == NULL;
+}
+
+static void user_clean_continuation (flux_future_t *f, void *arg)
+{
+    flux_t *h = flux_future_get_flux (f);
+    if (flux_rpc_get (f, NULL) < 0)
+        flux_log (h,
+                  LOG_ERR,
+                  "sdmon.user-clean: %s",
+                  future_strerror (f, errno));
+    flux_future_destroy (f);
+}
+
+/* Tell the local sdmon that the user bus has no un-reclaimed orphan, so it may
+ * complete its transition to online.  This is a level-triggered one-shot: it
+ * fires exactly once, the first time the startup sweep is complete and no proc
+ * blocks the clean decision (either there were no orphans, or they have all
+ * been reclaimed or have exited).  The request goes to the LOCAL rank only -
+ * never FLUX_NODEID_ANY, which could route upstream - and is not retried; a
+ * failure is logged.  Call after any event that could clear the last blocker:
+ * sweep completion, a recovered proc's reap, and a wait that attaches a waiter.
+ */
+static void send_user_clean_if_ready (struct sdexec_ctx *ctx)
+{
+    struct sdproc *proc;
+    flux_future_t *f;
+
+    if (ctx->clean_sent || !ctx->sweep_done || ctx->recover_pending > 0)
+        return;
+    proc = zlistx_first (ctx->procs);
+    while (proc) {
+        if (sdproc_blocks_clean (proc))
+            return;
+        proc = zlistx_next (ctx->procs);
+    }
+    ctx->clean_sent = true;
+    if (!(f = flux_rpc (ctx->h, "sdmon.user-clean", NULL, ctx->rank, 0))
+        || flux_future_then (f, -1, user_clean_continuation, NULL) < 0) {
+        flux_log_error (ctx->h, "error sending sdmon.user-clean request");
+        flux_future_destroy (f);
+    }
+}
+
 /* Send the streaming response IFF unit cleanup is complete and EOFs have
  * been sent.  Channel EOF and cleanup might(?) complete out of order so
  * call this from unit and channel callbacks.
  */
 static void finalize_exec_request_if_done (struct sdproc *proc)
 {
+    /* A recorded terminal error (wait_errnum) means no further unit events
+     * are guaranteed, e.g. the per-unit watch failed, so the inactive.dead
+     * gate below may never be satisfied.  Once the error has been delivered
+     * to a waiter (waitable cleared), there is nothing left to wait for:
+     * tear down now.
+     */
+    if (proc->wait_errnum && !sdproc_is_waitable (proc)) {
+        zlistx_delete (proc->ctx->procs, proc->list_handle);
+        return;
+    }
     if (proc->stop.timed_out) {
         exec_respond_error (proc,
                             EDEADLK,
@@ -577,25 +684,17 @@ static int sdproc_post_start_checks (struct sdproc *proc, flux_error_t *errp)
     return 0;
 }
 
-/* sdbus.subscribe sent a PropertiesChanged response for a particular unit.
- * Advance the proc->unit state accordingly and send exec responses as needed.
- * call finalize_exec_request_if_done() in case this update is the last thing
- * the exec request was waiting for.
+/* Advance proc->unit through the response protocol after its state has been
+ * updated (from a PropertiesChanged signal or a GetAll snapshot) and send
+ * exec responses as needed.  The caller is responsible for calling
+ * finalize_exec_request_if_done() afterward in case this was the last thing
+ * the exec request was waiting for.  This is shared by
+ * property_changed_continuation (live units) and the startup sweep
+ * (recovered units).
  */
-static void property_changed_continuation (flux_future_t *f, void *arg)
+static void sdproc_advance_state (struct sdproc *proc)
 {
-    flux_t *h = flux_future_get_flux (f);
-    struct sdproc *proc = arg;
-    json_t *properties;
-
-    if (!(properties = sdexec_property_changed_dict (f))) {
-        exec_respond_error (proc, errno, future_strerror (f, errno));
-        return;
-    }
-    if (!sdexec_unit_update (proc->unit, properties)) {
-        flux_future_reset (f);
-        return;
-    }
+    flux_t *h = proc->ctx->h;
 
     sdexec_log_debug (h,
                       "%s: %s.%s",
@@ -638,7 +737,7 @@ static void property_changed_continuation (flux_future_t *f, void *arg)
                     flux_log_error (h, "error killing unit after failed check");
                 sdexec_channel_start_output (proc->out);
                 sdexec_channel_start_output (proc->err);
-                goto done;
+                return;
             }
             if (flux_respond_pack (h,
                                    proc->exec_request,
@@ -687,10 +786,13 @@ static void property_changed_continuation (flux_future_t *f, void *arg)
      * suppressed, so key off the stored error instead to ensure the unit is
      * still reaped rather than left in active.exited.  A background process
      * likewise sends no finished response, so key off proc->bg as well.
+     * A held unit (sdproc_hold_unit()) is not stopped: it stays loaded as
+     * the durable copy of its exit status until a waiter attaches.
      */
     if (sdexec_unit_state (proc->unit) == STATE_ACTIVE
         && sdexec_unit_substate (proc->unit) == SUBSTATE_EXITED
-        && (proc->finished_response_sent || proc->errnum || proc->bg)) {
+        && (proc->finished_response_sent || proc->errnum || proc->bg)
+        && !sdproc_hold_unit (proc)) {
 
         if (!proc->f_stop) {
             flux_future_t *f2;
@@ -718,9 +820,13 @@ static void property_changed_continuation (flux_future_t *f, void *arg)
      * and stderr to reach eof, and the unit to transition to inactive.dead.
      * We can land here for both a child failure and an exec failure.
      * Start channel output here in case of the latter so it can be finalized.
+     * A held unit (sdproc_hold_unit()) is not reset: it stays loaded as the
+     * durable copy of its exit status until a waiter attaches.  An exec
+     * failure has no consumable status and so is never held.
      */
     if (sdexec_unit_state (proc->unit) == STATE_FAILED
-        && sdexec_unit_substate (proc->unit) == SUBSTATE_FAILED) {
+        && sdexec_unit_substate (proc->unit) == SUBSTATE_FAILED
+        && !sdproc_hold_unit (proc)) {
 
         sdexec_channel_start_output (proc->out);
         sdexec_channel_start_output (proc->err);
@@ -741,11 +847,37 @@ static void property_changed_continuation (flux_future_t *f, void *arg)
             proc->f_stop = f2;
         }
     }
-done:
+}
+
+/* sdbus.subscribe sent a PropertiesChanged response for a particular unit.
+ * Advance the proc->unit state accordingly and send exec responses as needed.
+ * call finalize_exec_request_if_done() in case this update is the last thing
+ * the exec request was waiting for.
+ */
+static void property_changed_continuation (flux_future_t *f, void *arg)
+{
+    struct sdproc *proc = arg;
+    struct sdexec_ctx *ctx = proc->ctx;
+    json_t *properties;
+
+    if (!(properties = sdexec_property_changed_dict (f))) {
+        exec_respond_error (proc, errno, future_strerror (f, errno));
+        return;
+    }
+    if (!sdexec_unit_update (proc->unit, properties)) {
+        flux_future_reset (f);
+        return;
+    }
+    sdproc_advance_state (proc);
     flux_future_reset (f);
     /* Conditionally send the final RPC response.
      */
     finalize_exec_request_if_done (proc);
+    /* A recovered orphan exiting on its own can clear the last blocker to the
+     * user-bus clean decision.  proc may have been freed by finalize above;
+     * use ctx only from here.
+     */
+    send_user_clean_if_ready (ctx);
 }
 
 /* StartTransientUnit reply does not normally generate a sdexec.exec response,
@@ -1247,6 +1379,71 @@ error:
     return NULL;
 }
 
+/* Create an sdproc for a leftover unit found by the startup sweep.  A previous
+ * instance of this module started the unit and then went away; there is no
+ * exec request to respond to and the stdio socketpairs died with the old
+ * module, so a recovered proc has no request message and no channels.  A NULL
+ * channel is treated as being at EOF by the finalize gate
+ * (finalize_exec_request_if_done()), and both response-sent flags are pre-set
+ * so the state machine (sdproc_advance_state()) never tries to respond on the
+ * absent request.  The proc is background and provisionally waitable so
+ * job-exec can reclaim it by label with a wait request; if the GetAll
+ * snapshot shows the unit was not started waitable, it is downgraded
+ * (see sweep_getall_continuation()).  The label is the unit name minus the
+ * ".service" suffix, matching the name job-exec used to start it (bulk-exec.c).
+ * Output cannot be recovered, so a later wait returns status only.
+ */
+static struct sdproc *sdproc_create_recovered (struct sdexec_ctx *ctx,
+                                               const char *name)
+{
+    struct sdproc *proc;
+    flux_reactor_t *reactor = flux_get_reactor (ctx->h);
+    char *label = NULL;
+    char *cp;
+
+    if (!(proc = calloc (1, sizeof (*proc))))
+        return NULL;
+    proc->ctx = ctx;
+    proc->bg = 1;
+    proc->waitable = 1;
+    proc->recovered = 1;
+    /* No request message: the unit's "started" response went to a client of
+     * the previous module instance, and no further response may be sent.
+     */
+    proc->started_response_sent = 1;
+    proc->request_done = 1;
+    proc->stop.timeout_sec = default_stop_timeout_sec;
+    proc->stop.kill_signal = SIGKILL;
+    if (!(proc->stop.timer = flux_timer_watcher_create (reactor,
+                                                        0,
+                                                        0,
+                                                        stop_timer_cb,
+                                                        proc)))
+        goto error;
+    /* Record the label (the unit name with this instance's suffix removed)
+     * so the proc can be looked up by label (sdproc_lookup_bylabel()) and
+     * named in log messages (sdproc_logname()), just as a normally-started
+     * proc carries it in cmd.  The sweep only admits names ending in the
+     * suffix, so the strip below cannot underflow.
+     */
+    if (!(label = strdup (name)))
+        goto error;
+    cp = label + strlen (label) - strlen (ctx->sweep_suffix);
+    *cp = '\0';
+    if (!(proc->cmd = json_pack ("{s:s}", "label", label))) {
+        errno = ENOMEM;
+        goto error;
+    }
+    if (!(proc->unit = sdexec_unit_create (name)))
+        goto error;
+    free (label);
+    return proc;
+error:
+    ERRNO_SAFE_WRAP (free, label);
+    sdproc_destroy (proc);
+    return NULL;
+}
+
 /*  Capture AllowedCPUs from the map response for post-start verification.
  */
 static int sdproc_set_allowed_cpus (struct sdproc *proc, json_t *map)
@@ -1309,6 +1506,31 @@ out:
     return rc;
 }
 
+/* Subscribe to PropertiesChanged signals for proc's unit so that unit state
+ * transitions drive the response protocol.  Used both when starting a unit and
+ * when recovering one that a previous instance of this module started.
+ */
+static int sdproc_start_watch (struct sdproc *proc, const char **errstrp)
+{
+    flux_t *h = proc->ctx->h;
+    const char *unit_path = sdexec_unit_path (proc->unit);
+
+    sdexec_log_debug (h, "watch %s", sdexec_unit_name (proc->unit));
+    if (!(proc->f_watch = sdexec_property_changed (h,
+                                                   "sdbus",
+                                                   proc->ctx->rank,
+                                                   unit_path))
+        || flux_future_then (proc->f_watch,
+                             -1,
+                             property_changed_continuation,
+                             proc) < 0) {
+        if (errstrp)
+            *errstrp = "sdbus watch operation failed";
+        return -1;
+    }
+    return 0;
+}
+
 /*
  * Resource mapping is complete. Set systemd properties as encoded by
  * key in the response payload, then start the transient unit.
@@ -1336,18 +1558,8 @@ static void map_continuation (flux_future_t *f, void *arg)
         goto error;
     }
 
-    sdexec_log_debug (h, "watch %s", sdexec_unit_name (proc->unit));
-    if (!(proc->f_watch = sdexec_property_changed (h,
-                                               "sdbus",
-                                               ctx->rank,
-                                               sdexec_unit_path (proc->unit)))
-        || flux_future_then (proc->f_watch,
-                             -1,
-                             property_changed_continuation,
-                             proc) < 0) {
-        errstr = "sdbus watch operation failed";
+    if (sdproc_start_watch (proc, &errstr) < 0)
         goto error;
-    }
 
     sdexec_log_debug (h, "start %s", sdexec_unit_name (proc->unit));
     if (!(proc->f_start = sdexec_start_transient_unit (h,
@@ -1496,6 +1708,16 @@ static void exec_cb (flux_t *h,
     if (!(proc = sdproc_create (ctx, cmd, flags, background)))
         goto error;
     proc->waitable = waitable;
+    /* Stamp waitable-ness into the unit environment so a later startup sweep
+     * can distinguish a leftover unit whose status a client will reclaim
+     * from one that nobody will ever wait on (see recover_unit()).
+     */
+    if (waitable
+        && set_dict (proc->cmd, "env", "FLUX_SDEXEC_WAITABLE", "1") < 0) {
+        sdproc_destroy (proc);
+        errno = ENOMEM;
+        goto error;
+    }
     /* The sdproc is owned by ctx->procs and holds its own reference to the
      * exec request message, so it outlives this callback.  Insert it into the
      * list first; on any later failure exec_respond_error() removes it (which
@@ -1737,12 +1959,22 @@ static void wait_cb (flux_t *h,
         goto error;
     }
     proc->waiter = flux_msg_incref (msg);
-    /* If the process has already finished, respond now and remove it;
-     * otherwise the parked waiter is answered when the unit is reaped.
+    /* If the process has already finished, respond now; otherwise the parked
+     * waiter is answered when the unit is reaped.  Attaching the waiter also
+     * releases the hold that kept a finished unit loaded in systemd as the
+     * durable copy of its status (see sdproc_hold_unit()), so run the state
+     * machine to issue the deferred stop or reset; the proc is then torn down
+     * by the shared reap path (finalize_exec_request_if_done()) when the unit
+     * reaches inactive.dead, the same as any other background process.
      */
     sdproc_wait_notify (proc);
-    if (!sdproc_is_waitable (proc)) // answered above
-        zlistx_delete (ctx->procs, proc->list_handle);
+    sdproc_advance_state (proc);
+    finalize_exec_request_if_done (proc); // may destroy proc
+    /* Reclaiming a recovered orphan (attaching a waiter, or collecting a
+     * finished one just now) can clear the last blocker to the user-bus clean
+     * decision.
+     */
+    send_user_clean_if_ready (ctx);
     return;
 error:
     if (flux_respond_error (h, msg, errno, errstr) < 0)
@@ -1782,12 +2014,20 @@ static void list_cb (flux_t *h,
          */
         state = sdexec_unit_has_finished (proc->unit) ? "Z" : "R";
         (void)json_unpack (proc->cmd, "{s:s}", "label", &label);
-        if (json_unpack (proc->cmd, "{s:[s]}", "cmdline", &arg0) == 0
-            && (o = json_pack ("{s:i s:s s:s s:s}",
-                               "pid", sdexec_unit_pid (proc->unit),
-                               "cmd", arg0,
-                               "label", label ? label : "",
-                               "state", state))) {
+        /* A recovered proc has no cmdline (only a label), so fall back to the
+         * unit name for the "cmd" field rather than omitting the entry.
+         */
+        if (json_unpack (proc->cmd, "{s:[s]}", "cmdline", &arg0) < 0)
+            arg0 = sdexec_unit_name (proc->unit);
+        if ((o = json_pack ("{s:i s:s s:s s:s s:b s:b s:b}",
+                            "pid", sdexec_unit_pid (proc->unit),
+                            "cmd", arg0,
+                            "label", label ? label : "",
+                            "state", state,
+                            "bg", proc->bg,
+                            "waitable", sdproc_is_waitable (proc),
+                            "attached", client_listening (proc)
+                                        || proc->waiter != NULL))) {
             if (json_array_append_new (procs, o) < 0) {
                 // jansson decrefs the new object on failure
                 goto nomem;
@@ -2054,9 +2294,11 @@ static void sdexec_ctx_destroy (struct sdexec_ctx *ctx)
             }
             zlistx_destroy (&ctx->procs);
         }
+        flux_future_destroy (ctx->f_list);
         flux_msglist_destroy (ctx->kills);
         free (ctx->local_uri);
         free (ctx->instance_name);
+        free (ctx->sweep_suffix);
         free (ctx);
         errno = saved_errno;
     }
@@ -2132,6 +2374,8 @@ static bool node_is_shared (flux_t *h, uint32_t rank)
     return shared;
 }
 
+static char *sweep_suffix (struct sdexec_ctx *ctx);
+
 static struct sdexec_ctx *sdexec_ctx_create (flux_t *h)
 {
     struct sdexec_ctx *ctx;
@@ -2153,6 +2397,8 @@ static struct sdexec_ctx *sdexec_ctx_create (flux_t *h)
         || !(ctx->instance_name = unit_name_suffix (s)))
         goto error;
     ctx->append_rank = node_is_shared (h, ctx->rank);
+    if (!(ctx->sweep_suffix = sweep_suffix (ctx)))
+        goto error;
     if (!(ctx->procs = zlistx_new ())
         || !(ctx->kills = flux_msglist_create ()))
         goto error;
@@ -2161,6 +2407,248 @@ static struct sdexec_ctx *sdexec_ctx_create (flux_t *h)
 error:
     sdexec_ctx_destroy (ctx);
     return NULL;
+}
+
+/* The startup sweep enumerates leftover units this module's previous
+ * incarnation may have started.  Every unit sdexec creates ends with this
+ * instance's suffix (":<instance>.service", preceded by the broker rank
+ * when the node is shared), so a glob for that suffix finds this sdexec's
+ * units and no others: not another instance's, and not a sibling rank's.
+ * The suffix is also the label inverse: a recovered unit's label is its
+ * name with the suffix removed (see sdproc_create_recovered ()).
+ */
+static char *sweep_suffix (struct sdexec_ctx *ctx)
+{
+    char *suffix;
+    int rc;
+
+    if (ctx->append_rank) {
+        rc = asprintf (&suffix,
+                       "-%lu:%s.service",
+                       (unsigned long)ctx->rank,
+                       ctx->instance_name);
+    }
+    else
+        rc = asprintf (&suffix, ":%s.service", ctx->instance_name);
+    return rc < 0 ? NULL : suffix;
+}
+
+/* A recovered unit's GetAll snapshot has arrived.  Feed it to the unit object
+ * and drive the state machine so an already-exited unit is reaped (its exit
+ * status, preserved by RemainAfterExit, becomes available to a later wait) and
+ * a still-running unit is left to its per-unit watch (installed before this
+ * request was sent).  The future is a one-shot, freed here.
+ */
+/* True if the unit was started with the waitable marker in its environment
+ * (see exec_cb()).  Absence means no client will ever wait on this unit.
+ */
+static bool unit_is_marked_waitable (json_t *dict)
+{
+    json_t *env;
+    size_t index;
+    json_t *entry;
+
+    if (sdexec_property_dict_unpack (dict, "Environment", "o", &env) == 0) {
+        json_array_foreach (env, index, entry) {
+            const char *s = json_string_value (entry);
+            if (s && streq (s, "FLUX_SDEXEC_WAITABLE=1"))
+                return true;
+        }
+    }
+    return false;
+}
+
+static void sweep_getall_continuation (flux_future_t *f, void *arg)
+{
+    struct sdproc *proc = arg;
+    struct sdexec_ctx *ctx = proc->ctx;
+    flux_t *h = ctx->h;
+    json_t *dict;
+
+    /* dict is borrowed from f, so take a reference to use it past the
+     * flux_future_destroy () below.
+     */
+    dict = json_incref (sdexec_property_get_all_dict (f));
+    if (!dict)
+        flux_log (h,
+                  LOG_ERR,
+                  "recover %s: GetAll: %s",
+                  sdexec_unit_name (proc->unit),
+                  future_strerror (f, errno));
+    /* The one-shot GetAll future is done; drop it before advancing state,
+     * since finalize_exec_request_if_done() may free proc (it will not here,
+     * as a recovered proc is waitable and has no waiter yet, but keep the
+     * ordering safe regardless) and sdproc_destroy () frees proc->f_map.
+     */
+    flux_future_destroy (f);
+    proc->f_map = NULL;
+    /* On GetAll failure leave the proc in place: the per-unit watch may still
+     * deliver updates, and the unit remains an un-reclaimed orphan meanwhile.
+     */
+    if (dict) {
+        /* A recovered proc is created waitable so a client can reclaim it by
+         * label, but a unit that was not started waitable has no reclaiming
+         * client: downgrade it so it is reaped when it exits (or now, if it
+         * already has) rather than held for a wait that will never come.
+         * On snapshot failure it stays waitable: better a held status than
+         * a lost one.
+         */
+        if (!unit_is_marked_waitable (dict))
+            proc->waitable = 0;
+        (void)sdexec_unit_update (proc->unit, dict);
+        sdproc_advance_state (proc);
+        finalize_exec_request_if_done (proc);
+        json_decref (dict);
+    }
+    /* This snapshot resolved: one fewer recovered proc pending, so the clean
+     * decision may now be able to proceed (see send_user_clean_if_ready()).
+     * proc may have been freed by finalize above; use ctx only from here.
+     */
+    ctx->recover_pending--;
+    send_user_clean_if_ready (ctx);
+}
+
+/* Adopt one leftover unit: create a recovered sdproc, seed its state from the
+ * list entry, insert it into ctx->procs, subscribe to its PropertiesChanged
+ * signals, then request a GetAll snapshot of its current properties.  Subscribe
+ * before GetAll so no state transition between the snapshot and the first
+ * signal is missed.
+ *
+ * The unit's running-vs-exited state comes from the list info (ActiveState /
+ * SubState); the GetAll snapshot is on the Service interface and supplies only
+ * ExecMain{PID,Code,Status}, which RemainAfterExit=true preserves for an
+ * already-exited unit so its exit status survives the restart.  Seed the state
+ * here rather than waiting for GetAll so the clean predicate is correct as soon
+ * as the unit is adopted.
+ */
+static void recover_unit (struct sdexec_ctx *ctx, struct unit_info *info)
+{
+    struct sdproc *proc;
+    const char *errstr;
+    const char *name = info->name;
+
+    if (!(proc = sdproc_create_recovered (ctx, name))) {
+        flux_log_error (ctx->h, "recover %s: create failed", name);
+        return;
+    }
+    sdexec_unit_update_frominfo (proc->unit, info);
+    if (!(proc->list_handle = zlistx_add_end (ctx->procs, proc))) {
+        flux_log (ctx->h, LOG_ERR, "recover %s: out of memory", name);
+        sdproc_destroy (proc);
+        return;
+    }
+    if (sdproc_start_watch (proc, &errstr) < 0) {
+        flux_log (ctx->h, LOG_ERR, "recover %s: %s", name, errstr);
+        zlistx_delete (ctx->procs, proc->list_handle);
+        return;
+    }
+    if (!(proc->f_map = sdexec_property_get_all (ctx->h,
+                                                 "sdbus",
+                                                 ctx->rank,
+                                                 sdexec_unit_path (proc->unit)))
+        || flux_future_then (proc->f_map,
+                             -1,
+                             sweep_getall_continuation,
+                             proc) < 0) {
+        flux_log_error (ctx->h, "recover %s: GetAll request failed", name);
+        zlistx_delete (ctx->procs, proc->list_handle);
+        return;
+    }
+    /* Defer the clean decision until this unit's GetAll snapshot resolves its
+     * running-vs-exited state (see send_user_clean_if_ready()).
+     */
+    ctx->recover_pending++;
+    flux_log (ctx->h, LOG_INFO, "recovering %s", name);
+}
+
+/* The startup unit list has arrived.  Adopt each running unit that matches the
+ * allow-list.  If sdbus is not yet connected to D-Bus the list fails with
+ * EAGAIN; sdbus blocks the request while it retries the connect, so simply
+ * resend rather than backing off here (as sdmon does).
+ */
+static void sweep_list_continuation (flux_future_t *f, void *arg)
+{
+    struct sdexec_ctx *ctx = arg;
+    struct unit_info info;
+
+    if (flux_future_get (f, NULL) < 0) {
+        flux_log (ctx->h,
+                  errno == EAGAIN ? LOG_INFO : LOG_ERR,
+                  "sdbus.call (ListUnitsByPatterns): %s",
+                  future_strerror (f, errno));
+        if (errno == EAGAIN) {
+            flux_future_reset (f);
+            return;
+        }
+        /* On a hard error the orphan set is unknown, so the user bus cannot be
+         * declared clean: leave sweep_done false so the node stays offline
+         * rather than risk signalling clean while an orphan runs.
+         */
+        flux_future_destroy (f);
+        ctx->f_list = NULL;
+        return;
+    }
+    while (sdexec_list_units_next (f, &info)) {
+        sdexec_state_t state;
+
+        /* The glob passed to ListUnitsByPatterns already selects on the
+         * suffix; this re-check makes the label inverse in
+         * sdproc_create_recovered () safe by construction.
+         */
+        if (!strends (info.name, ctx->sweep_suffix))
+            continue;
+        /* Running units are orphans worth recovering, and so are failed
+         * ones: systemd retains a failed unit's exit status until the unit
+         * is reset, so adoption lets a later wait collect the status and
+         * lets the state machine reset the unit rather than leak it.  An
+         * inactive leftover has nothing to wait on.
+         */
+        state = sdexec_strtostate (info.active_state);
+        if (state != STATE_ACTIVATING
+            && state != STATE_ACTIVE
+            && state != STATE_DEACTIVATING
+            && state != STATE_FAILED)
+            continue;
+        recover_unit (ctx, &info);
+    }
+    flux_future_destroy (f);
+    ctx->f_list = NULL;
+    /* The full orphan set is now known.  If nothing was adopted, or every
+     * adopted unit's snapshot already resolved without blocking, this sends
+     * the clean signal now; otherwise the last GetAll continuation does.
+     */
+    ctx->sweep_done = true;
+    send_user_clean_if_ready (ctx);
+}
+
+/* Enumerate leftover units at startup so job-exec can reclaim them by label
+ * (via sdexec.wait) and so this module owns the user-bus clean decision.
+ */
+static int start_sweep (struct sdexec_ctx *ctx, flux_error_t *error)
+{
+    char *glob;
+
+    if (asprintf (&glob, "*%s", ctx->sweep_suffix) < 0) {
+        errprintf (error, "error building sweep glob");
+        return -1;
+    }
+    if (!(ctx->f_list = sdexec_list_units (ctx->h,
+                                           "sdbus",
+                                           ctx->rank,
+                                           glob))
+        || flux_future_then (ctx->f_list,
+                             -1,
+                             sweep_list_continuation,
+                             ctx) < 0) {
+        errprintf (error, "error listing units for recovery: %s",
+                   strerror (errno));
+        ERRNO_SAFE_WRAP (free, glob);
+        flux_future_destroy (ctx->f_list);
+        ctx->f_list = NULL;
+        return -1;
+    }
+    free (glob);
+    return 0;
 }
 
 /* Check if the sdbus module is loaded on the local rank by pinging its
@@ -2228,6 +2716,10 @@ int mod_main (flux_t *h, int argc, char **argv)
                                     &ctx->handlers) < 0)
         goto error;
     if (sdbus_is_loaded (h, ctx->rank, &error) < 0) {
+        flux_log (h, LOG_ERR, "%s", error.text);
+        goto error;
+    }
+    if (start_sweep (ctx, &error) < 0) {
         flux_log (h, LOG_ERR, "%s", error.text);
         goto error;
     }

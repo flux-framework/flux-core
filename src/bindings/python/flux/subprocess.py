@@ -334,6 +334,9 @@ class Subprocess:
     state: str
     label: str
     cmd: str
+    bg: bool = False
+    waitable: bool = False
+    attached: bool = False
 
     def __post_init__(self):
         if not self.label:
