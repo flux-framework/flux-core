@@ -128,8 +128,11 @@ def ps(args):
         "label": "LABEL",
         "rank": "RANK",
         "cmd": "COMMAND",
+        "flags": "FLAGS",
+        "attached": "ATTACHED",
+        "statex": "ST",
     }
-    fmt = args.format or "{pid:>9} {state:<2} {label:<12} {cmd}"
+    fmt = args.format or "{pid:>9} {statex:<3} {flags:<11h} +:{label:<16} {cmd}"
     formatter = flux.util.OutputFormat(fmt, headings=headings)
 
     try:

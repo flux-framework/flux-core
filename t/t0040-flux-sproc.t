@@ -47,6 +47,26 @@ test_expect_success 'flux sproc ps shows background process' '
 	grep test-ps ps-with-proc.out &&
 	test_expect_code 143 flux sproc kill --wait 15 test-ps
 '
+test_expect_success 'flux sproc ps reports flags and attached fields' '
+	flux exec -r 0 --bg --waitable --label=fields-test sleep inf &&
+	flux sproc ps -no "{label} {statex} {flags} {attached}" >ps-fields.out &&
+	test_debug "cat ps-fields.out" &&
+	grep "^fields-test R bg,waitable False" ps-fields.out &&
+	test_expect_code 137 flux sproc kill --wait 9 fields-test
+'
+test_expect_success NO_CHAIN_LINT 'attached shows True while a wait is parked' '
+	flux exec -r 0 --bg --waitable --label=client-test sleep inf &&
+	flux sproc wait client-test &
+	echo $! >waitpid &&
+	retries=100 &&
+	until flux sproc ps -no "{label} {statex} {attached}" \
+	    | grep -q "^client-test R+ True"; do
+		test $retries -gt 0 || return 1
+		retries=$((retries-1)) && sleep 0.1
+	done &&
+	flux sproc kill 9 client-test &&
+	test_expect_code 137 wait $(cat waitpid)
+'
 test_expect_success 'flux sproc ps --format works' '
 	flux exec -r 0 --bg --waitable --label=format-test sleep inf &&
 	flux sproc ps -o "{pid} {label}" >ps-format.out &&

@@ -534,13 +534,14 @@ int bulk_exec_push_cmd (struct bulk_exec *exec,
     if (!(c = exec_cmd_create (ranks, cmd, flags)))
         return -1;
 
-    /* Set a label for the "sdexec" service.  sdexec builds the transient
-     * unit name from it, appending the broker rank where a node hosts more
-     * than one broker, and the instance name.
+    /* Set a <name>-<jobid> label so the process can be found with
+     * flux-sproc(1).  sdexec also builds the transient unit name from it,
+     * appending the broker rank where a node hosts more than one broker,
+     * and the instance name.
      * Ex: shell-fTE9HHdZvi3 -> shell-fTE9HHdZvi3:sys.service.
      * (N.B. systemd doesn't like "ƒ" in the unit name hence f58plain).
      */
-    if (streq (exec->service, "sdexec")) {
+    {
         char idbuf[21];
         char buf[128];
 
