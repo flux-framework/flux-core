@@ -376,13 +376,11 @@ flux_future_t *subprocess_rexec_bg (flux_t *h,
 
     bool sign = false;
 
-    /* FLUX_SUBPROCESS_FLAGS_LOCAL_UNBUF is not allowed with background
-     * execution, raise error if set:
-     */
-    if (local_flags & FLUX_SUBPROCESS_FLAGS_LOCAL_UNBUF) {
+    if (!h || !cmd) {
         errno = EINVAL;
         return NULL;
     }
+
     /* Move waitable flag from local_flags to flags
      */
     if (local_flags & FLUX_SUBPROCESS_FLAGS_WAITABLE) {
