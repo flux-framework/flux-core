@@ -47,18 +47,22 @@ def _get_security():
 def _maybe_sign(handle, sign, topic, payload):
     """Return a signed version of payload if signing is needed.
 
-    If sign is None, auto-detect by comparing the security.owner broker
-    attribute to the current userid: sign if they differ.  If sign is
-    True or False, that value is used directly.
+    If sign is None, sign only if the current user is not the instance
+    owner and topic starts with ``<userid>-`` (i.e. the topic falls under
+    the guest user's topic namespace).
+
+    If sign is not None, use the value directly.
 
     When signing, the RFC 42 signature token is added to the payload as
     the "signature" field alongside any other payload fields.
     """
     if sign is None:
+        uid = os.getuid()
         try:
-            sign = int(handle.attr_get("security.owner")) != os.getuid()
+            owner = int(handle.attr_get("security.owner"))
         except (OSError, ValueError):
-            sign = False
+            owner = uid
+        sign = uid != owner and topic.startswith(f"{uid}-")
     if not sign:
         return payload
     token = (
