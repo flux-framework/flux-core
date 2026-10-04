@@ -627,6 +627,60 @@ class TestSubprocessConstants(unittest.TestCase):
         self.assertEqual(subprocess.SUBPROCESS_REXEC_WAITABLE, 16)
 
 
+class TestMaybeSign(unittest.TestCase):
+    """Unit tests for the sign=None auto-detection in _maybe_sign()"""
+
+    class FakeHandle:
+        def __init__(self, owner):
+            self.owner = owner
+
+        def attr_get(self, name):
+            if self.owner is None:
+                raise OSError(errno.ENOENT, "no such attribute")
+            return str(self.owner)
+
+    class FakeSecurity:
+        def sign_wrap(self, payload):
+            return b"token"
+
+    def setUp(self):
+        self.uid = os.getuid()
+        self.saved = subprocess._get_security
+        subprocess._get_security = lambda: self.FakeSecurity()
+
+    def tearDown(self):
+        subprocess._get_security = self.saved
+
+    def signed(self, owner, topic):
+        h = self.FakeHandle(owner)
+        return "signature" in subprocess._maybe_sign(h, None, topic, {})
+
+    def test_owner_never_signs(self):
+        self.assertFalse(self.signed(self.uid, "rexec.list"))
+        self.assertFalse(self.signed(self.uid, f"{self.uid}-shell-f1.rexec.list"))
+
+    def test_nonowner_broker_rexec_not_signed(self):
+        self.assertFalse(self.signed(self.uid + 1, "rexec.list"))
+        self.assertFalse(self.signed(self.uid + 1, "sdexec.list"))
+
+    def test_nonowner_own_service_signed(self):
+        self.assertTrue(self.signed(self.uid + 1, f"{self.uid}-shell-f1.rexec.list"))
+        self.assertTrue(self.signed(self.uid + 1, f"{self.uid}-rexec.exec"))
+
+    def test_nonowner_uid_prefix_requires_dash(self):
+        self.assertFalse(self.signed(self.uid + 1, f"{self.uid}0-shell-f1.rexec.list"))
+
+    def test_owner_attr_unavailable_not_signed(self):
+        self.assertFalse(self.signed(None, f"{self.uid}-shell-f1.rexec.list"))
+
+    def test_explicit_sign_overrides(self):
+        h = self.FakeHandle(self.uid)
+        self.assertIn("signature", subprocess._maybe_sign(h, True, "rexec.list", {}))
+        h = self.FakeHandle(self.uid + 1)
+        topic = f"{self.uid}-shell-f1.rexec.list"
+        self.assertNotIn("signature", subprocess._maybe_sign(h, False, topic, {}))
+
+
 if __name__ == "__main__":
     if rerun_under_flux(__flux_size()):
         from pycotap import TAPTestRunner

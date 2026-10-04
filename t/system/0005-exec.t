@@ -25,6 +25,27 @@ test_expect_success 'flux exec without --jobid works as instance owner' '
 test_expect_success 'flux exec without --jobid fails as guest' '
 	test_must_fail flux exec -r 0 true
 '
+#
+# Non-owner requests to the broker rexec service must not be signed,
+# since that server has no security context (#7829). Root has the
+# owner role here via access.allow-root-owner.
+#
+test_expect_success 'flux sproc ps works as root' '
+	sudo flux sproc ps -r 0
+'
+test_expect_success 'flux sproc kill --wait works as root' '
+	sudo flux exec -r 0 --bg --waitable --label=root-test sleep inf &&
+	test_expect_code 143 sudo flux sproc kill --wait -r 0 15 root-test
+'
+test_expect_success 'flux sproc wait works as root' '
+	sudo flux exec -r 0 --bg --waitable --label=root-wait true &&
+	sudo flux sproc wait -r 0 root-wait
+'
+test_expect_success 'flux sproc ps fails as guest without signature error' '
+	test_must_fail flux sproc ps -r 0 2>guest-ps.err &&
+	test_debug "cat guest-ps.err" &&
+	test_must_fail grep -i signature guest-ps.err
+'
 # Get the rexec service name (e.g. "501-shell-XXXX.rexec") for a job
 job_rexec_service() {
 	flux job eventlog --format=json -p exec $1 \
@@ -99,6 +120,17 @@ test_expect_success HAVE_USER1 'another user cannot list processes in shell' '
 	    flux sproc ps --service $service --rank $rank 2>user1-ps.err &&
 	test_debug "cat user1-ps.err" &&
 	grep "request signature required" user1-ps.err
+'
+test_expect_success 'root cannot list processes in guest job shell' '
+	test_must_fail sudo flux sproc ps --service $service --rank $rank \
+	    2>root-ps.err &&
+	test_debug "cat root-ps.err" &&
+	grep "request signature required" root-ps.err
+'
+test_expect_success 'root cannot exec in guest job shell' '
+	test_must_fail sudo flux exec --jobid=$jobid true 2>root-exec.err &&
+	test_debug "cat root-exec.err" &&
+	grep "signing userid does not match" root-exec.err
 '
 test_expect_success 'cancel long-running job' '
 	flux cancel $jobid
