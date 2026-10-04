@@ -45,6 +45,11 @@ struct queue {
     bool is_started;            /* current queue state */
     bool is_started_sticky;     /* tracks is_started unless --nocheckpoint */
     char *stop_reason;          /* reason if stopped (optionally set) */
+    /* Both config-derived tables below are immutable once stored: a
+     * reconfigure replaces them (queue_parse_config()) and queue_policy()
+     * deep-copies before merging, so neither is ever mutated in place.
+     * queue_dup() relies on this to share them with a copy by incref.
+     */
     json_t *requires;           /* required properties array (own; a
                                  * virtual queue's is always NULL - see
                                  * queue_root() for the effective value)
@@ -326,16 +331,26 @@ struct queues *queues_create (void)
     return queues;
 }
 
+/* Drop the table 'queues' holds, leaving the object itself (and its notify
+ * callback) intact.
+ */
+static void queues_clear (struct queues *queues)
+{
+    if (queues->named)
+        zhashx_destroy (&queues->named);
+    else
+        queue_free (queues->anon);
+    queues->anon = NULL;
+    json_decref (queues->global_policy);
+    queues->global_policy = NULL;
+    cache_invalidate (queues);
+}
+
 void queues_destroy (struct queues *queues)
 {
     if (queues) {
         int saved_errno = errno;
-        if (queues->named)
-            zhashx_destroy (&queues->named);
-        else
-            queue_free (queues->anon);
-        json_decref (queues->global_policy);
-        json_decref (queues->list_cache);
+        queues_clear (queues);
         free (queues);
         errno = saved_errno;
     }
@@ -395,6 +410,121 @@ static struct queue *queues_next (struct queues *queues)
     if (queues->named)
         return zhashx_next (queues->named);
     return NULL;
+}
+
+/* Duplicate 'q' into 'queues'. 'requires' and 'policy' are shared by incref
+ * rather than deep-copied - see the immutability note on those fields in
+ * struct queue.
+ *
+ * ->parent is left NULL for copy_parents() to resolve against the new table.
+ */
+static struct queue *queue_dup (struct queues *queues, struct queue *q)
+{
+    struct queue *cpy;
+
+    /* A NULL config allocates with no config-derived fields and default
+     * administrative state, all of which is overwritten below.
+     */
+    if (!(cpy = queue_alloc (queues, q->name, NULL)))
+        return NULL;
+    cpy->is_enabled = q->is_enabled;
+    cpy->is_started = q->is_started;
+    cpy->is_started_sticky = q->is_started_sticky;
+    cpy->requires = json_incref (q->requires);
+    cpy->policy = json_incref (q->policy);
+    if ((q->disable_reason
+         && !(cpy->disable_reason = strdup (q->disable_reason)))
+        || (q->stop_reason
+            && !(cpy->stop_reason = strdup (q->stop_reason)))) {
+        queue_free (cpy);
+        errno = ENOMEM;
+        return NULL;
+    }
+    return cpy;
+}
+
+/* Re-point each copied queue's ->parent within 'cpy', so that no queue in
+ * the copy borrows a pointer into 'queues'. Inheritance is one level, so a
+ * single pass suffices.
+ */
+static void copy_parents (struct queues *cpy, struct queues *queues)
+{
+    struct queue *q;
+
+    q = queues_first (queues);
+    while (q) {
+        if (q->parent) {
+            struct queue *c = zhashx_lookup (cpy->named, q->name);
+            if (c)
+                c->parent = zhashx_lookup (cpy->named, q->parent->name);
+        }
+        q = queues_next (queues);
+    }
+}
+
+struct queues *queues_copy (struct queues *queues)
+{
+    struct queues *cpy;
+    struct queue *q;
+
+    if (!(cpy = calloc (1, sizeof (*cpy))))
+        return NULL;
+    cpy->global_policy = json_incref (queues->global_policy);
+    if (!queues->named) {
+        if (!(cpy->anon = queue_dup (cpy, queues->anon)))
+            goto error;
+        return cpy;
+    }
+    if (!(cpy->named = zhashx_new ())) {
+        errno = ENOMEM;
+        goto error;
+    }
+    zhashx_set_destructor (cpy->named, queue_destructor);
+    q = queues_first (queues);
+    while (q) {
+        struct queue *dup;
+        if (!(dup = queue_dup (cpy, q))
+            || zhashx_insert (cpy->named, dup->name, dup) < 0) {
+            queue_free (dup);
+            errno = ENOMEM;
+            goto error;
+        }
+        q = queues_next (queues);
+    }
+    copy_parents (cpy, queues);
+    return cpy;
+error:
+    ERRNO_SAFE_WRAP (queues_destroy, cpy);
+    return NULL;
+}
+
+void queues_set (struct queues *queues, struct queues **srcp)
+{
+    struct queues *src = *srcp;
+    struct queue *q;
+
+    /* The notify callback belongs to 'queues' and is neither taken from
+     * 'src' (a copy has none) nor fired: the restored state already had its
+     * side effects applied when it was originally set.
+     */
+    queues_clear (queues);
+    queues->named = src->named;
+    queues->anon = src->anon;
+    queues->global_policy = src->global_policy;
+    src->named = NULL;
+    src->anon = NULL;
+    src->global_policy = NULL;
+    queues_destroy (src);
+    *srcp = NULL;
+
+    /* Re-point the moved queues at their new owner, or notify would hand
+     * consumers a table that no longer exists.
+     */
+    q = queues_first (queues);
+    while (q) {
+        q->queues = queues;
+        q = queues_next (queues);
+    }
 }
 
 bool queues_have_named (struct queues *queues)
@@ -882,8 +1012,6 @@ int queues_configure (struct queues *queues,
     return 0;
 }
 
-/* Checkpoint */
-
 static int set_string (json_t *o, const char *key, const char *val)
 {
     json_t *s = json_string (val);
@@ -1123,6 +1251,8 @@ json_t *queues_get_conf (struct queues *queues)
         return NULL;
     return json_object_get (resp, "conf");
 }
+
+/* Checkpoint */
 
 static int save_one (json_t *a, struct queue *q)
 {

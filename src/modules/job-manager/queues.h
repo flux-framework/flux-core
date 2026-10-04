@@ -24,6 +24,21 @@ struct queue;
 struct queues *queues_create (void);
 void queues_destroy (struct queues *queues);
 
+/* Duplicate 'queues' so a configuration change can be undone by putting the
+ * copy back with queues_set(). Returns NULL with errno set on error.
+ *
+ * The copy has no notify callback and shares each queue's config-derived
+ * tables with the original, which are immutable once stored.
+ */
+struct queues *queues_copy (struct queues *queues);
+
+/* Replace the contents of 'queues' with those of '*srcp', which is consumed
+ * and set to NULL. 'queues' keeps its notify callback, which is not fired:
+ * the restored state already had its side effects applied when it was
+ * originally set.
+ */
+void queues_set (struct queues *queues, struct queues **srcp);
+
 /* Configure queues from a JSON `[queues]` table or NULL in `config`.
  *
  * `queues_configure()` diffs provided config against the current table
