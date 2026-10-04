@@ -704,6 +704,35 @@ class TestDependencySolver(unittest.TestCase):
         # module-b depends on module-a (resolved via service-x)
         self.assertEqual(deps["module-b"], ["module-a"])
 
+    def test_solve_execution_order_after_absent_task(self):
+        """An after edge referencing a task absent from the set is dropped"""
+        task_a = Task("module-a")
+        task_b = Task("module-b", after=["module-a"])
+        self.db.add(task_a)
+        self.db.add(task_b)
+
+        # module-a is defined but not in the task set (e.g. a module whose
+        # needs-config is unsatisfied), so the edge is ordering-only
+        deps = self.solver.solve_execution_order(["module-b"])
+        self.assertEqual(deps["module-b"], [])
+
+    def test_solve_execution_order_set_remove(self):
+        """set_remove() swaps before/after, reversing execution order"""
+        from flux.modprobe import Module
+
+        task_a = Module({"name": "module-a"})
+        task_b = Module({"name": "module-b", "after": ["module-a"]})
+        self.db.add(task_a)
+        self.db.add(task_b)
+        task_a.set_remove()
+        task_b.set_remove()
+
+        # removal order is the reverse of load order: module-a now
+        # depends on module-b
+        deps = self.solver.solve_execution_order(["module-a", "module-b"])
+        self.assertEqual(deps["module-a"], ["module-b"])
+        self.assertEqual(deps["module-b"], [])
+
     def test_get_requires_basic(self):
         """Basic requires dependency map"""
         task_a = Task("module-a")

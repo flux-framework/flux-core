@@ -152,7 +152,10 @@ requires = ["kvs", "job-manager"]
 
 [[modules]]
 name = "job-exec"
-after = ["job-manager"]
+# sdexec is ordering-only: when loaded, job-exec must unload first so
+# parked sdexec.wait requests are not failed with ENOSYS at shutdown,
+# which would raise a fatal exception on jobs held for recovery.
+after = ["job-manager", "sdexec"]
 requires = ["kvs", "job-manager"]
 ranks = "0"
 
