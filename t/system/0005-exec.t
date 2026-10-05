@@ -65,6 +65,37 @@ test_expect_success 'unsigned direct exec to shell rexec service is rejected' '
 	test_debug "cat direct.err" &&
 	grep "request signature required" direct.err
 '
+test_expect_success 'create none-sign.py' '
+	cat >none-sign.py <<-EOF
+	import sys, flux, flux.subprocess as sp
+	from flux.security import SecurityContext
+	# Sign as userid with the none mechanism, which requires no credential
+	userid = int(sys.argv[3])
+	class NoneMech:
+	    def __init__(self):
+	        self.ctx = SecurityContext()
+	    def sign_wrap(self, payload):
+	        return self.ctx.sign_wrap_as(userid, payload, mech_type=b"none")
+	sp._get_security = lambda: NoneMech()
+	sp.rexec_bg(flux.Flux(), ["true"], service=sys.argv[1],
+	            nodeid=int(sys.argv[2]), sign=True).get()
+	EOF
+'
+test_expect_success 'instance owner cannot exec in guest job with none signature' '
+	test -n "$service" && test -n "$rank" &&
+	uid=$(id -u) &&
+	{
+		sudo -u flux env FLUX_HANDLE_USERID=$uid \
+		    flux python - "$service" "$rank" "$uid" \
+		    <none-sign.py >owner-none.out 2>&1
+		echo $? >owner-none.rc
+	} &&
+	echo "exit code: $(cat owner-none.rc)" &&
+	cat owner-none.out &&
+	test $(cat owner-none.rc) -ne 0 &&
+	grep "signature verification failed" owner-none.out
+'
+
 #
 # `flux sproc` tests against the job shell rexec service.
 # In the system instance security.owner != getuid(), so flux.subprocess

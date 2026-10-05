@@ -10,7 +10,8 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/src/include \
 	-I$(top_srcdir)/src/common/libccan \
 	-I$(top_builddir)/src/common/libflux \
-	$(JANSSON_CFLAGS)
+	$(JANSSON_CFLAGS) \
+	$(FLUX_SECURITY_CFLAGS)
 
 #  Always set LUA_PATH such that builddir/?.lua is first so that the
 #   build version of fluxometer.lua is found.

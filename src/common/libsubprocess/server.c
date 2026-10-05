@@ -208,7 +208,6 @@ static int server_unpack_signed (subprocess_server_t *s,
 {
     const char *signed_topic;
     const void *payload;
-    const char *mech_type;
     int payloadsz;
     int64_t sign_userid;
     uint32_t userid;
@@ -222,13 +221,12 @@ static int server_unpack_signed (subprocess_server_t *s,
         errno = EPERM;
         return errprintf (errp, "signature verification not available");
     }
-    if (flux_sign_unwrap_anymech (s->sec,
-                                  json_string_value (signature),
-                                  &payload,
-                                  &payloadsz,
-                                  &mech_type,
-                                  &sign_userid,
-                                  0) < 0) {
+    if (flux_sign_unwrap (s->sec,
+                          json_string_value (signature),
+                          &payload,
+                          &payloadsz,
+                          &sign_userid,
+                          0) < 0) {
         errno = EPERM;
         return errprintf (errp, "signature verification failed");
     }
