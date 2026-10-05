@@ -1,21 +1,30 @@
-#!/bin/sh
+#!@PYTHON@ -I
+###############################################################
+# Copyright 2026 Lawrence Livermore National Security, LLC
+# (c.f. AUTHORS, NOTICE.LLNS, COPYING)
+#
+# This file is part of the Flux resource manager framework.
+# For details, see https://github.com/flux-framework.
+#
+# SPDX-License-Identifier: LGPL-3.0
+###############################################################
+#
+# Run the job housekeeping in the flux-housekeeping@ systemd unit.
+#
+# Executed as root by flux-imp run. The interpreter runs in isolated mode
+# (-I) so that no PYTHON* environment variable or user site directory can
+# affect it, and the flux package is located via its installed path.
 
-if test $FLUX_JOB_ID; then
-    FLUX_JOB_ID=$(flux job id --to=f58plain $FLUX_JOB_ID)
-fi
-unitname=flux-housekeeping@${FLUX_JOB_ID:-unknown}
+import sys
 
-terminate() {
-    systemctl stop $unitname
-    exit 1
-}
+sys.path.insert(0, "@X_FLUXPYLINKDIR@")
 
-trap terminate INT TERM
+# The flux package may be installed outside this interpreter's default
+# module path. As in src/cmd/py-runner.py, prepend the installed link
+# directory (the python_path builtin), which contains only the flux and
+# _flux packages, so that this build's package is used. Unlike py-runner,
+# the path is fixed at build time and FLUX_PYTHONPATH_PREPEND is not
+# honored, since nothing in the environment should influence what runs here.
+import flux.perilog  # noqa: E402
 
-umask 022
-printenv >@X_RUNSTATEDIR@/${unitname}.env
-
-# Run systemctl start in background and `wait` for it so that the trap
-# will run immediately when signal is received:
-systemctl start $unitname --quiet &
-wait $!
+sys.exit(flux.perilog.main("housekeeping", "@X_RUNSTATEDIR@"))

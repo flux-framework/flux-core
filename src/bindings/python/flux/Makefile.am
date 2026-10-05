@@ -16,6 +16,7 @@ nobase_fluxpy_PYTHON = \
 	conf_builtin.py \
 	brokermod.py \
 	proctitle.py \
+	perilog.py \
 	cli/__init__.py \
 	cli/argparse.py \
 	cli/base.py \
