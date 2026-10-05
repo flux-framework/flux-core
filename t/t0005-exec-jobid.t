@@ -152,6 +152,33 @@ test_expect_success SIGN_WRAP 'signed exec uses signed write requests' '
 	flux exec --jobid=$sign_jobid --sign cat <test.txt >output.txt &&
 	test_cmp test.txt output.txt
 '
+# Ensure that sign-type=none is disabled by config
+flux python -c '
+from flux.security import SecurityContext as C
+c = C()
+try:
+    c.sign_unwrap(c.sign_wrap("foo", mech_type=b"none"))
+except OSError:
+    raise SystemExit(0)
+raise SystemExit(1)
+' >/dev/null 2>&1 && test_set_prereq NONE_DISALLOWED
+
+test_expect_success SIGN_WRAP,NONE_DISALLOWED \
+'none-mech signature is rejected by shell rexec' '
+	cat >none-sign.py <<-EOF &&
+	import sys, flux, flux.subprocess as sp
+	from flux.security import SecurityContext
+	class NoneMech:
+	    def __init__(self):
+	        self.ctx = SecurityContext()
+	    def sign_wrap(self, payload):
+	        return self.ctx.sign_wrap(payload, mech_type=b"none")
+	sp._get_security = lambda: NoneMech()
+	sp.rexec_bg(flux.Flux(), ["true"], service=sys.argv[1],
+	            nodeid=int(sys.argv[2]), sign=True).get()
+	EOF
+	test_must_fail flux python none-sign.py $sign_service $sign_rank
+'
 # The version of stdbuf(1) in older versions of uutils/coreutils does
 # not exec() its argument but instead remains the parent and collects
 # exit status. This version does not forward signals to children, so
