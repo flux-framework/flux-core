@@ -11,14 +11,15 @@
 """Support for flux-run-{prolog,epilog,housekeeping}.
 
 These drivers run as root under flux-imp run. Each starts the
-flux-{prolog,epilog,housekeeping}@ systemd unit for a job and passes the
-environment provided by the IMP to the unit through an EnvironmentFile=.
+flux-{prolog,epilog,housekeeping}@ systemd unit for a job and passes a
+restricted set of environment variables to the unit through an
+EnvironmentFile=.
 
-In the EnvironmentFile=, each value is double-quoted with only '\\' and '"'
-escaped. Inside double quotes, systemd's parser takes every other byte,
-including a raw newline, literally, so a value can never be mistaken for
-the start of a new NAME=value assignment. Quoting cannot protect names, so
-entries whose name is not a valid shell variable name are dropped.
+In the EnvironmentFile=, each value is double-quoted with only ``\\`` and
+``"`` escaped. Systemd's parser takes all other bytes inside double-quotes,
+including newline, so a value will never be mistaken for the start of a
+new NAME=value assignment. Only the names listed in UNIT_ENVIRONMENT are
+passed to the unit.
 """
 
 import os
@@ -30,7 +31,21 @@ import tempfile
 
 from flux.job import JobID
 
-_VALID_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+# Variables passed to the unit. The IMP may be configured to pass any
+# FLUX_* variable, but many of those (e.g. FLUX_CONNECTOR_PATH_PREPEND,
+# FLUX_EXEC_PATH_PREPEND, FLUX_PYTHONPATH_PREPEND, FLUX_URI) configure
+# flux(1) itself, and the unit runs flux commands as root. Only the
+# variables set by the IMP and the job variables set by the job manager
+# are passed.
+UNIT_ENVIRONMENT = (
+    "HOME",
+    "USER",
+    "PATH",
+    "FLUX_OWNER_USERID",
+    "FLUX_JOB_ID",
+    "FLUX_JOB_USERID",
+    "FLUX_JOB_RANKS",
+)
 _SIGNALS = (signal.SIGINT, signal.SIGTERM)
 # Formats of job variables set by the job manager: a decimal uid and an
 # idset of broker ranks encoded with ranges (e.g. 0-3,5). Their values come
@@ -56,26 +71,6 @@ def _raise_terminated(signum, frame):
 
 def _ignore(signum, frame):
     pass
-
-
-def read_environ():
-    """Return the environment this process was exec'd with, as a dict.
-
-    This is read from /proc/self/environ rather than taken from os.environ
-    because the Python interpreter may modify its own environment before
-    any of this code runs: with no locale variables set, as is typical
-    under flux-imp run, PEP 538 locale coercion adds LC_CTYPE=C.UTF-8.
-    That cannot be disabled under -I, and cannot be undone afterward
-    since LC_CTYPE may also have been passed legitimately. The unit must
-    receive exactly the environment the IMP provided, and
-    /proc/self/environ is the unmodified block passed to execve(2).
-
-    Values are decoded with os.fsdecode(), as os.environ does, so arbitrary
-    bytes round-trip exactly through os.fsencode() in write_env_file().
-    """
-    with open("/proc/self/environ", "rb") as fh:
-        entries = os.fsdecode(fh.read()).split("\0")
-    return dict(e.split("=", 1) for e in entries if "=" in e)
 
 
 def normalize_jobid(environ):
@@ -141,7 +136,8 @@ class PerilogProc:
     """Drives one flux-{prolog,epilog,housekeeping}@<jobid> systemd unit."""
 
     def __init__(self, kind, runstatedir, systemctl="systemctl", environ=None):
-        self.environ = read_environ() if environ is None else environ
+        environ = os.environ if environ is None else environ
+        self.environ = {k: environ[k] for k in UNIT_ENVIRONMENT if k in environ}
         jobid = normalize_jobid(self.environ)
         check_job_values(self.environ)
         # Without a jobid, include the pid so that concurrent invocations
