@@ -319,9 +319,10 @@ SYSTEM SCRIPTS
 ==============
 
 The Flux :term:`system instance` may configure prolog, epilog, and/or
-housekeeping scripts to run as root before or after each job.  The script
-environment is restricted by the IMP for security reasons, but it always
-contains the following:
+housekeeping scripts to run as root before or after each job. Because these
+scripts run as root, their environment is kept minimal to avoid influence from
+variables set in the system instance. The environment contains only the
+following:
 
 - :envvar:`PATH` - a safe value for root such as
   ``/usr/sbin:/usr/bin:/sbin:/bin``
@@ -339,14 +340,9 @@ contains the following:
 
    FLUX_JOB_HOSTLIST=$(flux hostlist --nth=${FLUX_JOB_RANKS} instance)
 
-If the IMP is configured to allow other ``FLUX_`` prefixed environment
-variables to be set as described in :man5:`flux-config-security-imp`,
-then the following are set to allow Flux commands to work from the script:
-
-- :envvar:`FLUX_URI`
-- :envvar:`FLUX_MODULE_PATH`
-- :envvar:`FLUX_EXEC_PATH`
-- :envvar:`FLUX_CONNECTOR_PATH`
+:envvar:`FLUX_URI` is intentionally not set. Flux commands run from these
+scripts always act on the system instance, which they reach using the
+compiled-in default.
 
 TESTING
 =======
