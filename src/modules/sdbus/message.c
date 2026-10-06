@@ -23,6 +23,9 @@
 #include <string.h>
 #include <stdint.h>
 #include <math.h>
+#include <inttypes.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <systemd/sd-bus.h>
 
 #include "ccan/str/str.h"
@@ -165,6 +168,33 @@ static int put_value (sd_bus_message *m,
                       size_t len,
                       json_t *o);
 
+/* RFC 52: x and t are encoded as JSON strings containing the value in
+ * decimal, with no leading zeros, no leading +, and no whitespace.
+ */
+static int put_int64 (char type, json_t *o, value_t *v)
+{
+    const char *s;
+    const char *digits;
+    char *endptr;
+
+    if (!json_is_string (o))
+        return -EPROTO;
+    s = json_string_value (o);
+    digits = (type == 'x' && s[0] == '-') ? s + 1 : s;
+    if (digits[0] < '0' || digits[0] > '9'
+        || (digits[0] == '0' && digits[1] != '\0')
+        || (digits != s && streq (digits, "0"))) // -0
+        return -EPROTO;
+    errno = 0;
+    if (type == 'x')
+        v->x = strtoimax (s, &endptr, 10);
+    else
+        v->t = strtoumax (s, &endptr, 10);
+    if (errno != 0 || *endptr != '\0')
+        return -EPROTO;
+    return 0;
+}
+
 static int put_integer (char type, json_t *o, value_t *v)
 {
     json_int_t i;
@@ -197,12 +227,6 @@ static int put_integer (char type, json_t *o, value_t *v)
             if (i < 0 || i > UINT32_MAX)
                 return -EPROTO;
             v->u = i;
-            break;
-        case 'x':
-            v->x = i;
-            break;
-        case 't':
-            v->t = (uint64_t)i;
             break;
         case 'h':
             if (i < INT32_MIN || i > INT32_MAX)
@@ -259,6 +283,11 @@ static int put_basic (sd_bus_message *m, char type, json_t *o)
             if (!json_is_number (o))
                 return -EPROTO;
             v.d = json_number_value (o);
+            break;
+        case 'x':
+        case 't':
+            if ((e = put_int64 (type, o, &v)) < 0)
+                return e;
             break;
         default:
             if ((e = put_integer (type, o, &v)) < 0)
@@ -485,12 +514,18 @@ static int get_basic (sd_bus_message *m, char type, json_t **op)
         case 'u':
             o = json_integer (v.u);
             break;
-        case 'x':
-            o = json_integer (v.x);
+        case 'x': {
+            char buf[32];
+            snprintf (buf, sizeof (buf), "%" PRId64, v.x);
+            o = json_string (buf);
             break;
-        case 't':
-            o = json_integer ((json_int_t)v.t);
+        }
+        case 't': {
+            char buf[32];
+            snprintf (buf, sizeof (buf), "%" PRIu64, v.t);
+            o = json_string (buf);
             break;
+        }
         case 'h':
             o = json_integer (v.h);
             break;

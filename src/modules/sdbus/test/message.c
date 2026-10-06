@@ -208,7 +208,7 @@ void test_basic (sd_bus *bus)
 {
     ok (roundtrip (bus,
                    "ybnqiuxtdsgo",
-                   "[42,true,-30000,48000,-100000,100000,-10,10,3.5,"
+                   "[42,true,-30000,48000,-100000,100000,\"-10\",\"10\",3.5,"
                    "\"string\",\"a{sv}\",\"/object/path/string.suffix\"]"),
         "basic types round trip");
     ok (roundtrip (bus, "ss", "[\"\",\"\"]"),
@@ -225,6 +225,44 @@ void test_basic (sd_bus *bus)
         "minimum integer values round trip");
     ok (roundtrip_ex (bus, "d", "[1]", "[1.0]"),
         "integer is accepted for d");
+}
+
+void test_int64 (sd_bus *bus)
+{
+    ok (roundtrip (bus, "tt", "[\"0\",\"18446744073709551615\"]"),
+        "t limits round trip as strings");
+    ok (roundtrip (bus, "xxx",
+                   "[\"-9223372036854775808\",\"0\",\"9223372036854775807\"]"),
+        "x limits round trip as strings");
+    ok (roundtrip (bus, "v", "[[\"t\",\"9007199254740993\"]]"),
+        "t above 2^53 round trips exactly");
+
+    ok (write_error (bus, "t", "[42]") == -EPROTO,
+        "integer for t fails with EPROTO");
+    ok (write_error (bus, "x", "[-1]") == -EPROTO,
+        "integer for x fails with EPROTO");
+    ok (write_error (bus, "t", "[\"18446744073709551616\"]") == -EPROTO,
+        "t overflow fails with EPROTO");
+    ok (write_error (bus, "x", "[\"9223372036854775808\"]") == -EPROTO,
+        "x overflow fails with EPROTO");
+    ok (write_error (bus, "x", "[\"-9223372036854775809\"]") == -EPROTO,
+        "x underflow fails with EPROTO");
+    ok (write_error (bus, "t", "[\"-1\"]") == -EPROTO,
+        "negative t fails with EPROTO");
+    ok (write_error (bus, "t", "[\"007\"]") == -EPROTO,
+        "t with leading zeros fails with EPROTO");
+    ok (write_error (bus, "x", "[\"+5\"]") == -EPROTO,
+        "x with leading + fails with EPROTO");
+    ok (write_error (bus, "x", "[\"-0\"]") == -EPROTO,
+        "x of -0 fails with EPROTO");
+    ok (write_error (bus, "t", "[\" 5\"]") == -EPROTO,
+        "t with leading whitespace fails with EPROTO");
+    ok (write_error (bus, "t", "[\"5 \"]") == -EPROTO,
+        "t with trailing whitespace fails with EPROTO");
+    ok (write_error (bus, "t", "[\"\"]") == -EPROTO,
+        "empty t fails with EPROTO");
+    ok (write_error (bus, "t", "[\"0x10\"]") == -EPROTO,
+        "hex t fails with EPROTO");
 }
 
 void test_containers (sd_bus *bus)
@@ -295,7 +333,7 @@ void test_systemd (sd_bus *bus)
                    "{\"MainPID\":[\"u\",4242],"
                    "\"ExecStart\":[\"a(sasbttttuii)\","
                    "[[\"/bin/sleep\",[\"sleep\",\"60\"],false,"
-                   "1,2,3,4,4242,0,0]]]},"
+                   "\"1\",\"2\",\"3\",\"4\",4242,0,0]]]},"
                    "[]]"),
         "PropertiesChanged with ExecStart round trips");
 }
@@ -379,6 +417,7 @@ int main (int argc, char **argv)
 
     test_typestr (bus);
     test_basic (bus);
+    test_int64 (bus);
     test_containers (bus);
     test_variants (bus);
     test_systemd (bus);

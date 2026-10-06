@@ -19,6 +19,7 @@
 #endif
 #include <ctype.h>
 #include <stdio.h>
+#include <inttypes.h>
 #include <jansson.h>
 #include <flux/core.h>
 #include <float.h> // for DBL_MAX
@@ -202,12 +203,15 @@ static int prop_add_u32 (json_t *prop, const char *name, uint32_t val)
     return 0;
 }
 
+/* RFC 52: uint64 values are encoded as decimal strings.
+ */
 static int prop_add_u64 (json_t *prop, const char *name, uint64_t val)
 {
-    json_int_t i = (json_int_t)val;
+    char s[32];
     json_t *o;
 
-    if (!(o = json_pack ("[s[sI]]", name, "t", i))
+    snprintf (s, sizeof (s), "%" PRIu64, val);
+    if (!(o = json_pack ("[s[ss]]", name, "t", s))
         || json_array_append_new (prop, o) < 0) {
         // jansson decrefs the new object on failure
         return -1;
