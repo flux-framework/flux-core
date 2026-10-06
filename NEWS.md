@@ -1,3 +1,41 @@
+flux-core version 0.90.0 - 2026-10-06
+-------------------------------------
+
+## New Features
+ * rewrite `flux-run-{prolog,epilog,housekeeping}` in Python and restrict
+   environment (#7832)
+ * flux-sproc: add more information to ps output (#7826)
+ * allow signal sent at job expiration to be overridden with `--signal=SIG@0`
+   (#7827)
+ * sdexec: derive unique unit name from subprocess label (#7823)
+ * job-manager: add `queues.update` jobtap callback (#7820)
+ * broker: root jobid-path at the instance name (#7822)
+ * flux-alloc/batch: use -o pmi=simple by default (#7805)
+
+## Fixes
+ * shell: require J to be signed by the shell's user (#7833)
+ * libsubprocess: enforce signing mechanism when request signing required
+   in subprocess server (#7831)
+ * fix `sudo flux sproc` failure on system instance (#7830)
+ * job-exec: make shutdown with running jobs that escape cleanup deterministic
+   (#7828)
+ * job-manager: validate data from jobtap plugins and update and memo RPCs
+   (#7817)
+ * job-list: do not exit on invalid journal data (#7818)
+ * gc: protect the empty-directory blob from sweep (#7810)
+ * fix GPU id assignment in jobs run under resource containment (#7806)
+ * libsubprocess: minor bug fixes (#7742)
+ * libsubprocess: skip socketpair unless fork is used (#7804)
+ * job-exec: reject `exec.sdexec-constrain-resources,sdexec-properties`
+   when `exec.service` is not `sdexec` (#7802)
+
+## Build/CI/Testsuite/Documentation
+ * devcontainer: update to Noble and install pip (#7813)
+ * github: bump the github-actions group with 4 updates (#7825)
+ * fix several sdexec mapper documentation bugs (#7811)
+ * doc: enhance header docs for `flux_hostlist_nth()` and
+   `flux_get_hostbyrank()` (#7800)
+
 flux-core version 0.89.0 - 2026-09-02
 -------------------------------------
 
