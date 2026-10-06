@@ -66,6 +66,12 @@ unsigned int resourcecount_first (const struct resourcecount *count);
  */
 unsigned int resourcecount_next (const struct resourcecount *count, unsigned int value);
 
+/* Return the largest valid value in the count.
+ * Returns RESOURCECOUNT_INVALID_VALUE if the count is NULL.
+ * N.B. if isrange, this value can be less than max.
+ */
+unsigned int resourcecount_last (const struct resourcecount *count);
+
 /* Returns true if count is a simple integer, i.e. count->integer > 0.
  * Returns false otherwise, or if count is NULL.
  */
