@@ -288,6 +288,35 @@ void test_containers (sd_bus *bus)
         "empty dict round trips");
 }
 
+void test_dict_pairs (sd_bus *bus)
+{
+    ok (roundtrip (bus, "a{uv}", "[[[7,[\"b\",true]],[3,[\"s\",\"x\"]]]]"),
+        "a{uv} round trips as ordered pairs");
+    ok (roundtrip (bus, "a{ts}", "[[[\"18446744073709551615\",\"max\"]]]"),
+        "a{ts} round trips with string key");
+    ok (roundtrip (bus, "a{bd}", "[[[true,1.5],[false,-1.5]]]"),
+        "a{bd} round trips");
+    ok (roundtrip (bus, "a{us}", "[[[1,\"a\"],[1,\"b\"]]]"),
+        "a{us} with duplicate keys round trips");
+    ok (roundtrip (bus, "a{yv}", "[[]]"),
+        "empty a{yv} round trips");
+    ok (roundtrip (bus, "a{ua{sv}}", "[[[1,{\"A\":[\"i\",1]}]]]"),
+        "a{ua{sv}} round trips");
+
+    ok (write_error (bus, "a{uv}", "[{}]") == -EPROTO,
+        "object for a{uv} fails with EPROTO");
+    ok (write_error (bus, "a{sv}", "[[]]") == -EPROTO,
+        "array for a{sv} fails with EPROTO");
+    ok (write_error (bus, "a{uv}", "[[[7]]]") == -EPROTO,
+        "dict entry without value fails with EPROTO");
+    ok (write_error (bus, "a{us}", "[[[7,\"a\",\"b\"]]]") == -EPROTO,
+        "dict entry with extra value fails with EPROTO");
+    ok (write_error (bus, "a{us}", "[[7]]") == -EPROTO,
+        "dict entry that is not an array fails with EPROTO");
+    ok (write_error (bus, "a{us}", "[[[\"7\",\"a\"]]]") == -EPROTO,
+        "dict entry with wrong key type fails with EPROTO");
+}
+
 void test_variants (sd_bus *bus)
 {
     ok (roundtrip (bus, "vvv",
@@ -368,8 +397,6 @@ void test_write_errors (sd_bus *bus)
         "string for as fails with EPROTO");
     ok (write_error (bus, "a{sv}", "[[]]") == -EPROTO,
         "array for a{sv} fails with EPROTO");
-    ok (write_error (bus, "a{uv}", "[{}]") == -EPROTO,
-        "dict with non-string key fails with EPROTO");
     ok (write_error (bus, "v", "[[\"(s\",[\"x\"]]]") == -EPROTO,
         "variant with bad signature fails with EPROTO");
     ok (write_error (bus, "v", "[[\"ss\",[\"x\",\"y\"]]]") == -EPROTO,
@@ -419,6 +446,7 @@ int main (int argc, char **argv)
     test_basic (bus);
     test_int64 (bus);
     test_containers (bus);
+    test_dict_pairs (bus);
     test_variants (bus);
     test_systemd (bus);
     test_read_complex_variant (bus);

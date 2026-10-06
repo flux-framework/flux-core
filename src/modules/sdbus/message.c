@@ -362,42 +362,91 @@ static int put_struct (sd_bus_message *m,
     return e < 0 ? e : 0;
 }
 
-/* 'type' points to the dict entry type, e.g. "{sv}".
+/* Append one dict entry from key 'k' and value 'v'.
+ * 'type' points to the dict entry type, e.g. "{sv}".
+ */
+static int put_dict_entry (sd_bus_message *m,
+                           const char *type,
+                           size_t len,
+                           const char *contents,
+                           json_t *k,
+                           json_t *v)
+{
+    int e;
+
+    if (!k || !v)
+        return -EPROTO;
+    if ((e = sd_bus_message_open_container (m, 'e', contents)) < 0
+        || (e = put_basic (m, type[1], k)) < 0
+        || (e = put_value (m, type + 2, len - 3, v)) < 0
+        || (e = sd_bus_message_close_container (m)) < 0)
+        return e;
+    return 0;
+}
+
+/* RFC 52: a dict with an s, o, or g key is a JSON object.  A dict with
+ * any other key type is a JSON array of [key, value] pairs.
+ * 'type' points to the dict entry type, e.g. "{sv}".
  */
 static int put_dict (sd_bus_message *m,
                      const char *type,
                      size_t len,
                      json_t *o)
 {
-    char ktype = type[1];
-    const char *vtype = type + 2;
-    size_t vlen = len - 3;
     char *contents;
-    const char *key;
-    json_t *val;
     int e = 0;
 
-    if (!is_string_type (ktype) || !json_is_object (o))
+    if (!is_basic (type[1]))
         return -EPROTO;
     if (!(contents = strndup (type + 1, len - 2)))
         return -ENOMEM;
-    json_object_foreach (o, key, val) {
-        json_t *k;
+    if (is_string_type (type[1])) {
+        const char *key;
+        json_t *val;
 
-        if (!(k = json_string (key))) {
+        if (!json_is_object (o)) {
             e = -EPROTO;
-            break;
+            goto done;
         }
-        if ((e = sd_bus_message_open_container (m, 'e', contents)) >= 0
-            && (e = put_basic (m, ktype, k)) >= 0
-            && (e = put_value (m, vtype, vlen, val)) >= 0)
-            e = sd_bus_message_close_container (m);
-        json_decref (k);
-        if (e < 0)
-            break;
+        json_object_foreach (o, key, val) {
+            json_t *k;
+
+            if (!(k = json_string (key))) {
+                e = -EPROTO;
+                goto done;
+            }
+            e = put_dict_entry (m, type, len, contents, k, val);
+            json_decref (k);
+            if (e < 0)
+                goto done;
+        }
     }
+    else {
+        size_t index;
+        json_t *pair;
+
+        if (!json_is_array (o)) {
+            e = -EPROTO;
+            goto done;
+        }
+        json_array_foreach (o, index, pair) {
+            if (!json_is_array (pair) || json_array_size (pair) != 2) {
+                e = -EPROTO;
+                goto done;
+            }
+            e = put_dict_entry (m,
+                                type,
+                                len,
+                                contents,
+                                json_array_get (pair, 0),
+                                json_array_get (pair, 1));
+            if (e < 0)
+                goto done;
+        }
+    }
+done:
     free (contents);
-    return e < 0 ? e : 0;
+    return e;
 }
 
 static int put_array (sd_bus_message *m,
@@ -561,40 +610,101 @@ static int get_sequence (sd_bus_message *m, json_t *a)
     return e < 0 ? e : 0;
 }
 
-static int get_dict (sd_bus_message *m, json_t *dict)
+/* Read one dict entry into 'keyp' and 'valp'.
+ */
+static int get_dict_entry (sd_bus_message *m, json_t **keyp, json_t **valp)
 {
     char type;
     const char *contents;
+    json_t *key = NULL;
+    json_t *val = NULL;
     int e;
 
-    while ((e = sd_bus_message_peek_type (m, &type, &contents)) > 0) {
-        json_t *key = NULL;
-        json_t *val = NULL;
-
-        if (type != 'e' || !is_string_type (contents[0]))
-            return -EPROTO;
-        if ((e = sd_bus_message_enter_container (m, type, contents)) < 0
-            || (e = get_value (m, &key)) < 0
-            || (e = get_value (m, &val)) < 0
-            || (e = sd_bus_message_exit_container (m)) < 0)
-            goto error;
-        if (json_object_get (dict, json_string_value (key))) {
-            e = -EPROTO; // duplicate key
-            goto error;
-        }
-        if (json_object_set_new (dict, json_string_value (key), val) < 0) {
-            val = NULL; // jansson decrefs the new object on failure
-            e = -ENOMEM;
-            goto error;
-        }
-        json_decref (key);
-        continue;
-error:
+    if ((e = sd_bus_message_peek_type (m, &type, &contents)) < 0)
+        return e;
+    if (e == 0 || type != 'e')
+        return -EPROTO;
+    if ((e = sd_bus_message_enter_container (m, type, contents)) < 0
+        || (e = get_value (m, &key)) < 0
+        || (e = get_value (m, &val)) < 0
+        || (e = sd_bus_message_exit_container (m)) < 0) {
         json_decref (key);
         json_decref (val);
         return e;
     }
-    return e < 0 ? e : 0;
+    *keyp = key;
+    *valp = val;
+    return 0;
+}
+
+/* Add 'key' and 'val' to 'dict' as an object member if the key is a
+ * string, or as a [key, value] pair otherwise.  Steals both references.
+ * N.B. jansson decrefs the new object on json_*_new() failure.
+ */
+static int dict_add (json_t *dict, json_t *key, json_t *val)
+{
+    int e = 0;
+
+    if (json_is_object (dict)) {
+        const char *s = json_string_value (key);
+
+        if (json_object_get (dict, s)) {
+            json_decref (val);
+            e = -EPROTO; // duplicate key
+        }
+        else if (json_object_set_new (dict, s, val) < 0)
+            e = -ENOMEM;
+        json_decref (key);
+    }
+    else {
+        json_t *pair;
+
+        if (!(pair = json_array ())) {
+            json_decref (key);
+            json_decref (val);
+            e = -ENOMEM;
+        }
+        else if (json_array_append_new (pair, key) < 0) {
+            json_decref (val);
+            json_decref (pair);
+            e = -ENOMEM;
+        }
+        else if (json_array_append_new (pair, val) < 0) {
+            json_decref (pair);
+            e = -ENOMEM;
+        }
+        else if (json_array_append_new (dict, pair) < 0)
+            e = -ENOMEM;
+    }
+    return e;
+}
+
+/* RFC 52: a dict with an s, o, or g key is a JSON object.  A dict with
+ * any other key type is a JSON array of [key, value] pairs.
+ * 'contents' is the dict entry type, e.g. "{sv}".
+ */
+static int get_dict (sd_bus_message *m, const char *contents, json_t **op)
+{
+    json_t *dict;
+    int e;
+
+    if (!(dict = is_string_type (contents[1]) ? json_object () : json_array ()))
+        return -ENOMEM;
+    while ((e = sd_bus_message_at_end (m, false)) == 0) {
+        json_t *key;
+        json_t *val;
+
+        if ((e = get_dict_entry (m, &key, &val)) < 0
+            || (e = dict_add (dict, key, val)) < 0)
+            goto error;
+    }
+    if (e < 0)
+        goto error;
+    *op = dict;
+    return 0;
+error:
+    json_decref (dict);
+    return e;
 }
 
 static int get_value (sd_bus_message *m, json_t **op)
@@ -633,10 +743,8 @@ static int get_value (sd_bus_message *m, json_t **op)
             break;
         case 'a':
             if (contents[0] == '{') {
-                if (!(o = json_object ()))
-                    return -ENOMEM;
-                if ((e = get_dict (m, o)) < 0)
-                    goto error;
+                if ((e = get_dict (m, contents, &o)) < 0)
+                    return e;
             }
             else {
                 if (!(o = json_array ()))
