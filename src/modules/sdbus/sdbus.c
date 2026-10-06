@@ -27,7 +27,6 @@
 #include "watcher.h"
 #include "subscribe.h"
 #include "connect.h"
-#include "objpath.h"
 #include "sdbus.h"
 
 struct sdbus_ctx {
@@ -116,10 +115,8 @@ static bool match_subscription (const flux_msg_t *msg, sd_bus_message *m)
     if (member && !streq (member, sd_bus_message_get_member (m)))
         return false;
     if (path_glob) {
-        char *m_path = objpath_decode (sd_bus_message_get_path (m));
-        bool match = (m_path && fnmatch (path_glob, m_path, FNM_PATHNAME) == 0);
-        free (m_path);
-        if (!match)
+        const char *m_path = sd_bus_message_get_path (m);
+        if (!m_path || fnmatch (path_glob, m_path, FNM_PATHNAME) != 0)
             return false;
     }
     return true;
@@ -176,25 +173,19 @@ static const flux_msg_t *find_request_by_cookie (struct sdbus_ctx *ctx,
 }
 
 /* Log a signal message.
- * If path refers to a systemd unit, make it pretty for the logs.
  */
 static void log_msg_signal (flux_t *h,
                             sd_bus_message *m,
                             const char *disposition)
 {
-    const char *prefix = "/org/freedesktop/systemd1/unit";
     const char *path = sd_bus_message_get_path (m);
-    char *s = NULL;
 
-    if (path)
-        (void)sd_bus_path_decode (path, prefix, &s);
     sdbus_log_debug (h,
                      "bus %s %s %s %s",
                      disposition,
                      sdmsg_typestr (m),
-                     s ? s : path,
+                     path ? path : "(null)",
                      sd_bus_message_get_member (m));
-    free (s);
 }
 
 /* Log a method-reply or method-error.

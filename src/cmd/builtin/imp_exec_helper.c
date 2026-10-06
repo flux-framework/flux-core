@@ -59,7 +59,7 @@ static json_t *invocation_id_decode (const char *hex)
     return a;
 }
 
-/* Call GetUnitByInvocationID and return the decoded unit object path.
+/* Call GetUnitByInvocationID and return the unit object path.
  * The caller must free() the result.
  */
 static char *get_unit_path (flux_t *h, const char *invocation_id)

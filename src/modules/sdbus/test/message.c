@@ -209,8 +209,17 @@ void test_basic (sd_bus *bus)
     ok (roundtrip (bus,
                    "ybnqiuxtdsgo",
                    "[42,true,-30000,48000,-100000,100000,\"-10\",\"10\",3.5,"
-                   "\"string\",\"a{sv}\",\"/object/path/string.suffix\"]"),
+                   "\"string\",\"a{sv}\",\"/object/path/string_2esuffix\"]"),
         "basic types round trip");
+    ok (roundtrip (bus,
+                   "o",
+                   "[\"/org/freedesktop/systemd1/unit/foo_2eservice\"]"),
+        "object path round trips verbatim");
+    ok (write_error (bus,
+                     "o",
+                     "[\"/org/freedesktop/systemd1/unit/foo.service\"]")
+        == -EPROTO,
+        "object path with invalid character fails with EPROTO");
     ok (roundtrip (bus, "ss", "[\"\",\"\"]"),
         "empty strings round trip");
     ok (roundtrip (bus, "", "[]"),
@@ -421,8 +430,8 @@ void test_write_errors (sd_bus *bus)
         "dict entry with three members fails with EPROTO");
     ok (write_error (bus, "v", "[[\"s\",\"x\",\"y\"]]") == -EPROTO,
         "variant with extra element fails with EPROTO");
-    ok (write_error (bus, "o", "[\"not/a/path\"]") < 0,
-        "invalid object path fails");
+    ok (write_error (bus, "o", "[\"not/a/path\"]") == -EPROTO,
+        "invalid object path fails with EPROTO");
 }
 
 int main (int argc, char **argv)

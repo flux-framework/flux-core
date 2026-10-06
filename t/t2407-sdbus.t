@@ -71,14 +71,23 @@ bus_kill_unit() {
     flux python -c "import flux; print(flux.Flux().rpc(\"sdbus.call\",{\"member\":\"KillUnit\",\"params\":[\"$1\",\"all\",$2]}).get_str())"
 }
 
+# Usage: unit_path name
+# Print the systemd object path of unit 'name' (RFC 52 carries paths verbatim)
+# N.B. explicit ASCII ranges, not str.isascii(), which needs python >= 3.7
+unit_path() {
+    flux python -c "import sys; print(\"/org/freedesktop/systemd1/unit/\" + \"\".join(c if 'A' <= c <= 'Z' or 'a' <= c <= 'z' or (i > 0 and '0' <= c <= '9') else '_%02x' % ord(c) for i, c in enumerate(sys.argv[1])))" "$1"
+}
+
 # Usage: bus_get_prop_all interface name
 bus_get_prop_all () {
-    flux python -c "import flux; print(flux.Flux().rpc(\"sdbus.call\",{\"path\":\"/org/freedesktop/systemd1/unit/$2\",\"interface\":\"org.freedesktop.DBus.Properties\",\"member\":\"GetAll\",\"params\":[\"$1\"]}).get_str())"
+    local path=$(unit_path $2) || return 1
+    flux python -c "import flux; print(flux.Flux().rpc(\"sdbus.call\",{\"path\":\"$path\",\"interface\":\"org.freedesktop.DBus.Properties\",\"member\":\"GetAll\",\"params\":[\"$1\"]}).get_str())"
 }
 
 # Usage: bus_get_prop interface name property
 bus_get_prop () {
-    flux python -c "import flux; print(flux.Flux().rpc(\"sdbus.call\",{\"path\":\"/org/freedesktop/systemd1/unit/$2\",\"interface\":\"org.freedesktop.DBus.Properties\",\"member\":\"Get\",\"params\":[\"$1\",\"$3\"]}).get_str())"
+    local path=$(unit_path $2) || return 1
+    flux python -c "import flux; print(flux.Flux().rpc(\"sdbus.call\",{\"path\":\"$path\",\"interface\":\"org.freedesktop.DBus.Properties\",\"member\":\"Get\",\"params\":[\"$1\",\"$3\"]}).get_str())"
 }
 
 # Usage: bus_start_simple name description remain cmd arg1
@@ -169,9 +178,9 @@ test_expect_success 'create subscribe script' '
 	EOT
 	chmod +x subscribe.py
 '
-test_expect_success NO_CHAIN_LINT 'subscribe to flux-t2406-[2-9]* signals' '
+test_expect_success NO_CHAIN_LINT 'subscribe to flux-t2406-[2-9]* signals by object path' '
 	flux python ./subscribe.py \
-	    /org/freedesktop/systemd1/unit/flux-t2406-[2-9]* \
+	    /org/freedesktop/systemd1/unit/flux_2dt2406_2d[2-9]* \
 	    >signals.out 2>signals.err &
 	echo $! >signals.pid
 '
@@ -288,16 +297,16 @@ test_expect_success NO_CHAIN_LINT 'PropertiesChanged signals were received' '
 	test $(grep PropertiesChanged signals_all.out | wc -l) -gt 0
 '
 test_expect_success NO_CHAIN_LINT 'all units triggered signals' '
-	test $(grep flux-t2406-1 signals_all.out | wc -l) -gt 0 &&
-	test $(grep flux-t2406-2 signals_all.out | wc -l) -gt 0 &&
-	test $(grep flux-t2406-3 signals_all.out | wc -l) -gt 0 &&
-	test $(grep flux-t2406-4 signals_all.out | wc -l) -gt 0
+	test $(grep flux_2dt2406_2d1 signals_all.out | wc -l) -gt 0 &&
+	test $(grep flux_2dt2406_2d2 signals_all.out | wc -l) -gt 0 &&
+	test $(grep flux_2dt2406_2d3 signals_all.out | wc -l) -gt 0 &&
+	test $(grep flux_2dt2406_2d4 signals_all.out | wc -l) -gt 0
 '
 test_expect_success NO_CHAIN_LINT 'subscription filter worked' '
-	test $(grep flux-t2406-1 signals.out | wc -l) -eq 0 &&
-	test $(grep flux-t2406-2 signals.out | wc -l) -gt 0 &&
-	test $(grep flux-t2406-3 signals.out | wc -l) -gt 0 &&
-	test $(grep flux-t2406-4 signals.out | wc -l) -gt 0
+	test $(grep flux_2dt2406_2d1 signals.out | wc -l) -eq 0 &&
+	test $(grep flux_2dt2406_2d2 signals.out | wc -l) -gt 0 &&
+	test $(grep flux_2dt2406_2d3 signals.out | wc -l) -gt 0 &&
+	test $(grep flux_2dt2406_2d4 signals.out | wc -l) -gt 0
 '
 # Test restriction of RPCs to sdbus on rank 0 from rank 1
 # N.B. requests are forwarded upstream b/c sdbus is not loaded on rank 1

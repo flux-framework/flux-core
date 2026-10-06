@@ -31,7 +31,6 @@
 #include "ccan/str/str.h"
 #include "ccan/array_size/array_size.h"
 
-#include "objpath.h"
 #include "message.h"
 
 /* D-Bus specification: signatures are limited to 255 bytes.
@@ -160,6 +159,28 @@ static bool is_valid_signature (const char *s)
     return true;
 }
 
+/* Return true if 's' is a valid D-Bus object path: '/' followed by
+ * zero or more elements of [A-Za-z0-9_] separated by single slashes.
+ */
+static bool is_valid_objpath (const char *s)
+{
+    if (s[0] != '/')
+        return false;
+    if (s[1] == '\0')
+        return true;
+    for (int i = 1; s[i] != '\0'; i++) {
+        if (s[i] == '/') {
+            if (s[i - 1] == '/')
+                return false;
+        }
+        else if (!strchr ("ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+                          "abcdefghijklmnopqrstuvwxyz"
+                          "0123456789_", s[i]))
+            return false;
+    }
+    return s[strlen (s) - 1] != '/';
+}
+
 /* JSON -> D-Bus
  */
 
@@ -242,7 +263,6 @@ static int put_integer (char type, json_t *o, value_t *v)
 static int put_string (sd_bus_message *m, char type, json_t *o)
 {
     const char *s;
-    int e;
 
     if (!json_is_string (o))
         return -EPROTO;
@@ -250,19 +270,13 @@ static int put_string (sd_bus_message *m, char type, json_t *o)
     if (strlen (s) != json_string_length (o)) // embedded NUL
         return -EPROTO;
     /* RFC 52: reject strings that are not valid for the D-Bus type.
-     * sd-bus validation of g varies by systemd version, so do not
-     * rely on it.
+     * sd-bus validation of o and g varies by systemd version, so do
+     * not rely on it.
      */
+    if (type == 'o' && !is_valid_objpath (s))
+        return -EPROTO;
     if (type == 'g' && !is_valid_signature (s))
         return -EPROTO;
-    if (type == 'o') {
-        char *path;
-        if (!(path = objpath_encode (s)))
-            return -errno;
-        e = sd_bus_message_append_basic (m, type, path);
-        free (path);
-        return e;
-    }
     return sd_bus_message_append_basic (m, type, s);
 }
 
@@ -514,21 +528,6 @@ int sdmsg_write (sd_bus_message *m, const char *sig, json_t *params)
 
 static int get_value (sd_bus_message *m, json_t **op);
 
-static json_t *get_string (char type, const char *s)
-{
-    if (type == 'o') {
-        char *path;
-        json_t *o;
-
-        if (!(path = objpath_decode (s)))
-            return NULL;
-        o = json_string (path);
-        free (path);
-        return o;
-    }
-    return json_string (s);
-}
-
 static int get_basic (sd_bus_message *m, char type, json_t **op)
 {
     value_t v;
@@ -543,7 +542,7 @@ static int get_basic (sd_bus_message *m, char type, json_t **op)
         case 's':
         case 'o':
         case 'g':
-            o = get_string (type, v.s);
+            o = json_string (v.s);
             break;
         case 'b':
             o = json_boolean (v.b);

@@ -35,7 +35,6 @@
 #include "ccan/str/str.h"
 #include "ccan/array_size/array_size.h"
 
-#include "objpath.h"
 #include "message.h"
 #include "interface.h"
 
@@ -111,10 +110,9 @@ sd_bus_message *interface_request_fromjson (sd_bus *bus,
 {
     json_t *params;
     const char *destination = "org.freedesktop.systemd1";
-    const char *xpath = "/org/freedesktop/systemd1";
+    const char *path = "/org/freedesktop/systemd1";
     const char *interface = "org.freedesktop.systemd1.Manager";
     const char *member;
-    char *path = NULL;
     const struct xtab *x;
     sd_bus_message *m;
     int e;
@@ -122,7 +120,7 @@ sd_bus_message *interface_request_fromjson (sd_bus *bus,
     if (json_unpack (obj,
                      "{s?s s?s s?s s:s s:o}",
                      "destination", &destination,
-                     "path", &xpath,
+                     "path", &path,
                      "interface", &interface,
                      "member", &member,
                      "params", &params) < 0
@@ -132,10 +130,6 @@ sd_bus_message *interface_request_fromjson (sd_bus *bus,
     }
     if (!(x = xtab_lookup (interface, member, error)))
         return NULL;
-    if (!(path = objpath_encode (xpath))) {
-        errprintf (error, "error encoding object path %s", xpath);
-        return NULL;
-    }
     if ((e = sd_bus_message_new_method_call (bus,
                                              &m,
                                              destination,
@@ -143,7 +137,6 @@ sd_bus_message *interface_request_fromjson (sd_bus *bus,
                                              interface,
                                              member)) < 0) {
         errprintf (error, "error creating sd-bus message: %s", strerror (-e));
-        free (path);
         return NULL;
     }
     if ((e = sdmsg_write (m, x->signature, params)) < 0) {
@@ -152,10 +145,8 @@ sd_bus_message *interface_request_fromjson (sd_bus *bus,
                    x->member,
                    strerror (-e));
         sd_bus_message_unref (m);
-        free (path);
         return NULL;
     }
-    free (path);
     return m;
 }
 
@@ -184,7 +175,6 @@ json_t *interface_signal_tojson (sd_bus_message *m, flux_error_t *error)
     const char *iface = sd_bus_message_get_interface (m);
     const char *member = sd_bus_message_get_member (m);
     const char *path = sd_bus_message_get_path (m);
-    char *xpath;
     json_t *o;
     int e;
 
@@ -192,20 +182,14 @@ json_t *interface_signal_tojson (sd_bus_message *m, flux_error_t *error)
         errprintf (error, "signal is missing interface, member, or path");
         return NULL;
     }
-    if (!(xpath = objpath_decode (path))) {
-        errprintf (error, "error decoding object path %s", path);
-        return NULL;
-    }
     if (!(o = json_pack ("{s:s s:s s:s s:[]}",
-                         "path", xpath,
+                         "path", path,
                          "interface", iface,
                          "member", member,
                          "params"))) {
         errprintf (error, "error creating output parameter object");
-        free (xpath);
         return NULL;
     }
-    free (xpath);
     if ((e = sdmsg_read (m, json_object_get (o, "params"))) < 0) {
         errprintf (error,
                    "error translating %s signal to JSON: %s",
