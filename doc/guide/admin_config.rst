@@ -428,6 +428,14 @@ root access as suggested in :ref:`config-flux`.
 
 The IMP sets :envvar:`PATH` to a safe ``/usr/sbin:/usr/bin:/sbin:/bin``.
 
+Because the scripts run as root, their environment is limited to the
+variables listed in the SYSTEM SCRIPTS section of :man7:`flux-environment`.
+Other variables in the system instance environment are not passed to the
+scripts.  If site scripts need additional environment, for example to find
+Flux commands installed outside the default path, set it in a systemd
+drop-in for the corresponding unit, e.g. with
+``systemctl edit flux-prolog@.service``.
+
 Error Handling
 ~~~~~~~~~~~~~~
 
