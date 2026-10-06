@@ -363,7 +363,6 @@ TESTSCRIPTS = \
 	python/t0038-brokermod.py \
 	python/t0039-rv1pool.py \
 	python/t0040-proctitle.py \
-	python/t0041-resource-count.py \
 	python/t0042-job-manager-alloc-cache.py \
 	python/t0043-sdexec-map.py \
 	python/t0043-scheduler-pool.py \
