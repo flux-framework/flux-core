@@ -37,10 +37,17 @@ static int lookup_jobspec_get (flux_future_t *f, char **jobspec)
 {
     flux_error_t error;
     const char *J;
+    uint32_t userid;
     if (flux_rpc_get_unpack (f, "{s:s}", "J", &J) < 0)
         goto error;
-    if (!(*jobspec = flux_unwrap_string (J, true, NULL, &error))) {
+    if (!(*jobspec = flux_unwrap_string (J, true, &userid, &error))) {
         shell_log_error ("failed to unwrap J: %s", error.text);
+        return -1;
+    }
+    if ((uid_t) userid != getuid ()) {
+        shell_log_error ("J signing userid %lu != current %lu",
+                         (unsigned long) userid,
+                         (unsigned long) getuid ());
         return -1;
     }
     return 0;
