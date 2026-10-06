@@ -2467,6 +2467,27 @@ static void recover_probe_continuation (flux_future_t *f, void *arg)
     }
 }
 
+/* Extract the cmdline array from the ExecStart property returned by GetAll.
+ * The readable ExecStart property has D-Bus type a(sasbttttuii): an array
+ * of (path, argv, ignore_errors, ...) structs with trailing status fields.
+ * Assume a single command (the first struct) and take its argv, member 1,
+ * which the typed read guarantees is an array.  Returns a new reference
+ * on success, or NULL if ExecStart is missing or empty.
+ */
+static json_t *extract_cmdline_from_execstart (json_t *dict)
+{
+    json_t *execstart;
+    json_t *cmdline;
+
+    if (sdexec_property_dict_read (dict,
+                                   "ExecStart",
+                                   "a(sasbttttuii)",
+                                   &execstart) < 0
+        || !(cmdline = json_array_get (json_array_get (execstart, 0), 1)))
+        return NULL;
+    return json_incref (cmdline);
+}
+
 /* A recovered unit's GetAll snapshot has arrived.  Feed it to the unit object
  * and drive the state machine so an already-exited unit is reaped (its exit
  * status, preserved by RemainAfterExit, becomes available to a later wait) and
@@ -2517,6 +2538,13 @@ static void sweep_getall_continuation (flux_future_t *f, void *arg)
         }
         return;
     }
+    /* Add the actual command line from ExecStart so logs and ps show the
+     * real command instead of the unit name.  If ExecStart is not available,
+     * the label (unit name minus suffix) remains as the fallback.
+     */
+    json_t *cmdline = extract_cmdline_from_execstart (dict);
+    if (cmdline)
+        (void)json_object_set_new (proc->cmd, "cmdline", cmdline);
     (void)sdexec_unit_update (proc->unit, dict);
     sdproc_advance_state (proc);
     finalize_exec_request_if_done (proc);
@@ -2530,11 +2558,11 @@ static void sweep_getall_continuation (flux_future_t *f, void *arg)
  * signal is missed.
  *
  * The unit's running-vs-exited state comes from the list info (ActiveState /
- * SubState); the GetAll snapshot is on the Service interface and supplies only
+ * SubState); the GetAll snapshot is on the Service interface and supplies
  * ExecMain{PID,Code,Status}, which RemainAfterExit=true preserves for an
- * already-exited unit so its exit status survives the restart.  Seed the state
- * here rather than waiting for GetAll so the clean predicate is correct as soon
- * as the unit is adopted.
+ * already-exited unit so its exit status survives the restart, plus the
+ * command line (ExecStart).  Seed the state here rather than waiting for
+ * GetAll so the clean predicate is correct as soon as the unit is adopted.
  */
 static void recover_unit (struct sdexec_ctx *ctx, struct unit_info *info)
 {
