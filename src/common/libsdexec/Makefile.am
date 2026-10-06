@@ -31,6 +31,8 @@ libsdexec_la_SOURCES = \
 	channel.h \
 	channel.c \
 	unit.h \
+	proplist.c \
+	proplist.h \
 	bus.h \
 	unit.c \
 	parse.h \
@@ -58,6 +60,7 @@ TESTS = \
 	test_list.t \
 	test_property.t \
 	test_start.t \
+	test_proplist.t \
 	test_state.t \
 	test_stop.t \
 	test_unit.t
@@ -89,6 +92,11 @@ test_property_t_SOURCES = test/property.c
 test_property_t_CPPFLAGS = $(test_cppflags)
 test_property_t_LDADD = libsdexec.la $(test_ldadd)
 test_property_t_LDFLAGS = $(test_ldflags)
+
+test_proplist_t_SOURCES = test/proplist.c
+test_proplist_t_CPPFLAGS = $(test_cppflags)
+test_proplist_t_LDADD = libsdexec.la $(test_ldadd)
+test_proplist_t_LDFLAGS = $(test_ldflags)
 
 test_start_t_SOURCES = test/start.c
 test_start_t_CPPFLAGS = $(test_cppflags)
