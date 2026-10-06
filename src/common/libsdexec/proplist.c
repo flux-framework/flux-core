@@ -19,13 +19,13 @@
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
-#include <inttypes.h>
 #include <jansson.h>
 #include <flux/core.h>
 
 #include "src/common/libutil/errprintf.h"
 
 #include "proplist.h"
+#include "value.h"
 
 struct sdexec_proplist {
     json_t *props;
@@ -65,82 +65,6 @@ static void set_error (struct sdexec_proplist *pl,
     if (pl->errnum == 0) {
         pl->errnum = errnum;
         errprintf (&pl->error, "%s: %s", name ? name : "(null)", msg);
-    }
-}
-
-/* RFC 52: x and t are decimal strings; other integers are JSON integers.
- */
-static json_t *encode_int64 (int64_t i)
-{
-    char s[32];
-    snprintf (s, sizeof (s), "%" PRId64, i);
-    return json_string (s);
-}
-
-static json_t *encode_uint64 (uint64_t u)
-{
-    char s[32];
-    snprintf (s, sizeof (s), "%" PRIu64, u);
-    return json_string (s);
-}
-
-/* Encode one value of basic type 'type' from 'ap'.
- */
-static json_t *encode_basic (char type, va_list *ap)
-{
-    switch (type) {
-        case 'b':
-            return json_boolean (va_arg (*ap, int));
-        case 'y':
-        case 'n':
-        case 'q':
-        case 'i':
-        case 'h':
-            return json_integer (va_arg (*ap, int));
-        case 'u':
-            return json_integer (va_arg (*ap, uint32_t));
-        case 'x':
-            return encode_int64 (va_arg (*ap, int64_t));
-        case 't':
-            return encode_uint64 (va_arg (*ap, uint64_t));
-        case 'd':
-            return json_real (va_arg (*ap, double));
-        case 's':
-        case 'o':
-        case 'g': {
-            const char *s = va_arg (*ap, const char *);
-            return s ? json_string (s) : NULL;
-        }
-        default:
-            return NULL;
-    }
-}
-
-/* Encode element 'i' of fixed-size type 'type' at 'ptr'.
- */
-static json_t *encode_element (char type, const void *ptr, size_t i)
-{
-    switch (type) {
-        case 'y':
-            return json_integer (((const uint8_t *)ptr)[i]);
-        case 'b':
-            return json_boolean (((const int *)ptr)[i]);
-        case 'n':
-            return json_integer (((const int16_t *)ptr)[i]);
-        case 'q':
-            return json_integer (((const uint16_t *)ptr)[i]);
-        case 'i':
-            return json_integer (((const int32_t *)ptr)[i]);
-        case 'u':
-            return json_integer (((const uint32_t *)ptr)[i]);
-        case 'x':
-            return encode_int64 (((const int64_t *)ptr)[i]);
-        case 't':
-            return encode_uint64 (((const uint64_t *)ptr)[i]);
-        case 'd':
-            return json_real (((const double *)ptr)[i]);
-        default:
-            return NULL;
     }
 }
 
@@ -195,7 +119,7 @@ void sdexec_proplist_add (struct sdexec_proplist *pl,
         return;
     }
     va_start (ap, type);
-    val = encode_basic (type[0], &ap);
+    val = sdexec_value_encode (type[0], &ap);
     va_end (ap);
     append (pl, name, type, val);
 }
@@ -221,7 +145,7 @@ void sdexec_proplist_add_array (struct sdexec_proplist *pl,
     }
     for (size_t i = 0; i < count; i++) {
         json_t *o;
-        if (!(o = encode_element (type[0], ptr, i))
+        if (!(o = sdexec_value_encode_element (type[0], ptr, i))
             || json_array_append_new (a, o) < 0) {
             set_error (pl, EINVAL, name, "invalid array element");
             json_decref (a);
