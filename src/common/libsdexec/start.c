@@ -32,31 +32,23 @@
 
 #include "bus.h"
 #include "parse.h"
+#include "proplist.h"
 #include "start.h"
 
-/* This dense JSON format string deserves some explanation!
- * [s[sO]] is [key,[type,val]] std. form for a StartTransientUnit property.
- * - key is "ExecStart", the property name
- * - type is "a(sasb)", the D-Bus signature for value
- * - val is [[sOb]], an array of command lines
- * The command line [sOb] consists of
- * - command name (argv[0])
- * - argv array (of strings)
- * - boolean ignore-failure flag (e.g. an ExecStart prefix of "-")
- * This function assumes one command line, and ignore-failure=false.
+/* ExecStart has D-Bus type a(sasb), an array of command lines.  Each is
+ * [path, argv, ignore-failure], where ignore-failure corresponds to an
+ * ExecStart prefix of "-".  This adds one command line with
+ * ignore-failure=false.
  */
-static int prop_add_execstart (json_t *prop, const char *name, json_t *cmdline)
+static void prop_add_execstart (struct sdexec_proplist *pl, json_t *cmdline)
 {
-    json_t *o = NULL;
     const char *arg0;
+    json_t *val = NULL;
 
-    if (json_unpack (cmdline, "[s]", &arg0) < 0
-        || !(o = json_pack ("[s[s[[sOb]]]]", name, "a(sasb)", arg0, cmdline, 0))
-        || json_array_append_new (prop, o) < 0) {
-        // jansson decrefs the new object on failure
-        return -1;
-    }
-    return 0;
+    if (json_unpack (cmdline, "[s]", &arg0) == 0)
+        val = json_pack ("[[sOb]]", arg0, cmdline, 0);
+    sdexec_proplist_add_json (pl, "ExecStart", "a(sasb)", val);
+    json_decref (val);
 }
 
 /* systemd fails a StartTransientUnit request if environment variable
@@ -78,84 +70,29 @@ static bool environment_name_ok (const char *name)
 /* The Environment property is an array of "key=value" strings, which
  * is built up from the env dict received as part of the command.
  */
-static int prop_add_env (json_t *prop, const char *name, json_t *dict)
+static void prop_add_env (struct sdexec_proplist *pl, json_t *dict)
 {
     json_t *a;
     const char *k;
     json_t *vo;
-    json_t *env;
-    int rc = -1;
 
-    if (!(a = json_array ()))
-        return -1;
-    json_object_foreach (dict, k, vo) {
-        const char *v = json_string_value (vo);
-
-        if (environment_name_ok (k)) {
+    if ((a = json_array ())) {
+        json_object_foreach (dict, k, vo) {
             char *kv = NULL;
-            json_t *kvo = NULL;
-            if (asprintf (&kv, "%s=%s", k, v) < 0
-                || !(kvo = json_string (kv))
-                || json_array_append_new (a, kvo) < 0) {
-                // jansson decrefs the new object on failure
+            if (!environment_name_ok (k))
+                continue;
+            if (asprintf (&kv, "%s=%s", k, json_string_value (vo)) < 0
+                || json_array_append_new (a, json_string (kv)) < 0) {
                 free (kv);
-                goto out;
+                json_decref (a);
+                a = NULL; // proplist reports the error
+                break;
             }
             free (kv);
         }
     }
-    if (!(env = json_pack ("[s[sO]]", name, "as", a))
-        || json_array_append_new (prop, env) < 0) {
-        // jansson decrefs the new object on failure
-        goto out;
-    }
-    rc = 0;
-out:
+    sdexec_proplist_add_json (pl, "Environment", "as", a);
     json_decref (a);
-    return rc;
-}
-
-static int prop_add_string (json_t *prop, const char *name, const char *val)
-{
-    json_t *o;
-
-    if (val) {
-        if (!(o = json_pack ("[s[ss]]", name, "s", val))
-            || json_array_append_new (prop, o) < 0) {
-            // jansson decrefs the new object on failure
-            return -1;
-        }
-    }
-    return 0;
-}
-
-/* This assumes message source and destination are in the same process,
- * as is the case with sdexec => sdbus broker modules.
- */
-static int prop_add_fd (json_t *prop, const char *name, int val)
-{
-    json_t *o;
-
-    if (val >= 0) {
-        if (!(o = json_pack ("[s[si]]", name, "h", val))
-            || json_array_append_new (prop, o) < 0) {
-            // jansson decrefs the new object on failure
-            return -1;
-        }
-    }
-    return 0;
-}
-
-static int prop_add_bool (json_t *prop, const char *name, int val)
-{
-    json_t *o;
-
-    if (!(o = json_pack ("[s[sb]]", name, "b", val))
-        || json_array_append_new (prop, o) < 0) {
-        // jansson decrefs the new object on failure
-        return -1;
-    }
-    return 0;
 }
 
 // per systemd.syntax(7), boolean values are: 1|yes|true|on, 0|no|false|off
@@ -178,132 +115,67 @@ static bool is_false (const char *s)
     return false;
 }
 
-static int prop_add_i32 (json_t *prop, const char *name, int32_t val)
-{
-    json_int_t i = val;
-    json_t *o;
-
-    if (!(o = json_pack ("[s[sI]]", name, "i", i))
-        || json_array_append_new (prop, o) < 0) {
-        // jansson decrefs the new object on failure
-        return -1;
-    }
-    return 0;
-}
-
-static int prop_add_u32 (json_t *prop, const char *name, uint32_t val)
-{
-    json_int_t i = val;
-    json_t *o;
-
-    if (!(o = json_pack ("[s[sI]]", name, "u", i))
-        || json_array_append_new (prop, o) < 0) {
-        // jansson decrefs the new object on failure
-        return -1;
-    }
-    return 0;
-}
-
-/* RFC 52: uint64 values are encoded as decimal strings.
- */
-static int prop_add_u64 (json_t *prop, const char *name, uint64_t val)
-{
-    char s[32];
-    json_t *o;
-
-    snprintf (s, sizeof (s), "%" PRIu64, val);
-    if (!(o = json_pack ("[s[ss]]", name, "t", s))
-        || json_array_append_new (prop, o) < 0) {
-        // jansson decrefs the new object on failure
-        return -1;
-    }
-    return 0;
-}
-
-static int prop_add_bytearray (json_t *prop,
-                               const char *name,
-                               uint8_t *bytearray,
-                               size_t size)
-{
-    json_t *o;
-    json_t *a;
-
-    if (!(a = json_array ()))
-        return -1;
-    for (int i = 0; i < size; i++) {
-        json_t *vo;
-        if (!(vo = json_integer (bytearray[i]))
-            || json_array_append_new (a, vo) < 0) {
-            // jansson decrefs the new object on failure
-            json_decref (a);
-            return -1;
-        }
-    }
-    if (!(o = json_pack ("[s[sO]]", name, "ay", a))
-        || json_array_append_new (prop, o) < 0) {
-        // jansson decrefs the new object on failure
-        json_decref (a);
-        return -1;
-    }
-    json_decref (a);
-    return 0;
-}
-
 /* Parse comma-separated "specifier perms" pairs such as "/dev/nvidiactl rw"
- * and add a property of D-Bus type a(ss), as used by DeviceAllow.
+ * into a JSON array for D-Bus type a(ss), as used by DeviceAllow.
  * See systemd.resource-control(5) for specifier and perms syntax.
  */
-static int prop_add_str_pair_array (json_t *prop,
-                                    const char *name,
-                                    const char *val)
+static json_t *parse_str_pair_array (const char *val)
 {
-    json_t *pairs = NULL;
-    json_t *o = NULL;
+    json_t *pairs;
     char *buf = NULL;
     char *saveptr;
     char *entry;
-    int rc = -1;
 
-    if (!(pairs = json_array ()))
-        return -1;
-    if (!(buf = strdup (val)))
-        goto out;
+    if (!(pairs = json_array ()) || !(buf = strdup (val)))
+        goto error;
     entry = strtok_r (buf, ",", &saveptr);
     while (entry) {
         char *sp;
         entry = strstrip (entry);
         if (!(sp = strchr (entry, ' ')))
-            goto out;
+            goto error;
         *sp++ = '\0';
         sp = strstrip (sp);
-        if (strlen (entry) == 0 || strlen (sp) == 0)
-            goto out;
-        json_t *pair;
-        if (!(pair = json_pack ("[ss]", entry, sp))
-            || json_array_append_new (pairs, pair) < 0) {
-            // jansson decrefs the new object on failure
-            goto out;
-        }
+        if (strlen (entry) == 0
+            || strlen (sp) == 0
+            || json_array_append_new (pairs, json_pack ("[ss]", entry, sp)) < 0)
+            goto error;
         entry = strtok_r (NULL, ",", &saveptr);
     }
     if (json_array_size (pairs) == 0)
-        goto out;
-    if (!(o = json_pack ("[s[sO]]", name, "a(ss)", pairs))
-        || json_array_append_new (prop, o) < 0) {
-        // jansson decrefs the new object on failure
-        goto out;
-    }
-    rc = 0;
-out:
+        goto error;
+    free (buf);
+    return pairs;
+error:
     free (buf);
     json_decref (pairs);
-    return rc;
+    return NULL;
 }
 
-/* Set a property by name. By default, values are strings  Those that are
- * not require explicit conversion from string.
+/* Parse an unsigned integer that may also be "infinity" (UINT64_MAX).
  */
-static int prop_add (json_t *prop, const char *name, const char *val)
+static int parse_u64_infinity (const char *val, uint64_t *up)
+{
+    char *endptr;
+
+    if (streq (val, "infinity")) {
+        *up = UINT64_MAX;
+        return 0;
+    }
+    errno = 0;
+    *up = strtoull (val, &endptr, 10);
+    if (errno != 0 || *endptr != '\0')
+        return -1;
+    return 0;
+}
+
+/* Set a property by name from its string value.  By default, values are
+ * strings.  Those that are not require explicit conversion from string.
+ * Return -1 if 'val' cannot be parsed for property 'name'.
+ */
+static int prop_add (struct sdexec_proplist *pl,
+                     const char *name,
+                     const char *val)
 {
     if (strlen (name) == 0 || !val)
         return 0;
@@ -319,17 +191,12 @@ static int prop_add (json_t *prop, const char *name, const char *val)
         if (sdexec_parse_percent (val, &d) == 0) {
             char newname[64];
             snprintf (newname, sizeof (newname), "%sScale", name);
-            if (prop_add_u32 (prop, newname, (uint32_t)(d * UINT32_MAX)) < 0)
-                return -1;
+            sdexec_proplist_add (pl, newname, "u", (uint32_t)(d * UINT32_MAX));
         }
-        else if (parse_size (val, &u) == 0) {
-            if (prop_add_u64 (prop, name, u) < 0)
-                return -1;
-        }
-        else if (streq (val, "infinity")) {
-            if (prop_add_u64 (prop, name, UINT64_MAX) < 0)
-                return -1;
-        }
+        else if (parse_size (val, &u) == 0)
+            sdexec_proplist_add (pl, name, "t", u);
+        else if (streq (val, "infinity"))
+            sdexec_proplist_add (pl, name, "t", UINT64_MAX);
         else
             return -1;
     }
@@ -340,55 +207,44 @@ static int prop_add (json_t *prop, const char *name, const char *val)
 
         if (sdexec_parse_bitmap (val, &bitmap, &size) < 0)
             return -1;
-        if (prop_add_bytearray (prop, name, bitmap, size) < 0) {
-            free (bitmap);
-            return -1;
-        }
+        sdexec_proplist_add_array (pl, name, "y", bitmap, size);
         free (bitmap);
     }
     else if (streq (name, "DeviceAllow")) {
-        if (prop_add_str_pair_array (prop, name, val) < 0)
+        json_t *pairs;
+
+        if (!(pairs = parse_str_pair_array (val)))
             return -1;
+        sdexec_proplist_add_json (pl, name, "a(ss)", pairs);
+        json_decref (pairs);
     }
     else if (streq (name, "SendSIGKILL")) {
-        bool value;
         if (is_false (val))
-            value = false;
+            sdexec_proplist_add (pl, name, "b", false);
         else if (is_true (val))
-            value = true;
+            sdexec_proplist_add (pl, name, "b", true);
         else
-            return -1;
-        if (prop_add_bool (prop, name, value) < 0)
             return -1;
     }
     else if (streq (name, "TimeoutStopUSec")) {
-        if (streq (val, "infinity")) {
-            if (prop_add_u64 (prop, name, UINT64_MAX) < 0)
-                return -1;
-        }
-        else {
-            errno = 0;
-            char *endptr;
-            uint64_t u = strtoull (val, &endptr, 10);
-            if (errno != 0 || *endptr != '\0')
-                return -1;
-            if (prop_add_u64 (prop, name, u) < 0)
-                return -1;
-        }
+        uint64_t u;
+
+        if (parse_u64_infinity (val, &u) < 0)
+            return -1;
+        sdexec_proplist_add (pl, name, "t", u);
     }
     else if (streq (name, "OOMScoreAdjust")) {
-        errno = 0;
         char *endptr;
-        long l = strtol (val, &endptr, 10);
+        long l;
+
+        errno = 0;
+        l = strtol (val, &endptr, 10);
         if (errno != 0 || *endptr != '\0')
             return -1;
-        if (prop_add_i32 (prop, name, l) < 0)
-            return -1;
+        sdexec_proplist_add (pl, name, "i", (int)l);
     }
-    else {
-        if (prop_add_string (prop, name, val) < 0)
-            return -1;
-    }
+    else
+        sdexec_proplist_add (pl, name, "s", val);
     return 0;
 }
 
@@ -398,7 +254,8 @@ static json_t *prop_create (json_t *cmd,
                             int stderr_fd,
                             flux_error_t *error)
 {
-    json_t *prop;
+    struct sdexec_proplist *pl;
+    json_t *prop = NULL;
     json_error_t jerror;
     const char *cwd = NULL;
     json_t *cmdline;
@@ -422,43 +279,51 @@ static json_t *prop_create (json_t *cmd,
         errno = EPROTO;
         return NULL;
     }
-    if (!(prop = json_array ())) {
+    if (!(pl = sdexec_proplist_create ())) {
         errprintf (error, "out of memory");
         errno = ENOMEM;
         return NULL;
     }
-    if (prop_add_execstart (prop, "ExecStart", cmdline) < 0
-        || prop_add_string (prop, "WorkingDirectory", cwd) < 0
-        || prop_add_bool (prop, "RemainAfterExit", true) < 0
-        || prop_add_env (prop, "Environment", env) < 0
-        || prop_add_fd (prop, "StandardInputFileDescriptor", stdin_fd) < 0
-        || prop_add_fd (prop, "StandardOutputFileDescriptor", stdout_fd) < 0
-        || prop_add_fd (prop, "StandardErrorFileDescriptor", stderr_fd) < 0) {
-        errprintf (error, "error packing StartTransientUnit properties");
-        goto error;
-    }
+    prop_add_execstart (pl, cmdline);
+    if (cwd)
+        sdexec_proplist_add (pl, "WorkingDirectory", "s", cwd);
+    sdexec_proplist_add (pl, "RemainAfterExit", "b", true);
+    prop_add_env (pl, env);
+    // N.B. this assumes sdexec and sdbus are in the same process (RFC 52)
+    if (stdin_fd >= 0)
+        sdexec_proplist_add (pl,
+                             "StandardInputFileDescriptor",
+                             "h",
+                             stdin_fd);
+    if (stdout_fd >= 0)
+        sdexec_proplist_add (pl,
+                             "StandardOutputFileDescriptor",
+                             "h",
+                             stdout_fd);
+    if (stderr_fd >= 0)
+        sdexec_proplist_add (pl,
+                             "StandardErrorFileDescriptor",
+                             "h",
+                             stderr_fd);
+
     // any subprocess opt prefixed with SDEXEC_PROP_ is taken for a property
     json_object_foreach (opts, key, val) {
         if (strstarts (key, "SDEXEC_PROP_")) {
-            if (prop_add (prop, key + 12, json_string_value (val)) < 0) {
+            if (prop_add (pl, key + 12, json_string_value (val)) < 0) {
                 errprintf (error, "%s: error setting property", key);
-                goto error;
+                errno = EINVAL;
+                goto done;
             }
             if (streq (key + 12, "Type"))
                 type_is_set = true;
         }
     }
-    if (!type_is_set) {
-        if (prop_add_string (prop, "Type", "exec") < 0) {
-            errprintf (error, "error setting property Type=simple");
-            goto error;
-        }
-    }
+    if (!type_is_set)
+        sdexec_proplist_add (pl, "Type", "s", "exec");
+    prop = sdexec_proplist_finish (pl, error);
+done:
+    sdexec_proplist_destroy (pl);
     return prop;
-error:
-    json_decref (prop);
-    errno = EINVAL;
-    return NULL;
 }
 
 flux_future_t *sdexec_start_transient_unit (flux_t *h,
