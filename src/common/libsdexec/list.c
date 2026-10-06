@@ -18,6 +18,7 @@
 
 #include "ccan/ptrint/ptrint.h"
 
+#include "bus.h"
 #include "list.h"
 
 static int parse_unit (json_t *units, size_t index, struct unit_info *info)
@@ -81,8 +82,12 @@ flux_future_t *sdexec_list_units (flux_t *h,
                           topic,
                           rank,
                           0,
-                          "{s:s s:[[] [s]]}",
+                          "{s:s s:s s:s s:s s:s s:[[] [s]]}",
+                          "destination", SDEXEC_DESTINATION,
+                          "path", SDEXEC_MANAGER_PATH,
+                          "interface", SDEXEC_MANAGER_IFACE,
                           "member", "ListUnitsByPatterns",
+                          "signature", "asas",
                           "params", pattern);
 }
 

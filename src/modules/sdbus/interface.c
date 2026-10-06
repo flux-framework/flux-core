@@ -10,9 +10,9 @@
 
 /* interface.c - D-Bus message translation to/from JSON
  *
- * Values are translated generically by message.c (see RFC 52), but
- * method call signatures are not carried in requests, so each
- * (interface, member) that we call from Flux must be listed here.
+ * Message bodies are translated by message.c as described in RFC 52.
+ * Requests carry the method call signature, and replies and signals are
+ * self-describing, so no per-method information is needed here.
  *
  * To list systemd Manager methods and signatures:
  *   busctl --user introspect \
@@ -33,103 +33,35 @@
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/errprintf.h"
 #include "ccan/str/str.h"
-#include "ccan/array_size/array_size.h"
 
 #include "message.h"
 #include "interface.h"
-
-/* Method call signatures, needed to translate JSON requests to D-Bus.
- * Replies and signals are self-describing and need no table.
- */
-struct xtab {
-    const char *member;
-    const char *signature;
-};
-
-/* Manager methods
- */
-static const struct xtab managertab[] = {
-    { "Subscribe",              "" },
-    { "Unsubscribe",            "" },
-    { "ListUnitsByPatterns",    "asas" },
-    { "KillUnit",               "ssi" },
-    { "StopUnit",               "ss" },
-    { "ResetFailedUnit",        "s" },
-    { "StartTransientUnit",     "ssa(sv)a(sa(sv))" },
-    { "GetUnitByInvocationID",  "ay" },
-};
-
-static const struct xtab dbustab[] = {
-    { "AddMatch",               "s" },
-    { "RemoveMatch",            "s" },
-};
-
-static const struct xtab proptab[] = {
-    { "GetAll",                 "s" },
-    { "Get",                    "ss" },
-};
-
-static const struct xtab *xtab_lookup (const char *interface,
-                                       const char *member,
-                                       flux_error_t *error)
-{
-    const struct xtab *tab = NULL;
-    size_t size = 0;
-
-    if (interface) {
-        if (streq (interface, "org.freedesktop.systemd1.Manager")) {
-            tab = managertab;
-            size = ARRAY_SIZE (managertab);
-        }
-        else if (streq (interface, "org.freedesktop.DBus")) {
-            tab = dbustab;
-            size = ARRAY_SIZE (dbustab);
-        }
-        else if (streq (interface, "org.freedesktop.DBus.Properties")) {
-            tab = proptab;
-            size = ARRAY_SIZE (proptab);
-        }
-    }
-    if (!tab) {
-        errprintf (error, "unknown interface %s", interface);
-        return NULL;
-    }
-    if (member) {
-        for (int i = 0; i < size; i++) {
-            if (streq (tab[i].member, member))
-                return &tab[i];
-        }
-    }
-    errprintf (error, "unknown member %s of interface %s", member, interface);
-    return NULL;
-}
 
 sd_bus_message *interface_request_fromjson (sd_bus *bus,
                                             json_t *obj,
                                             flux_error_t *error)
 {
     json_t *params;
-    const char *destination = "org.freedesktop.systemd1";
-    const char *path = "/org/freedesktop/systemd1";
-    const char *interface = "org.freedesktop.systemd1.Manager";
+    const char *destination;
+    const char *path;
+    const char *interface;
     const char *member;
-    const struct xtab *x;
+    const char *signature;
     sd_bus_message *m;
     int e;
 
     if (json_unpack (obj,
-                     "{s?s s?s s?s s:s s:o}",
+                     "{s:s s:s s:s s:s s:s s:o}",
                      "destination", &destination,
                      "path", &path,
                      "interface", &interface,
                      "member", &member,
+                     "signature", &signature,
                      "params", &params) < 0
         || !json_is_array (params)) {
         errprintf (error, "malformed request");
         return NULL;
     }
-    if (!(x = xtab_lookup (interface, member, error)))
-        return NULL;
     if ((e = sd_bus_message_new_method_call (bus,
                                              &m,
                                              destination,
@@ -139,10 +71,10 @@ sd_bus_message *interface_request_fromjson (sd_bus *bus,
         errprintf (error, "error creating sd-bus message: %s", strerror (-e));
         return NULL;
     }
-    if ((e = sdmsg_write (m, x->signature, params)) < 0) {
+    if ((e = sdmsg_write (m, signature, params)) < 0) {
         errprintf (error,
                    "error translating JSON to %s method-call: %s",
-                   x->member,
+                   member,
                    strerror (-e));
         sd_bus_message_unref (m);
         return NULL;
@@ -152,10 +84,14 @@ sd_bus_message *interface_request_fromjson (sd_bus *bus,
 
 json_t *interface_reply_tojson (sd_bus_message *m, flux_error_t *error)
 {
+    const char *signature = sd_bus_message_get_signature (m, true);
     json_t *o;
     int e;
 
-    if (!(o = json_pack ("{s:[]}", "params"))) {
+    if (!signature
+        || !(o = json_pack ("{s:s s:[]}",
+                            "signature", signature,
+                            "params"))) {
         errprintf (error, "error creating output parameter object");
         return NULL;
     }
@@ -175,17 +111,20 @@ json_t *interface_signal_tojson (sd_bus_message *m, flux_error_t *error)
     const char *iface = sd_bus_message_get_interface (m);
     const char *member = sd_bus_message_get_member (m);
     const char *path = sd_bus_message_get_path (m);
+    const char *signature = sd_bus_message_get_signature (m, true);
     json_t *o;
     int e;
 
-    if (!iface || !member || !path) {
-        errprintf (error, "signal is missing interface, member, or path");
+    if (!iface || !member || !path || !signature) {
+        errprintf (error,
+                   "signal is missing interface, member, path, or signature");
         return NULL;
     }
-    if (!(o = json_pack ("{s:s s:s s:s s:[]}",
+    if (!(o = json_pack ("{s:s s:s s:s s:s s:[]}",
                          "path", path,
                          "interface", iface,
                          "member", member,
+                         "signature", signature,
                          "params"))) {
         errprintf (error, "error creating output parameter object");
         return NULL;

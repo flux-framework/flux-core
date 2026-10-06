@@ -16,6 +16,7 @@
 #endif
 #include <flux/core.h>
 
+#include "bus.h"
 #include "stop.h"
 
 flux_future_t *sdexec_stop_unit (flux_t *h,
@@ -31,8 +32,12 @@ flux_future_t *sdexec_stop_unit (flux_t *h,
                           "sdbus.call",
                           rank,
                           0,
-                          "{s:s s:[ss]}",
+                          "{s:s s:s s:s s:s s:s s:[ss]}",
+                          "destination", SDEXEC_DESTINATION,
+                          "path", SDEXEC_MANAGER_PATH,
+                          "interface", SDEXEC_MANAGER_IFACE,
                           "member", "StopUnit",
+                          "signature", "ss",
                           "params", name, mode);
 }
 
@@ -48,8 +53,12 @@ flux_future_t *sdexec_reset_failed_unit (flux_t *h,
                           "sdbus.call",
                           rank,
                           0,
-                          "{s:s s:[s]}",
+                          "{s:s s:s s:s s:s s:s s:[s]}",
+                          "destination", SDEXEC_DESTINATION,
+                          "path", SDEXEC_MANAGER_PATH,
+                          "interface", SDEXEC_MANAGER_IFACE,
                           "member", "ResetFailedUnit",
+                          "signature", "s",
                           "params", name);
 }
 
@@ -67,8 +76,12 @@ flux_future_t *sdexec_kill_unit (flux_t *h,
                           "sdbus.call",
                           rank,
                           0,
-                          "{s:s s:[ssi]}",
+                          "{s:s s:s s:s s:s s:s s:[ssi]}",
+                          "destination", SDEXEC_DESTINATION,
+                          "path", SDEXEC_MANAGER_PATH,
+                          "interface", SDEXEC_MANAGER_IFACE,
                           "member", "KillUnit",
+                          "signature", "ssi",
                           "params", name, who, signum);
 
 }

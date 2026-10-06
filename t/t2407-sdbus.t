@@ -20,6 +20,9 @@ fi
 
 test_under_flux 2 minimal
 
+# sdbus.call request keys addressing the systemd manager (RFC 52)
+MGR='"destination":"org.freedesktop.systemd1","path":"/org/freedesktop/systemd1","interface":"org.freedesktop.systemd1.Manager"'
+
 #
 # N.B. ListUnitsByPatterns response payload is a 'params' array whose first
 # and only item (".params[0]") is an array of units.  The jq(1) expression
@@ -30,7 +33,7 @@ test_under_flux 2 minimal
 
 # Usage: bus_list_units PATTERN
 bus_list_units() {
-    flux python -c "import flux; print(flux.Flux().rpc(\"sdbus.call\",{\"member\":\"ListUnitsByPatterns\",\"params\":[[],[\"$1\"]]}).get_str())"
+    flux python -c "import flux; print(flux.Flux().rpc(\"sdbus.call\",{$MGR,\"member\":\"ListUnitsByPatterns\",\"signature\":\"asas\",\"params\":[[],[\"$1\"]]}).get_str())"
 }
 
 # Usage: bus_list_units_parsed PATTERN FIELDNUM
@@ -58,17 +61,17 @@ bus_wait_for_unit_count() {
 
 # Usage: bus_reset_failed_unit name
 bus_reset_failed_unit() {
-    flux python -c "import flux; print(flux.Flux().rpc(\"sdbus.call\",{\"member\":\"ResetFailedUnit\",\"params\":[\"$1\"]}).get_str())"
+    flux python -c "import flux; print(flux.Flux().rpc(\"sdbus.call\",{$MGR,\"member\":\"ResetFailedUnit\",\"signature\":\"s\",\"params\":[\"$1\"]}).get_str())"
 }
 
 # Usage: bus_stop_unit name
 bus_stop_unit() {
-    flux python -c "import flux; print(flux.Flux().rpc(\"sdbus.call\",{\"member\":\"StopUnit\",\"params\":[\"$1\",\"fail\"]}).get_str())"
+    flux python -c "import flux; print(flux.Flux().rpc(\"sdbus.call\",{$MGR,\"member\":\"StopUnit\",\"signature\":\"ss\",\"params\":[\"$1\",\"fail\"]}).get_str())"
 }
 
 # Usage: bus_kill_unit name signum
 bus_kill_unit() {
-    flux python -c "import flux; print(flux.Flux().rpc(\"sdbus.call\",{\"member\":\"KillUnit\",\"params\":[\"$1\",\"all\",$2]}).get_str())"
+    flux python -c "import flux; print(flux.Flux().rpc(\"sdbus.call\",{$MGR,\"member\":\"KillUnit\",\"signature\":\"ssi\",\"params\":[\"$1\",\"all\",$2]}).get_str())"
 }
 
 # Usage: unit_path name
@@ -81,28 +84,28 @@ unit_path() {
 # Usage: bus_get_prop_all interface name
 bus_get_prop_all () {
     local path=$(unit_path $2) || return 1
-    flux python -c "import flux; print(flux.Flux().rpc(\"sdbus.call\",{\"path\":\"$path\",\"interface\":\"org.freedesktop.DBus.Properties\",\"member\":\"GetAll\",\"params\":[\"$1\"]}).get_str())"
+    flux python -c "import flux; print(flux.Flux().rpc(\"sdbus.call\",{\"destination\":\"org.freedesktop.systemd1\",\"path\":\"$path\",\"interface\":\"org.freedesktop.DBus.Properties\",\"member\":\"GetAll\",\"signature\":\"s\",\"params\":[\"$1\"]}).get_str())"
 }
 
 # Usage: bus_get_prop interface name property
 bus_get_prop () {
     local path=$(unit_path $2) || return 1
-    flux python -c "import flux; print(flux.Flux().rpc(\"sdbus.call\",{\"path\":\"$path\",\"interface\":\"org.freedesktop.DBus.Properties\",\"member\":\"Get\",\"params\":[\"$1\",\"$3\"]}).get_str())"
+    flux python -c "import flux; print(flux.Flux().rpc(\"sdbus.call\",{\"destination\":\"org.freedesktop.systemd1\",\"path\":\"$path\",\"interface\":\"org.freedesktop.DBus.Properties\",\"member\":\"Get\",\"signature\":\"ss\",\"params\":[\"$1\",\"$3\"]}).get_str())"
 }
 
 # Usage: bus_start_simple name description remain cmd arg1
 # where remain=True|False and cmd has exactly one argument
 bus_start_simple() {
     local cmd=$(which $4) || return 1
-    flux python -c "import flux; print(flux.Flux().rpc(\"sdbus.call\",{\"member\":\"StartTransientUnit\",\"params\":[\"$1\",\"fail\",[ [\"Description\",[\"s\",\"$2\"]], [\"RemainAfterExit\",[\"b\",$3]], [\"ExecStart\",[\"a(sasb)\",[[\"$cmd\",[\"$4\",\"$5\"],False]]]] ], []]}).get_str())"
+    flux python -c "import flux; print(flux.Flux().rpc(\"sdbus.call\",{$MGR,\"member\":\"StartTransientUnit\",\"signature\":\"ssa(sv)a(sa(sv))\",\"params\":[\"$1\",\"fail\",[ [\"Description\",[\"s\",\"$2\"]], [\"RemainAfterExit\",[\"b\",$3]], [\"ExecStart\",[\"a(sasb)\",[[\"$cmd\",[\"$4\",\"$5\"],False]]]] ], []]}).get_str())"
 }
 
 bus_call_unknown_member() {
-    flux python -c "import flux; print(flux.Flux().rpc(\"sdbus.call\",{\"member\":\"UnknownMember\",\"params\":[]}).get_str())"
+    flux python -c "import flux; print(flux.Flux().rpc(\"sdbus.call\",{$MGR,\"member\":\"UnknownMember\",\"signature\":\"\",\"params\":[]}).get_str())"
 }
 
 bus_call_unknown_interface() {
-    flux python -c "import flux; print(flux.Flux().rpc(\"sdbus.call\",{\"interface\":\"org.freedesktop.DBus.unknown\",\"member\":\"StopUnit\",\"params\":[\"$1\",\"fail\"]}).get_str())"
+    flux python -c "import flux; print(flux.Flux().rpc(\"sdbus.call\",{\"destination\":\"org.freedesktop.systemd1\",\"path\":\"/org/freedesktop/systemd1\",\"interface\":\"org.freedesktop.DBus.unknown\",\"member\":\"StopUnit\",\"signature\":\"ss\",\"params\":[\"$1\",\"fail\"]}).get_str())"
 }
 
 bus_call_malformed() {
@@ -272,11 +275,11 @@ test_expect_success 'ListUnitsByPatterns does not show transient unit 4' '
 '
 test_expect_success 'calling an unknown member fails' '
 	test_must_fail bus_call_unknown_member 2>unknown_member.err &&
-	grep "unknown member" unknown_member.err
+	grep "UnknownMember" unknown_member.err
 '
 test_expect_success 'calling an unknown interface fails' '
 	test_must_fail bus_call_unknown_interface 2>unknown_interface.err &&
-	grep "unknown interface" unknown_interface.err
+	grep "org.freedesktop.DBus.unknown" unknown_interface.err
 '
 test_expect_success 'malformed sdbus.call request fails' '
 	test_must_fail bus_call_malformed 2>malformed.err &&
@@ -318,7 +321,7 @@ test_expect_success 'create list script' '
 	cat >list.py <<-EOT &&
 	import sys
 	import flux
-	print(flux.Flux().rpc(sys.argv[1] + ".call",{"member":"ListUnitsByPatterns","params":[[],["*"]]}).get_str())
+	print(flux.Flux().rpc(sys.argv[1] + ".call",{"destination":"org.freedesktop.systemd1","path":"/org/freedesktop/systemd1","interface":"org.freedesktop.systemd1.Manager","member":"ListUnitsByPatterns","signature":"asas","params":[[],["*"]]}).get_str())
 	EOT
 	chmod +x list.py
 '

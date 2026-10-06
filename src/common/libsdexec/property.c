@@ -26,10 +26,11 @@
 #include "ccan/str/str.h"
 #include "src/common/libutil/errno_safe.h"
 
+#include "bus.h"
 #include "property.h"
 
-static const char *serv_interface = "org.freedesktop.systemd1.Service";
-static const char *prop_interface = "org.freedesktop.DBus.Properties";
+static const char *serv_interface = SDEXEC_SERVICE_IFACE;
+static const char *prop_interface = SDEXEC_PROPERTIES_IFACE;
 
 flux_future_t *sdexec_property_get_all (flux_t *h,
                                         const char *service,
@@ -48,10 +49,12 @@ flux_future_t *sdexec_property_get_all (flux_t *h,
                              topic,
                              rank,
                              0,
-                             "{s:s s:s s:s s:[s]}",
+                             "{s:s s:s s:s s:s s:s s:[s]}",
+                             "destination", SDEXEC_DESTINATION,
                              "path", path,
                              "interface", prop_interface,
                              "member", "GetAll",
+                             "signature", "s",
                              "params", serv_interface)))
         return NULL;
     return f;
@@ -72,13 +75,15 @@ flux_future_t *sdexec_property_get (flux_t *h,
     }
     snprintf (topic, sizeof (topic), "%s.call", service);
     if (!(f = flux_rpc_pack (h,
-                             "sdbus.call",
+                             topic,
                              rank,
                              0,
-                             "{s:s s:s s:s s:[ss]}",
+                             "{s:s s:s s:s s:s s:s s:[ss]}",
+                             "destination", SDEXEC_DESTINATION,
                              "path", path,
                              "interface", prop_interface,
                              "member", "Get",
+                             "signature", "ss",
                              "params", serv_interface, name)))
         return NULL;
     return f;

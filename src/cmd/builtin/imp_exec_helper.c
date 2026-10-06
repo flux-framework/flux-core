@@ -74,8 +74,12 @@ static char *get_unit_path (flux_t *h, const char *invocation_id)
                              "sdbus.call",
                              FLUX_NODEID_ANY,
                              0,
-                             "{s:s s:[O]}",
+                             "{s:s s:s s:s s:s s:s s:[O]}",
+                             "destination", "org.freedesktop.systemd1",
+                             "path", "/org/freedesktop/systemd1",
+                             "interface", "org.freedesktop.systemd1.Manager",
                              "member", "GetUnitByInvocationID",
+                             "signature", "ay",
                              "params", bytes))
         || flux_rpc_get_unpack (f, "{s:[s]}", "params", &path) < 0)
         log_msg_exit ("GetUnitByInvocationID: %s", future_strerror (f, errno));
@@ -107,10 +111,12 @@ static void options_add_device (json_t *options, flux_t *h)
                              "sdbus.call",
                              FLUX_NODEID_ANY,
                              0,
-                             "{s:s s:s s:s s:[ss]}",
+                             "{s:s s:s s:s s:s s:s s:[ss]}",
+                             "destination", "org.freedesktop.systemd1",
                              "path", unit_path,
                              "interface", prop_interface,
                              "member", "Get",
+                             "signature", "ss",
                              "params", unit_interface, "DevicePolicy"))
         || flux_rpc_get_unpack (f,
                                 "{s:[[ss]]}",
@@ -121,10 +127,12 @@ static void options_add_device (json_t *options, flux_t *h)
                               "sdbus.call",
                               FLUX_NODEID_ANY,
                               0,
-                              "{s:s s:s s:s s:[ss]}",
+                              "{s:s s:s s:s s:s s:s s:[ss]}",
+                              "destination", "org.freedesktop.systemd1",
                               "path", unit_path,
                               "interface", prop_interface,
                               "member", "Get",
+                              "signature", "ss",
                               "params", unit_interface, "DeviceAllow"))
         || flux_rpc_get_unpack (f2,
                                 "{s:[[so]]}",

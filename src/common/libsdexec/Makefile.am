@@ -31,6 +31,7 @@ libsdexec_la_SOURCES = \
 	channel.h \
 	channel.c \
 	unit.h \
+	bus.h \
 	unit.c \
 	parse.h \
 	parse.c

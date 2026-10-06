@@ -28,7 +28,7 @@ test_under_flux 1 minimal --config-path=$(pwd)/config -Slog-stderr-level=1
 
 # Usage: bus_get_manager_prop property
 bus_get_manager_prop() {
-    flux python -c "import flux; print(flux.Flux().rpc(\"sdbus.call\",{\"path\":\"/org/freedesktop/systemd1\",\"interface\":\"org.freedesktop.DBus.Properties\",\"member\":\"Get\",\"params\":[\"org.freedesktop.systemd1.Manager\",\"$1\"]}).get_str())"
+    flux python -c "import flux; print(flux.Flux().rpc(\"sdbus.call\",{\"destination\":\"org.freedesktop.systemd1\",\"path\":\"/org/freedesktop/systemd1\",\"interface\":\"org.freedesktop.DBus.Properties\",\"member\":\"Get\",\"signature\":\"ss\",\"params\":[\"org.freedesktop.systemd1.Manager\",\"$1\"]}).get_str())"
 }
 
 # Usage: bus_reconnect

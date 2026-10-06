@@ -30,6 +30,7 @@
 #include "src/common/libutil/parse_size.h"
 #include "src/common/libutil/strstrip.h"
 
+#include "bus.h"
 #include "parse.h"
 #include "start.h"
 
@@ -496,8 +497,12 @@ flux_future_t *sdexec_start_transient_unit (flux_t *h,
                              "sdbus.call",
                              rank,
                              0,
-                             "{s:s s:[ssO[]]}",
+                             "{s:s s:s s:s s:s s:s s:[ssO[]]}",
+                             "destination", SDEXEC_DESTINATION,
+                             "path", SDEXEC_MANAGER_PATH,
+                             "interface", SDEXEC_MANAGER_IFACE,
                              "member", "StartTransientUnit",
+                             "signature", "ssa(sv)a(sa(sv))",
                              "params", name, mode, prop))) {
         errprintf (error, "error sending StartTransientUnit RPC");
         goto error;

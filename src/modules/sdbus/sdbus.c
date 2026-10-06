@@ -346,7 +346,7 @@ static int handle_call_request (struct sdbus_ctx *ctx,
         return -1;
     }
     if (!(m = interface_request_fromjson (ctx->bus, req, error))) {
-        errno = EINVAL;
+        errno = EPROTO; // RFC 52: a request that cannot be translated
         goto error;
     }
     if ((e = sd_bus_send (NULL, m, &cookie)) < 0) {
