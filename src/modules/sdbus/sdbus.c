@@ -251,7 +251,17 @@ static void sdbus_recv (struct sdbus_ctx *ctx, sd_bus_message *m)
         log_msg_method_reply (ctx->h, m, info);
         if (errnum == 0)
             errnum = EINVAL;
-        if (flux_respond_error (ctx->h, msg, errnum, error->message) < 0)
+        /* RFC 52: the error string is "name: message", or just "name"
+         * if there is no message.
+         */
+        char errstr[512];
+        if (error && error->message && strlen (error->message) > 0)
+            snprintf (errstr, sizeof (errstr), "%s: %s",
+                      error->name, error->message);
+        else
+            snprintf (errstr, sizeof (errstr), "%s",
+                      error && error->name ? error->name : "unknown error");
+        if (flux_respond_error (ctx->h, msg, errnum, errstr) < 0)
             flux_log_error (ctx->h, "error responding to sdbus.call");
         flux_msglist_delete (ctx->requests); // cursor is on completed message
     }
