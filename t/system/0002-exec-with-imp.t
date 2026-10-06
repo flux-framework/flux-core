@@ -74,3 +74,24 @@ test_expect_success HAVE_IMP 'flux exec flux-imp run forwards signals' '
 	test_expect_code 130 run_timeout 30 sudo -u flux ./test_signal.sh INT &&
 	test_expect_code 143 run_timeout 30 sudo -u flux ./test_signal.sh TERM
 '
+# Simulate an instance owner substituting the J a job shell receives.
+# Replace a held job's J in the KVS with one signed by the instance owner,
+# then start the job shell as the job's user and check that it refuses a J
+# not signed by the user it runs as. In production the IMP would first
+# verify the user's genuine J and switch to that user. That step is skipped
+# here by running the in-tree shell directly as the test user.
+test_expect_success 'job shell rejects J not signed by its user' '
+	shell=${SHARNESS_BUILD_DIRECTORY}/src/shell/flux-shell &&
+	id=$(flux submit --urgency=hold true) &&
+	cleanup "flux cancel $id" &&
+	(cd / && sudo -u flux flux run --dry-run --cwd=/ true \
+	    | sudo -u flux flux python -c "import sys
+from flux.security import SecurityContext
+print(SecurityContext().sign_wrap(sys.stdin.read()).decode())") \
+	    >J.owner &&
+	sudo -u flux flux kvs put "$(flux job id --to=kvs $id).J=$(cat J.owner)" &&
+	test_must_fail $shell $(flux job id --to=dec $id) 2>shell.err &&
+	test_debug "cat shell.err" &&
+	grep "J signing userid $(id -u flux) != current $(id -u)" shell.err
+'
+test_done
