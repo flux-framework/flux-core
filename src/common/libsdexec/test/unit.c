@@ -69,11 +69,11 @@ void test_update (void)
 
     if (!(unit = sdexec_unit_create ("foo.service")))
         BAIL_OUT ("could not create unit object for testing");
-    if (!(dict_pid = json_pack ("{s:[si]}", "ExecMainPID", "I", 42)))
+    if (!(dict_pid = json_pack ("{s:[si]}", "ExecMainPID", "u", 42)))
         BAIL_OUT ("could not create property dict with MainExitPid");
     if (!(dict_exit = json_pack ("{s:[si] s:[si]}",
-                                 "ExecMainCode", "I", CLD_EXITED,
-                                 "ExecMainStatus", "I", 0)))
+                                 "ExecMainCode", "i", CLD_EXITED,
+                                 "ExecMainStatus", "i", 0)))
         BAIL_OUT ("could not create property dict with"
                   " ExecMainCode, ExecMainStatus for testing");
 

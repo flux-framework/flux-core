@@ -298,8 +298,9 @@ error:
 
 bool sdexec_unit_update (struct unit *unit, json_t *dict)
 {
-    json_int_t i;
-    json_int_t j;
+    uint32_t pid;
+    int32_t code;
+    int32_t status;
     const char *s;
     int changes = 0;
 
@@ -309,9 +310,9 @@ bool sdexec_unit_update (struct unit *unit, json_t *dict)
     /* The pid is for the forked child and so its availability does not
      * necessarily mean the exec has succeeded.
      */
-    if (sdexec_property_dict_unpack (dict, "ExecMainPID", "I", &i) == 0
+    if (sdexec_property_dict_read (dict, "ExecMainPID", "u", &pid) == 0
         && !unit->exec_main_pid_is_set) {
-        unit->exec_main_pid = i;
+        unit->exec_main_pid = pid;
         unit->exec_main_pid_is_set = true;
         changes++;
     }
@@ -319,23 +320,23 @@ bool sdexec_unit_update (struct unit *unit, json_t *dict)
      * which is a valid status but not CLD_* code.  So don't set either unless
      * the code is valid.  On exec failure, code=1 (CLD_EXITED), status=203.
      */
-    if (sdexec_property_dict_unpack (dict, "ExecMainCode", "I", &i) == 0
-        && sdexec_property_dict_unpack (dict, "ExecMainStatus", "I", &j) == 0
+    if (sdexec_property_dict_read (dict, "ExecMainCode", "i", &code) == 0
+        && sdexec_property_dict_read (dict, "ExecMainStatus", "i", &status) == 0
         && !unit->exec_main_status_is_set
-        && i > 0) {
-        unit->exec_main_code = i;
-        unit->exec_main_status = j;
+        && code > 0) {
+        unit->exec_main_code = code;
+        unit->exec_main_status = status;
         unit->exec_main_status_is_set = true;
         changes++;
     }
-    if (sdexec_property_dict_unpack (dict, "SubState", "s", &s) == 0) {
+    if (sdexec_property_dict_read (dict, "SubState", "s", &s) == 0) {
         sdexec_substate_t substate  = sdexec_strtosubstate (s);
         if (unit->substate != substate) {
             unit->substate = substate;
             changes++;
         }
     }
-    if (sdexec_property_dict_unpack (dict, "ActiveState", "s", &s) == 0) {
+    if (sdexec_property_dict_read (dict, "ActiveState", "s", &s) == 0) {
         sdexec_state_t state = sdexec_strtostate (s);
         if (unit->state != state) {
             unit->state = state;
