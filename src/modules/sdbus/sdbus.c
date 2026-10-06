@@ -285,13 +285,12 @@ static void sdbus_recv (struct sdbus_ctx *ctx, sd_bus_message *m)
          * developing support for new methods, if nothing else.
          */
         log_msg_method_reply (ctx->h, m, info);
-        if ((rep = interface_reply_tojson (m,
-                                           info->interface,
-                                           info->member,
-                                           &error)))
+        if ((rep = interface_reply_tojson (m, &error)))
             rc = flux_respond_pack (ctx->h, msg, "O", rep);
-        else
-            rc = flux_respond_error (ctx->h, msg, EINVAL, error.text);
+        else {
+            // RFC 52: a method return that cannot be translated
+            rc = flux_respond_error (ctx->h, msg, EPROTO, error.text);
+        }
         if (rc < 0)
             flux_log_error (ctx->h, "error responding to sdbus.call");
         json_decref (rep);

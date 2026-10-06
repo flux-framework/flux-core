@@ -41,25 +41,6 @@ void diagmsg (sd_bus_message *m)
 #endif
 }
 
-void msgtype_is (sd_bus_message *m, const char *fmt)
-{
-    char type[65] = "";
-
-    if (m) {
-        (void)sd_bus_message_rewind (m, true);
-        for (int i = 0; i < sizeof (type) - 1; i++) {
-            if (sd_bus_message_peek_type (m, &type[i], NULL) < 1
-                || sd_bus_message_skip (m, &type[i]) < 0)
-                break;
-        }
-        (void)sd_bus_message_rewind (m, true);
-    }
-    bool match = streq (type, fmt);
-    ok (match, "message type has %s signature", fmt);
-    if (!match)
-        diag ("message type %s != %s signature", type, fmt);
-}
-
 void test_typestr (sd_bus *bus)
 {
     const char *s;
@@ -98,472 +79,285 @@ void test_typestr (sd_bus *bus)
     sd_bus_message_unref (m);
 }
 
-/* Check that an object containing all of the basic D-Bus types can be
- * converted from json->dbus->json.  The input and output json objects
- * are compared for equality.
+/* Finalize message 'm' so it can be read.
  */
-void test_basic (sd_bus *bus)
+static void seal (sd_bus_message *m)
 {
-    json_t *o;
-    json_t *o2;
-    int rc;
-    sd_bus_message *m;
+    if (sd_bus_message_seal (m, 42, 0) < 0
+        || sd_bus_message_rewind (m, true) < 0)
+        BAIL_OUT ("could not finalize message");
+}
 
-    if (!(o = json_pack ("[ibiiiiiifsss]",
-                         42,
-                         true,
-                         -30000,
-                         48000,
-                         -100000,
-                         100000,
-                         -10,
-                         10,
-                         3.5,
-                         "string",
-                         "",
-                         "/object/path/string.suffix")))
-        BAIL_OUT ("could not pack json array");
-    diagjson (o);
+/* Convert 'in' (JSON text) to a D-Bus message with signature 'sig',
+ * then back to JSON.  Return true if the message has signature 'sig' and
+ * the result equals 'out' (JSON text), or 'in' if 'out' is NULL.
+ */
+static bool roundtrip_ex (sd_bus *bus,
+                          const char *sig,
+                          const char *in,
+                          const char *out)
+{
+    json_t *o_in = NULL;
+    json_t *o_out = NULL;
+    json_t *o_expect = NULL;
+    json_error_t error;
+    sd_bus_message *m;
+    const char *msig;
+    bool result = false;
+    int e;
+
+    if (!(o_in = json_loads (in, 0, &error))
+        || !(o_expect = json_loads (out ? out : in, 0, &error))
+        || !(o_out = json_array ()))
+        BAIL_OUT ("could not parse test JSON: %s", error.text);
     if (sd_bus_message_new (bus, &m, SD_BUS_MESSAGE_METHOD_CALL) < 0)
         BAIL_OUT ("could not create method call message");
-
-    const char *fmt = "ybnqiuxtdsso";
-    rc = sdmsg_write (m, fmt, o);
-    ok (rc == 0,
-        "sdmsg_write works");
-
-    if (sd_bus_message_seal (m, 42, 0) < 0
-        || sd_bus_message_rewind (m, true) < 0)
-        BAIL_OUT ("could not finalize message");
-
-    msgtype_is (m, fmt);
-
+    if ((e = sdmsg_write (m, sig, o_in)) < 0) {
+        diag ("sdmsg_write %s: %s", sig, strerror (-e));
+        goto done;
+    }
+    seal (m);
     diagmsg (m);
-
-    if (!(o2 = json_array ()))
-        BAIL_OUT ("could not create json array");
-    rc = sdmsg_read (m, fmt, o2);
-    diag ("sdmsg_read returned %d", rc);
-    ok (rc == 1,
-        "sdmsg_read works");
-    diagjson (o2);
-    ok (sd_bus_message_at_end (m, true),
-        "all message contents were read");
-    ok (json_equal (o, o2),
-        "json in/out are the same");
-
-    json_decref (o2);
+    if (!(msig = sd_bus_message_get_signature (m, true))
+        || !streq (msig, sig)) {
+        diag ("message signature %s != %s", msig ? msig : "(null)", sig);
+        goto done;
+    }
+    if ((e = sdmsg_read (m, o_out)) < 0) {
+        diag ("sdmsg_read %s: %s", sig, strerror (-e));
+        goto done;
+    }
+    if (!sd_bus_message_at_end (m, true)) {
+        diag ("message was not completely read");
+        goto done;
+    }
+    if (!json_equal (o_expect, o_out)) {
+        diagjson (o_out);
+        goto done;
+    }
+    result = true;
+done:
     sd_bus_message_unref (m);
-    json_decref (o);
+    json_decref (o_out);
+    json_decref (o_expect);
+    json_decref (o_in);
+    return result;
 }
 
-/* Check that a struct containing string, array-of-string, and boolean "(sasb)"
- * can be converted from json->dbus.  dbus->json is not supported yet so
- * use sd_bus_message accessors to check that dbus content is correct.
- * N.B. An array of (sasb) is required in the StartTransientUnit request.
+static bool roundtrip (sd_bus *bus, const char *sig, const char *in)
+{
+    return roundtrip_ex (bus, sig, in, NULL);
+}
+
+/* Return the error from converting 'in' (JSON text) to a D-Bus message
+ * with signature 'sig', or 0 if it succeeds.
  */
-void test_struct_sasb (sd_bus *bus)
+static int write_error (sd_bus *bus, const char *sig, const char *in)
 {
     json_t *o;
-    const char *fmt = "(sasb)";
+    json_error_t error;
     sd_bus_message *m;
-    const char *s;
-    int b;
+    int e;
 
-    if (!(o = json_pack ("[s[ss]b]", "foo", "a1", "a2", 1)))
-        BAIL_OUT ("could not pack json array for (sasb)");
-    diagjson (o);
-
+    if (!(o = json_loads (in, JSON_DECODE_ANY | JSON_ALLOW_NUL, &error)))
+        BAIL_OUT ("could not parse test JSON: %s", error.text);
     if (sd_bus_message_new (bus, &m, SD_BUS_MESSAGE_METHOD_CALL) < 0)
         BAIL_OUT ("could not create method call message");
-
-    ok (sdmsg_put (m, fmt, o) == 0,
-        "sdmsg_put works with struct (sasb)");
-
-    if (sd_bus_message_seal (m, 42, 0) < 0
-        || sd_bus_message_rewind (m, true) < 0)
-        BAIL_OUT ("could not finalize message");
-
-    diagmsg (m);
-
-    if (sd_bus_message_enter_container (m, 'r', "sasb") <= 0)
-        BAIL_OUT ("could not enter struct container");
-
-    ok (sd_bus_message_read (m, "s", &s) > 0
-        && streq (s, "foo"),
-        "successfully read back first (string) element");
-
-    ok (sd_bus_message_enter_container (m, 'a', "s") > 0
-        && sd_bus_message_read (m, "s", &s) > 0
-        && streq (s, "a1")
-        && sd_bus_message_read (m, "s", &s) > 0
-        && streq (s, "a2")
-        && sd_bus_message_exit_container (m) > 0,
-        "successfully read back second (array) element");
-
-    ok (sd_bus_message_read (m, "b", &b) > 0
-        && b == 1,
-        "successfully read back third (boolean) element");
-
-    if (sd_bus_message_exit_container (m) <= 0)
-        BAIL_OUT ("error exiting struct container");
-
+    e = sdmsg_write (m, sig, o);
     sd_bus_message_unref (m);
     json_decref (o);
+    return e < 0 ? e : 0;
 }
 
-/* Convert three variants (integer, string, float) from json->dbus->json.
- * The input and output json objects are compared for equality.
+/* Build a D-Bus message with a(yy) inside a variant, plus a string on
+ * each side, as sd-bus would deliver it, then convert it to JSON.
  */
-void test_variant (sd_bus *bus)
-{
-    json_t *o;
-    json_t *o2;
-    sd_bus_message *m;
-    int rc;
-
-    if (!(o = json_pack ("[[si][ss][sf]]",
-                         "i", 42,
-                         "s", "fubar",
-                         "d", -1.5)))
-        BAIL_OUT ("could not pack json array");
-    diagjson (o);
-
-    if (sd_bus_message_new (bus, &m, SD_BUS_MESSAGE_METHOD_CALL) < 0)
-        BAIL_OUT ("could not create method call message");
-
-    const char *fmt = "vvv";
-    rc = sdmsg_write (m, fmt, o);
-    ok (rc == 0,
-        "sdmsg_write works with variants");
-
-    if (sd_bus_message_seal (m, 42, 0) < 0
-        || sd_bus_message_rewind (m, true) < 0)
-        BAIL_OUT ("could not finalize message");
-
-    msgtype_is (m, "vvv");
-
-    diagmsg (m);
-
-    if (!(o2 = json_array ()))
-        BAIL_OUT ("could not create json array");
-    rc = sdmsg_read (m, fmt, o2);
-    diag ("sdmsg_read returned %d", rc);
-    ok (rc == 1,
-        "sdmsg_read works");
-    diagjson (o2);
-    ok (sd_bus_message_at_end (m, true),
-        "all message contents were read");
-    ok (json_equal (o, o2),
-        "json in/out are the same");
-
-    json_decref (o2);
-    sd_bus_message_unref (m);
-    json_decref (o);
-}
-
-/* Convert an array-of-string from json->dbus->json.
- * The input and output json objects are compared for equality.
- */
-void test_variant_as (sd_bus *bus)
-{
-    sd_bus_message *m;
-    json_t *in;
-    json_t *out;
-    const char *fmt = "v";
-    int rc;
-
-    if (!(in = json_pack ("[[s[sss]]]", "as", "foo", "bar", "baz")))
-        BAIL_OUT ("could not create json object");
-    if (sd_bus_message_new (bus, &m, SD_BUS_MESSAGE_METHOD_RETURN) < 0)
-        BAIL_OUT ("could not create message");
-    ok (sdmsg_write (m, fmt, in) == 0,
-        "sdmsg_write of variant string array works");
-
-    if (sd_bus_message_seal (m, 42, 0) < 0
-        || sd_bus_message_rewind (m, true) < 0)
-        BAIL_OUT ("could not finalize message");
-    diagmsg (m);
-    msgtype_is (m, fmt);
-
-    if (!(out = json_array ()))
-        BAIL_OUT ("could not create json array");
-
-    rc = sdmsg_read (m, fmt, out);
-    diag ("sdmsg_read returned %d", rc);
-    ok (rc == 1,
-        "sdmsg_read works on message containing string array variant");
-
-    diagjson (out);
-
-    ok (json_equal (in, out),
-        "json in/out are the same");
-
-    json_decref (out);
-    json_decref (in);
-    sd_bus_message_unref (m);
-}
-
-/* Convert an a(ss) variant (e.g. DeviceAllow property) from dbus->json.
- * Verify that each (ss) pair is decoded as a two-element JSON array.
- */
-void test_variant_ass (sd_bus *bus)
-{
-    sd_bus_message *m;
-    json_t *out;
-    const char *fmt = "v";
-    int rc;
-
-    if (sd_bus_message_new (bus, &m, SD_BUS_MESSAGE_METHOD_RETURN) < 0
-        || sd_bus_message_open_container (m, 'v', "a(ss)") < 0
-        || sd_bus_message_open_container (m, 'a', "(ss)") < 0
-        || sd_bus_message_open_container (m, 'r', "ss") < 0
-        || sd_bus_message_append (m, "ss", "/dev/nvidiactl", "rw") < 0
-        || sd_bus_message_close_container (m) < 0
-        || sd_bus_message_open_container (m, 'r', "ss") < 0
-        || sd_bus_message_append (m, "ss", "/dev/nvidia0", "r") < 0
-        || sd_bus_message_close_container (m) < 0
-        || sd_bus_message_close_container (m) < 0
-        || sd_bus_message_close_container (m) < 0
-        || sd_bus_message_seal (m, 42, 0) < 0
-        || sd_bus_message_rewind (m, true) < 0)
-        BAIL_OUT ("could not create a(ss) variant message");
-    diagmsg (m);
-
-    if (!(out = json_array ()))
-        BAIL_OUT ("could not create json array");
-    rc = sdmsg_read (m, fmt, out);
-    diag ("sdmsg_read returned %d", rc);
-    ok (rc == 1,
-        "sdmsg_read works on a(ss) variant");
-    diagjson (out);
-
-    const char *type, *path1, *perms1, *path2, *perms2;
-    ok (json_unpack (out,
-                     "[[s[[ss][ss]]]]",
-                     &type,
-                     &path1, &perms1,
-                     &path2, &perms2) == 0
-        && streq (type, "a(ss)")
-        && streq (path1, "/dev/nvidiactl")
-        && streq (perms1, "rw")
-        && streq (path2, "/dev/nvidia0")
-        && streq (perms2, "r"),
-        "a(ss) variant decoded as expected");
-
-    json_decref (out);
-    sd_bus_message_unref (m);
-}
-
-/* In property dicts (e.g. GetAll) we don't know how to decode all values yet.
- * It seems most sane to decode keys with a JSON null value rather than omit
- * those keys.  Create an sdbus message containing complex variants, then
- * convert dbus->json.  Verify that values that can't be decoded are null.
- */
-void test_variant_unknown (sd_bus *bus)
+void test_read_complex_variant (sd_bus *bus)
 {
     sd_bus_message *m;
     json_t *o;
-    const char *fmt = "svs";
-    uint8_t y[2] = { 99, 100 };
-    int rc;
+    json_t *expect;
 
     if (sd_bus_message_new (bus, &m, SD_BUS_MESSAGE_METHOD_CALL) < 0
         || sd_bus_message_append (m, "s", "eek") < 0
         || sd_bus_message_open_container (m, 'v', "a(yy)") < 0
         || sd_bus_message_open_container (m, 'a', "(yy)") < 0
         || sd_bus_message_open_container (m, 'r', "yy") < 0
-        || sd_bus_message_append (m, "yy", y[0], y[1]) < 0
+        || sd_bus_message_append (m, "yy", 99, 100) < 0
         || sd_bus_message_close_container (m) < 0
         || sd_bus_message_close_container (m) < 0
         || sd_bus_message_close_container (m) < 0
-        || sd_bus_message_append (m, "s", "ook") < 0
-        || sd_bus_message_seal (m, 42, 0) < 0
-        || sd_bus_message_rewind (m, true) < 0)
+        || sd_bus_message_append (m, "s", "ook") < 0)
         BAIL_OUT ("could not create message containing complex variant");
+    seal (m);
     diagmsg (m);
-    msgtype_is (m, fmt);
-    if (!(o = json_array ()))
-        BAIL_OUT ("could not create json array");
-
-    rc = sdmsg_read (m, fmt, o);
-    diag ("sdmsg_read returned %d", rc);
-    ok (rc == 1,
-        "sdmsg_read works on message containing complex variant");
-
+    if (!(o = json_array ())
+        || !(expect = json_loads ("[\"eek\",[\"a(yy)\",[[99,100]]],\"ook\"]",
+                                  0,
+                                  NULL)))
+        BAIL_OUT ("could not create json objects");
+    ok (sdmsg_read (m, o) == 0 && json_equal (o, expect),
+        "sdmsg_read decodes a(yy) variant");
     diagjson (o);
-
-    const char *s1, *s2, *type;
-    ok (json_unpack (o, "[s[sn]s]", &s1, &type, &s2) == 0
-        && streq (s1, "eek")
-        && streq (type, "a(yy)")
-        && streq (s2, "ook"),
-        "complex variant was translated to json null");
-
+    json_decref (expect);
     json_decref (o);
     sd_bus_message_unref (m);
 }
 
-/* StartTransientUnit wants a property array rather than the D-bus std dict.
- * Create one and convert json->dbus.  Then since we don't require the reverse
- * encoding, use sd_bus_message accessors to verify the result.
+void test_basic (sd_bus *bus)
+{
+    ok (roundtrip (bus,
+                   "ybnqiuxtdsgo",
+                   "[42,true,-30000,48000,-100000,100000,-10,10,3.5,"
+                   "\"string\",\"a{sv}\",\"/object/path/string.suffix\"]"),
+        "basic types round trip");
+    ok (roundtrip (bus, "ss", "[\"\",\"\"]"),
+        "empty strings round trip");
+    ok (roundtrip (bus, "", "[]"),
+        "empty body round trips");
+    ok (roundtrip (bus,
+                   "ynqiu",
+                   "[255,32767,65535,2147483647,4294967295]"),
+        "maximum integer values round trip");
+    ok (roundtrip (bus,
+                   "ynqiu",
+                   "[0,-32768,0,-2147483648,0]"),
+        "minimum integer values round trip");
+    ok (roundtrip_ex (bus, "d", "[1]", "[1.0]"),
+        "integer is accepted for d");
+}
+
+void test_containers (sd_bus *bus)
+{
+    ok (roundtrip (bus, "(sasb)", "[[\"foo\",[\"a1\",\"a2\"],true]]"),
+        "struct (sasb) round trips");
+    ok (roundtrip (bus, "ai", "[[1,2,3]]"),
+        "array of int32 round trips");
+    ok (roundtrip (bus, "ay", "[[]]"),
+        "empty array round trips");
+    ok (roundtrip (bus, "aas", "[[[\"a\"],[],[\"b\",\"c\"]]]"),
+        "array of array round trips");
+    ok (roundtrip (bus, "a(ss)",
+                   "[[[\"/dev/nvidiactl\",\"rw\"],[\"/dev/nvidia0\",\"r\"]]]"),
+        "a(ss) round trips");
+    ok (roundtrip (bus, "a{sv}",
+                   "[{\"A\":[\"s\",\"x\"],\"B\":[\"u\",42]}]"),
+        "a{sv} round trips");
+    ok (roundtrip (bus, "a{sa{sv}}",
+                   "[{\"eth0\":{\"mtu\":[\"u\",1500]},\"lo\":{}}]"),
+        "nested dict round trips");
+    ok (roundtrip (bus, "a{ss}", "[{}]"),
+        "empty dict round trips");
+}
+
+void test_variants (sd_bus *bus)
+{
+    ok (roundtrip (bus, "vvv",
+                   "[[\"i\",42],[\"s\",\"fubar\"],[\"d\",-1.5]]"),
+        "basic variants round trip");
+    ok (roundtrip (bus, "v", "[[\"as\",[\"foo\",\"bar\",\"baz\"]]]"),
+        "as variant round trips");
+    ok (roundtrip (bus, "v", "[[\"a(ss)\",[[\"/dev/null\",\"rw\"]]]]"),
+        "a(ss) variant round trips");
+    ok (roundtrip (bus, "v", "[[\"v\",[\"v\",[\"b\",false]]]]"),
+        "nested variants round trip");
+    ok (roundtrip (bus, "av", "[[[\"i\",1],[\"(ss)\",[\"a\",\"b\"]]]]"),
+        "array of variants round trips");
+}
+
+/* Signatures from systemd methods and properties used by Flux.
  */
-void test_property_array (sd_bus *bus)
+void test_systemd (sd_bus *bus)
 {
-    json_t *o;
-    json_error_t error;
-    sd_bus_message *m;
-    const char *fmt = "a(sv)";
-    const char *key;
-    const char *s;
-    const char *s2;
-    int b;
-
-    if (!(o = json_pack_ex (&error,
-                            0,
-                            "["
-                            "[s[ss]]"
-                            "[s[sb]]"
-                            "[s[s[ss]]]"
-                            "[s[s[[s[ss]b]]]]"
-                            "]",
-                            "key1", "s", "val1",
-                            "key2", "b", 1,
-                            "key3", "as", "a1", "a2",
-                            "key4", "a(sasb)", "foo", "a1", "a2", 0)))
-        BAIL_OUT ("error creating properties object: %s", error.text);
-    diagjson (o);
-
-    if (sd_bus_message_new (bus, &m, SD_BUS_MESSAGE_METHOD_CALL) < 0)
-        BAIL_OUT ("could not create message");
-    ok (sdmsg_put (m, fmt, o) == 0,
-        "sdmsg_put of property array works");
-    if (sd_bus_message_seal (m, 42, 0) < 0
-        || sd_bus_message_rewind (m, true) < 0)
-        BAIL_OUT ("could not finalize message");
-    diagmsg (m);
-
-    if (sd_bus_message_enter_container (m, 'a', "(sv)") <= 0)
-        BAIL_OUT ("could not enter property array container");
-
-    ok (sd_bus_message_enter_container (m, 'r', "sv") > 0
-        && sd_bus_message_read (m, "s", &key) > 0
-        && sd_bus_message_enter_container (m, 'v', "s") > 0
-        && sd_bus_message_read (m, "s", &s) > 0
-        && sd_bus_message_exit_container (m) > 0
-        && sd_bus_message_exit_container (m) > 0
-        && streq (key, "key1")
-        && streq (s, "val1"),
-        "successfully read back first property");
-
-    ok (sd_bus_message_enter_container (m, 'r', "sv") > 0
-        && sd_bus_message_read (m, "s", &key) > 0
-        && sd_bus_message_enter_container (m, 'v', "b") > 0
-        && sd_bus_message_read (m, "b", &b) > 0
-        && sd_bus_message_exit_container (m) > 0
-        && sd_bus_message_exit_container (m) > 0
-        && streq (key, "key2")
-        && b == 1,
-        "successfully read back second property");
-
-    ok (sd_bus_message_enter_container (m, 'r', "sv") > 0
-        && sd_bus_message_read (m, "s", &key) > 0
-        && sd_bus_message_enter_container (m, 'v', "as") > 0
-        && sd_bus_message_enter_container (m, 'a', "s") > 0
-        && sd_bus_message_read (m, "s", &s) > 0
-        && sd_bus_message_read (m, "s", &s2) > 0
-        && sd_bus_message_exit_container (m) > 0
-        && sd_bus_message_exit_container (m) > 0
-        && sd_bus_message_exit_container (m) > 0
-        && streq (key, "key3")
-        && streq (s, "a1")
-        && streq (s2, "a2"),
-        "successfully read back third property");
-
-    ok (sd_bus_message_enter_container (m, 'r', "sv") > 0
-        && sd_bus_message_read (m, "s", &key) > 0
-        && streq (key, "key4")
-        && sd_bus_message_enter_container (m, 'v', "a(sasb)") > 0
-        && sd_bus_message_enter_container (m, 'a', "(sasb)") > 0
-        && sd_bus_message_enter_container (m, 'r', "sasb") > 0
-        && sd_bus_message_read (m, "s", &s) > 0
-        && streq (s, "foo")
-        && sd_bus_message_enter_container (m, 'a', "s") > 0
-        && sd_bus_message_read (m, "s", &s) > 0
-        && streq (s, "a1")
-        && sd_bus_message_read (m, "s", &s) > 0
-        && streq (s, "a2")
-        && sd_bus_message_exit_container (m) > 0
-        && sd_bus_message_read (m, "b", &b) > 0
-        && b == 0
-        && sd_bus_message_exit_container (m) > 0
-        && sd_bus_message_exit_container (m) > 0
-        && sd_bus_message_exit_container (m) > 0,
-        "successfully read back fourth property");
-
-    if (sd_bus_message_exit_container (m) <= 0)
-        BAIL_OUT ("error exiting property array container");
-
-    json_decref (o);
-    sd_bus_message_unref (m);
+    ok (roundtrip (bus, "a(sv)",
+                   "[["
+                   "[\"key1\",[\"s\",\"val1\"]],"
+                   "[\"key2\",[\"b\",true]],"
+                   "[\"key3\",[\"as\",[\"a1\",\"a2\"]]],"
+                   "[\"key4\",[\"a(sasb)\",[[\"foo\",[\"a1\",\"a2\"],false]]]],"
+                   "[\"DeviceAllow\",[\"a(ss)\",[[\"/dev/nvidia0\",\"r\"]]]]"
+                   "]]"),
+        "StartTransientUnit property array round trips");
+    ok (roundtrip (bus, "ssa(sv)a(sa(sv))",
+                   "[\"foo.service\",\"fail\","
+                   "[[\"Description\",[\"s\",\"hi\"]]],"
+                   "[[\"aux.service\",[[\"RemainAfterExit\",[\"b\",true]]]]]]"),
+        "StartTransientUnit arguments with aux units round trip");
+    ok (roundtrip (bus, "ssa(sv)a(sa(sv))",
+                   "[\"foo.service\",\"fail\",[],[]]"),
+        "StartTransientUnit arguments without aux units round trip");
+    ok (roundtrip (bus, "a(ssssssouso)",
+                   "[[[\"a.service\",\"desc\",\"loaded\",\"active\","
+                   "\"running\",\"\",\"/org/x/a\",0,\"\",\"/\"]]]"),
+        "ListUnitsByPatterns reply round trips");
+    ok (roundtrip (bus, "sa{sv}as",
+                   "[\"org.freedesktop.systemd1.Service\","
+                   "{\"MainPID\":[\"u\",4242],"
+                   "\"ExecStart\":[\"a(sasbttttuii)\","
+                   "[[\"/bin/sleep\",[\"sleep\",\"60\"],false,"
+                   "1,2,3,4,4242,0,0]]]},"
+                   "[]]"),
+        "PropertiesChanged with ExecStart round trips");
 }
 
-void test_str_pair_array (sd_bus *bus)
+void test_write_errors (sd_bus *bus)
 {
-    json_t *o;
-    json_error_t error;
-    sd_bus_message *m;
-    const char *fmt = "a(sv)";
-    const char *key;
-    const char *path1, *perms1;
-    const char *path2, *perms2;
-
-    /* Encode a property with value type a(ss): array of (path, perms) pairs,
-     * as used by the systemd DeviceAllow property.
-     */
-    if (!(o = json_pack_ex (&error,
-                            0,
-                            "[[s[s[[ss][ss]]]]]",
-                            "DeviceAllow",
-                            "a(ss)",
-                            "/dev/nvidiactl", "rw",
-                            "/dev/nvidia0", "r")))
-        BAIL_OUT ("error creating a(ss) property object: %s", error.text);
-    diagjson (o);
-
-    if (sd_bus_message_new (bus, &m, SD_BUS_MESSAGE_METHOD_CALL) < 0)
-        BAIL_OUT ("could not create message");
-    ok (sdmsg_put (m, fmt, o) == 0,
-        "sdmsg_put of a(ss) property works");
-    if (sd_bus_message_seal (m, 42, 0) < 0
-        || sd_bus_message_rewind (m, true) < 0)
-        BAIL_OUT ("could not finalize message");
-    diagmsg (m);
-
-    ok (sd_bus_message_enter_container (m, 'a', "(sv)") > 0
-        && sd_bus_message_enter_container (m, 'r', "sv") > 0
-        && sd_bus_message_read (m, "s", &key) > 0
-        && streq (key, "DeviceAllow")
-        && sd_bus_message_enter_container (m, 'v', "a(ss)") > 0
-        && sd_bus_message_enter_container (m, 'a', "(ss)") > 0
-        && sd_bus_message_enter_container (m, 'r', "ss") > 0
-        && sd_bus_message_read (m, "ss", &path1, &perms1) > 0
-        && streq (path1, "/dev/nvidiactl")
-        && streq (perms1, "rw")
-        && sd_bus_message_exit_container (m) > 0
-        && sd_bus_message_enter_container (m, 'r', "ss") > 0
-        && sd_bus_message_read (m, "ss", &path2, &perms2) > 0
-        && streq (path2, "/dev/nvidia0")
-        && streq (perms2, "r")
-        && sd_bus_message_exit_container (m) > 0
-        && sd_bus_message_exit_container (m) > 0
-        && sd_bus_message_exit_container (m) > 0
-        && sd_bus_message_exit_container (m) > 0
-        && sd_bus_message_exit_container (m) > 0,
-        "successfully read back a(ss) DeviceAllow property");
-
-    json_decref (o);
-    sd_bus_message_unref (m);
+    ok (write_error (bus, "ss", "[\"one\"]") == -EPROTO,
+        "too few params fails with EPROTO");
+    ok (write_error (bus, "s", "[\"one\",\"two\"]") == -EPROTO,
+        "too many params fails with EPROTO");
+    ok (write_error (bus, "s", "{}") == -EPROTO,
+        "params that are not an array fails with EPROTO");
+    ok (write_error (bus, "i", "[\"42\"]") == -EPROTO,
+        "string for i fails with EPROTO");
+    ok (write_error (bus, "s", "[42]") == -EPROTO,
+        "integer for s fails with EPROTO");
+    ok (write_error (bus, "b", "[1]") == -EPROTO,
+        "integer for b fails with EPROTO");
+    ok (write_error (bus, "i", "[1.5]") == -EPROTO,
+        "real for i fails with EPROTO");
+    ok (write_error (bus, "y", "[256]") == -EPROTO,
+        "out of range y fails with EPROTO");
+    ok (write_error (bus, "q", "[-1]") == -EPROTO,
+        "out of range q fails with EPROTO");
+    ok (write_error (bus, "u", "[4294967296]") == -EPROTO,
+        "out of range u fails with EPROTO");
+    ok (write_error (bus, "s", "[\"a\\u0000b\"]") == -EPROTO,
+        "string with embedded NUL fails with EPROTO");
+    ok (write_error (bus, "(si)", "[[\"x\"]]") == -EPROTO,
+        "short struct fails with EPROTO");
+    ok (write_error (bus, "as", "[\"x\"]") == -EPROTO,
+        "string for as fails with EPROTO");
+    ok (write_error (bus, "a{sv}", "[[]]") == -EPROTO,
+        "array for a{sv} fails with EPROTO");
+    ok (write_error (bus, "a{uv}", "[{}]") == -EPROTO,
+        "dict with non-string key fails with EPROTO");
+    ok (write_error (bus, "v", "[[\"(s\",[\"x\"]]]") == -EPROTO,
+        "variant with bad signature fails with EPROTO");
+    ok (write_error (bus, "v", "[[\"ss\",[\"x\",\"y\"]]]") == -EPROTO,
+        "variant with multiple types fails with EPROTO");
+    ok (write_error (bus, "v", "[[\"s\"]]") == -EPROTO,
+        "variant without value fails with EPROTO");
+    ok (write_error (bus, "a(", "[[]]") == -EPROTO,
+        "bad signature fails with EPROTO");
+    ok (write_error (bus, "()", "[[]]") == -EPROTO,
+        "empty struct signature fails with EPROTO");
+    ok (write_error (bus, "z", "[1]") == -EPROTO,
+        "unknown type code fails with EPROTO");
+    ok (write_error (bus, "g", "[\"(\"]") == -EPROTO,
+        "invalid signature string fails with EPROTO");
+    ok (write_error (bus, "g", "[\"{sv}\"]") == -EPROTO,
+        "bare dict entry in g value fails with EPROTO");
+    ok (write_error (bus, "{sv}", "[{}]") == -EPROTO,
+        "bare dict entry signature fails with EPROTO");
+    ok (write_error (bus, "a{vs}", "[[]]") == -EPROTO,
+        "dict with non-basic key fails with EPROTO");
+    ok (write_error (bus, "a{svs}", "[{}]") == -EPROTO,
+        "dict entry with three members fails with EPROTO");
+    ok (write_error (bus, "v", "[[\"s\",\"x\",\"y\"]]") == -EPROTO,
+        "variant with extra element fails with EPROTO");
+    ok (write_error (bus, "o", "[\"not/a/path\"]") < 0,
+        "invalid object path fails");
 }
 
 int main (int argc, char **argv)
@@ -585,13 +379,11 @@ int main (int argc, char **argv)
 
     test_typestr (bus);
     test_basic (bus);
-    test_struct_sasb (bus);
-    test_variant (bus);
-    test_variant_as (bus);
-    test_variant_ass (bus);
-    test_variant_unknown (bus);
-    test_property_array (bus);
-    test_str_pair_array (bus);
+    test_containers (bus);
+    test_variants (bus);
+    test_systemd (bus);
+    test_read_complex_variant (bus);
+    test_write_errors (bus);
 
     sd_bus_flush (bus);
     sd_bus_close (bus);

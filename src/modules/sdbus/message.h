@@ -16,28 +16,17 @@
 
 const char *sdmsg_typestr (sd_bus_message *m);
 
-/* Put one value (or container) specified by 'fmt' from json object 'o' to
- * current cursor position of message 'm'.  Return 0 on success, or -errno
- * on failure.
+/* Append the values in JSON array 'params' to message 'm', where 'sig'
+ * is the D-Bus signature of the values.  The JSON encoding of each value
+ * is described in RFC 52.  Return 0 on success, or -errno on failure.
  */
-int sdmsg_put (sd_bus_message *m, const char *fmt, json_t *o);
+int sdmsg_write (sd_bus_message *m, const char *sig, json_t *params);
 
-/* Put list of values specified by 'fmt' from json array 'o' to current cursor
- * position of message 'm'.  Return 0 on success or -errno on failure.
+/* Read the remaining values at the current level of message 'm' and
+ * append them to JSON array 'params'.  D-Bus messages are self-describing,
+ * so no signature is needed.  Return 0 on success, or -errno on failure.
  */
-int sdmsg_write (sd_bus_message *m, const char *fmt, json_t *o);
-
-/* Get one value (or container) specified by 'fmt' from message 'm' at the
- * current cursor position and return in a new json object assigned to 'op'.
- * Return 1 on success, or -errno on failure.
- */
-int sdmsg_get (sd_bus_message *m, const char *fmt, json_t **op);
-
-/* Get list of values specified by 'fmt' from message 'm' at the current cursor
- * position and append them to the json array 'o'.
- * Return 1 on success, or -errno on failure.
- */
-int sdmsg_read (sd_bus_message *m, const char *fmt, json_t *o);
+int sdmsg_read (sd_bus_message *m, json_t *params);
 
 #endif /* !_SDBUS_MESSAGE_H */
 

@@ -19,10 +19,7 @@ sd_bus_message *interface_request_fromjson (sd_bus *bus,
                                             json_t *req,
                                             flux_error_t *error);
 
-json_t *interface_reply_tojson (sd_bus_message *m,
-                                const char *interface,
-                                const char *member,
-                                flux_error_t *error);
+json_t *interface_reply_tojson (sd_bus_message *m, flux_error_t *error);
 
 json_t *interface_signal_tojson (sd_bus_message *m, flux_error_t *error);
 
