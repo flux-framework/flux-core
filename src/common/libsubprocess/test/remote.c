@@ -632,9 +632,10 @@ void local_unbuf_multiline_test (flux_t *h)
 }
 
 /* In SIGSTOP test, a 'cat' subprocess is sent SIGSTOP upon starting.
- * If remote SIGSTOP handling works, the sigchld callback is called again
- * with sigchld == STOPPED, which triggers closure of stdin and natural
- * termination of the process, which causes the reactor to exit.
+ * If remote SIGSTOP handling works, the sigchld callback is called
+ * with sigchld == STOPPED, stdin will be closd, and natural
+ * termination of the process occurs, which causes the reactor to
+ * exit.
  */
 
 static void stop_state_cb (flux_subprocess_t *p,
