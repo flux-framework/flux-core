@@ -34,6 +34,13 @@ gc-threshold
    If ``gc-threshold`` is not configured in an instance started another way,
    it may be manually requested with :option:`flux-shutdown --gc`.
 
+transaction-max-ops
+   (optional) Sets the maximum number of transactions that can be
+   performed in a single KVS commit.  This configuration is to prevent
+   a single transaction from taking up too much of the KVS's time
+   (i.e. to prevent a denial-of-service from a large transaction).  By
+   default the maximum is 16384.
+
 
 EXAMPLE
 =======
