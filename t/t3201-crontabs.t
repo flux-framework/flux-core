@@ -1,5 +1,6 @@
 #!/bin/sh
 #
+# ci=asan
 
 test_description='Test rc1 loading of crontab files'
 
