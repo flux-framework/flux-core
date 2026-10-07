@@ -140,6 +140,7 @@ void sigchld_set (flux_subprocess_t *p,
                   flux_subprocess_sigchld_t sigchld);
 
 void sigchld_notify_start (flux_subprocess_t *p);
+void sigchld_notify_stop (flux_subprocess_t *p);
 
 void channel_destroy (void *arg);
 
