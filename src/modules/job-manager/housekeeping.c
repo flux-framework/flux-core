@@ -906,7 +906,9 @@ struct housekeeping *housekeeping_ctx_create (struct job_manager *ctx)
     zlistx_set_destructor (hk->allocations, allocation_destructor);
     if (conf_register_callback (ctx->conf,
                                 &error,
+                                "housekeeping",
                                 housekeeping_parse_config,
+                                NULL,
                                 hk) < 0) {
         flux_log (ctx->h, LOG_ERR, "%s", error.text);
         goto error;

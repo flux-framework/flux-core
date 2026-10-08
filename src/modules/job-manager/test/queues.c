@@ -628,6 +628,175 @@ static void test_restore_unknown_queue_ignored (void)
     queues_destroy (qs);
 }
 
+/* A copy put back with queues_set() must reproduce the table exactly,
+ * including administrative state a reconfigure would have reset, and the
+ * live started bit a --nocheckpoint stop cleared without touching the
+ * sticky one. Restoring fires no change notification.
+ */
+static void test_copy_set (void)
+{
+    struct queues *qs;
+    struct queues *cpy;
+    struct queue *q;
+    flux_error_t error;
+    json_t *config;
+
+    qs = queues_create ();
+    if (!qs)
+        BAIL_OUT ("queues_create failed");
+    queues_set_notify (qs, notify_cb, NULL);
+
+    config = json_pack ("{s:{} s:{}}", "batch", "debug");
+    if (!config)
+        BAIL_OUT ("json_pack failed");
+    ok (queues_configure (qs, config, &error) == 0, "configure batch+debug");
+    json_decref (config);
+
+    q = queues_lookup (qs, "batch", &error);
+    if (!q)
+        BAIL_OUT ("batch lookup failed");
+    ok (queue_disable (q, "maint") == 0, "disable batch");
+    ok (queue_start (q, false) == 0, "start batch");
+    ok (queue_stop (q, "transient", true) == 0, "nocheckpoint stop batch");
+
+    q = queues_lookup (qs, "debug", &error);
+    if (!q)
+        BAIL_OUT ("debug lookup failed");
+    ok (queue_start (q, false) == 0, "start debug");
+
+    ok ((cpy = queues_copy (qs)) != NULL, "queues_copy works");
+
+    /* Reconfigure batch away and back, as a failed reload would, losing
+     * its administrative state.
+     */
+    config = json_pack ("{s:{}}", "debug");
+    if (!config)
+        BAIL_OUT ("json_pack failed");
+    ok (queues_configure (qs, config, &error) == 0, "remove batch");
+    json_decref (config);
+    config = json_pack ("{s:{} s:{}}", "batch", "debug");
+    if (!config)
+        BAIL_OUT ("json_pack failed");
+    ok (queues_configure (qs, config, &error) == 0, "re-add batch");
+    json_decref (config);
+
+    q = queues_lookup (qs, "batch", &error);
+    ok (q != NULL && queue_is_enabled (q) && !queue_is_started (q),
+        "re-added batch has default administrative state");
+
+    notify_reset ();
+    queues_set (qs, &cpy);
+    ok (notify_count == 0, "queues_set fired no notifications");
+    ok (cpy == NULL, "queues_set consumed the copy");
+
+    q = queues_lookup (qs, "batch", &error);
+    ok (q != NULL && !queue_is_enabled (q) && !queue_is_started (q),
+        "batch administrative state restored");
+    is (queue_disable_reason (q), "maint", "batch disable reason restored");
+    is (queue_stop_reason (q), "transient", "batch stop reason restored");
+
+    q = queues_lookup (qs, "debug", &error);
+    ok (q != NULL && queue_is_enabled (q) && queue_is_started (q),
+        "debug administrative state restored");
+    ok (queue_stop_reason (q) == NULL, "debug stop reason still unset");
+
+    /* The restored table must be live, not detached: a mutation on it
+     * still reaches the notify callback registered on 'qs'.
+     */
+    notify_reset ();
+    ok (queue_enable (q) == 0, "enable a restored queue");
+    ok (notify_count == 1, "restored queue still fires notify");
+
+    queues_destroy (qs);
+}
+
+/* A copied vqueue's parent must point into the copy, never back into the
+ * table it was copied from - which would dangle once that table is freed.
+ */
+static void test_copy_set_vqueue_parent (void)
+{
+    struct queues *qs;
+    struct queues *cpy;
+    struct queue *q;
+    flux_error_t error;
+    json_t *config;
+
+    qs = queues_create ();
+    if (!qs)
+        BAIL_OUT ("queues_create failed");
+
+    config = json_pack ("{s:{} s:{s:s}}",
+                        "batch",
+                        "expedite", "parent", "batch");
+    if (!config)
+        BAIL_OUT ("json_pack failed");
+    ok (queues_configure (qs, config, &error) == 0, "configure batch+vqueue");
+    json_decref (config);
+
+    ok ((cpy = queues_copy (qs)) != NULL, "queues_copy works");
+
+    /* Replace the live table with the copy, then free the original. A
+     * parent pointer left aliasing the original would dangle here.
+     */
+    queues_set (qs, &cpy);
+
+    q = queues_lookup (qs, "expedite", &error);
+    ok (q != NULL && queue_is_virtual (q), "copied vqueue is still virtual");
+    ok (queue_parent (q) == queues_lookup (qs, "batch", &error),
+        "copied vqueue parent points into the copy");
+    ok (queue_root (q) == queues_lookup (qs, "batch", &error),
+        "copied vqueue root resolves");
+
+    /* Parent is stopped, so the vqueue is not effectively started. */
+    ok (!queue_is_started_effective (q),
+        "copied vqueue inherits parent started state");
+
+    queues_destroy (qs);
+}
+
+/* A copy taken in anon mode restores a table that reconfiguration has
+ * since switched to named mode, and the other way around.
+ */
+static void test_copy_set_mode_switch (void)
+{
+    struct queues *qs;
+    struct queues *cpy;
+    struct queue *q;
+    flux_error_t error;
+    json_t *config;
+
+    qs = queues_create ();
+    if (!qs)
+        BAIL_OUT ("queues_create failed");
+
+    /* anon -> named -> restore anon */
+    ok ((cpy = queues_copy (qs)) != NULL, "queues_copy works in anon mode");
+    config = json_pack ("{s:{}}", "batch");
+    if (!config)
+        BAIL_OUT ("json_pack failed");
+    ok (queues_configure (qs, config, &error) == 0, "switch to named mode");
+    json_decref (config);
+    queues_set (qs, &cpy);
+    ok (!queues_have_named (qs), "restored table is in anon mode");
+    q = queues_lookup (qs, NULL, &error);
+    ok (q != NULL && queue_is_started (q), "restored anon queue is started");
+
+    /* named -> anon -> restore named */
+    config = json_pack ("{s:{}}", "batch");
+    if (!config)
+        BAIL_OUT ("json_pack failed");
+    ok (queues_configure (qs, config, &error) == 0, "switch to named mode");
+    json_decref (config);
+    ok ((cpy = queues_copy (qs)) != NULL, "queues_copy works in named mode");
+    ok (queues_configure (qs, NULL, &error) == 0, "switch to anon mode");
+    queues_set (qs, &cpy);
+    ok (queues_have_named (qs), "restored table is in named mode");
+    ok (queues_lookup (qs, "batch", &error) != NULL,
+        "restored named queue exists");
+
+    queues_destroy (qs);
+}
+
 static void test_notify_configure (void)
 {
     struct queues *qs;
@@ -2977,6 +3146,9 @@ int main (int argc, char *argv[])
     test_save_restore_v1 ();
     test_restore_v0 ();
     test_restore_unknown_queue_ignored ();
+    test_copy_set ();
+    test_copy_set_vqueue_parent ();
+    test_copy_set_mode_switch ();
     test_notify_configure ();
     test_notify_restore ();
     test_requires_accessor ();

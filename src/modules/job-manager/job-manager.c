@@ -279,7 +279,9 @@ int mod_main (flux_t *h, int argc, char **argv)
     }
     if (conf_register_callback (ctx.conf,
                                 &error,
+                                "private-mode",
                                 private_mode_update,
+                                NULL,
                                 &ctx) < 0) {
         flux_log (h, LOG_ERR, "error parsing access config: %s", error.text);
         goto done;

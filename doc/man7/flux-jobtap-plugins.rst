@@ -280,7 +280,9 @@ callback is invoked when:
 
   - The plugin is first loaded. Failure causes plugin load to fail.
 
-  - The configuration changes. Failure causes ``flux config reload`` to fail.
+  - The configuration changes. Failure causes ``flux config reload`` to
+    fail. The proposed configuration is not committed, and every plugin is
+    re-invoked with the configuration still in effect.
 
 Return 0 on success, -1 on failure. On failure, optionally set a human
 readable error in the ``errstr`` output argument. Use
@@ -314,7 +316,9 @@ The callback is invoked when:
 
   - The Flux configuration changes. Note that the queue configuration itself
     may be unchanged, so the delivered object is often identical to the
-    previous one. Failure causes ``flux config reload`` to fail.
+    previous one. Failure causes ``flux config reload`` to fail. The queue
+    table is then restored, and every plugin is re-invoked with the restored
+    queue configuration.
 
 Return 0 on success, -1 on failure. On failure, optionally set a human
 readable error with ``flux_jobtap_error()``.

@@ -608,7 +608,9 @@ struct purge *purge_create (struct job_manager *ctx)
 
     if (conf_register_callback (ctx->conf,
                                 &error,
+                                "purge",
                                 purge_parse_config,
+                                NULL,
                                 purge) < 0) {
         flux_log (ctx->h,
                   LOG_ERR,
