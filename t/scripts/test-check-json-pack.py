@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 # Self-test for scripts/check-json-pack.
 #
-# Generates stub jansson + wrapper headers and good/bad fixture sources in a
-# temporary directory, builds a compile_commands.json for them, runs the
-# checker, and asserts it flags exactly the intended mismatches.  Requires
-# only clang (no flux build).
+# Generates stub jansson + wrapper + libsdexec headers and good/bad fixture
+# sources in a temporary directory, builds a compile_commands.json for them,
+# runs the checker, and asserts it flags exactly the intended mismatches,
+# for both the jansson pack/unpack family and the libsdexec D-Bus value
+# readers.  Requires only clang (no flux build).
 #
 # The checker is located relative to this file (../../scripts/check-json-pack
 # in the source tree).  If the environment variable CHECK_JSON_PACK_CLANG is
@@ -41,6 +42,28 @@ WRAP_H = """\
 #include "jansson.h"
 int myx_pack (void *h, const char *fmt, ...);
 int myx_unpack (void *h, const char *fmt, ...);
+#endif
+"""
+
+SDEXEC_H = """\
+#ifndef SDEXEC_H
+#define SDEXEC_H
+#include "jansson.h"
+typedef struct flux_future flux_future_t;
+struct sdexec_proplist;
+int sdexec_value_read (json_t *val, const char *type, ...);
+int sdexec_variant_read (json_t *val, const char *type, ...);
+int sdexec_params_read (json_t *params, const char *sig, ...);
+int sdexec_reply_read (flux_future_t *f, const char *sig, ...);
+int sdexec_property_get_read (flux_future_t *f, const char *type, ...);
+int sdexec_property_dict_read (json_t *dict,
+                               const char *name,
+                               const char *type,
+                               ...);
+void sdexec_proplist_add (struct sdexec_proplist *pl,
+                          const char *name,
+                          const char *type,
+                          ...);
 #endif
 """
 
@@ -112,6 +135,86 @@ void bad (void *h, json_t *root)
 }
 """
 
+# Every call here must type-check cleanly per the RFC 52 D-Bus rules.
+GOOD_DBUS_C = """\
+#include <stdint.h>
+#include "sdexec.h"
+void good_dbus (flux_future_t *f, json_t *o, struct sdexec_proplist *pl,
+                const char *dyntype)
+{
+    uint8_t y = 0;
+    int b = 0, h = 0;
+    int16_t n = 0;
+    uint16_t q = 0;
+    int32_t i = 0;
+    uint32_t u = 0;
+    int64_t x = 0;
+    uint64_t t = 0;
+    double d = 0;
+    const char *s = 0, *op = 0, *g = 0;
+    json_t *a = 0;
+    json_t *dict = 0;
+
+    sdexec_value_read (o, "y", &y);
+    sdexec_value_read (o, "(sasb)", &s, &a, &b);
+    sdexec_params_read (o, "ybnqiuxtdsogh",
+                        &y, &b, &n, &q, &i, &u, &x, &t, &d, &s, &op, &g, &h);
+    sdexec_params_read (o, "a{sv}", &dict);
+    sdexec_params_read (o, "");
+    sdexec_params_read (o, "v", "t", &t);
+    sdexec_params_read (o, "sv", &s, "v", "s", &s);  /* nested variant */
+    sdexec_params_read (o, "v", dyntype, &i, &s);    /* unchecked after */
+    sdexec_variant_read (o, "u", &u);
+    sdexec_reply_read (f, "o", &op);
+    sdexec_property_get_read (f, "t", &t);
+    sdexec_property_dict_read (o, "MainPID", "u", &u);
+
+    sdexec_proplist_add (pl, "U", "u", u);
+    sdexec_proplist_add (pl, "X", "x", x);
+    sdexec_proplist_add (pl, "T", "t", (uint64_t)0);
+    sdexec_proplist_add (pl, "D", "d", d);
+    sdexec_proplist_add (pl, "S", "s", s);
+    sdexec_proplist_add (pl, "H", "h", h);
+}
+"""
+
+# Each call here has exactly one intended defect.  The %s is replaced with
+# an over-length (>255 byte) but otherwise valid type string.
+BAD_DBUS_C = """\
+#include <stdint.h>
+#include "sdexec.h"
+void bad_dbus (flux_future_t *f, json_t *o, struct sdexec_proplist *pl)
+{
+    int i32 = 0;
+    long l = 0;
+    int64_t x64 = 0;
+    uint64_t t64 = 0;
+    float fl = 0;
+    const char *s = 0;
+    json_t *a = 0;
+
+    sdexec_params_read (o, "t", &i32);       /* 1 int* -> t             */
+    sdexec_params_read (o, "i", &x64);       /* 2 int64* -> i           */
+    sdexec_params_read (o, "x", &l);         /* 3 long* -> x (platform) */
+    sdexec_params_read (o, "as", a);         /* 4 json_t* -> json_t**   */
+    sdexec_params_read (o, "d", &fl);        /* 5 float* -> double*     */
+    sdexec_params_read (o, "(ss)", &s);      /* 6 too few arguments     */
+    sdexec_params_read (o, "s", &s, &s);     /* 7 too many arguments    */
+    sdexec_params_read (o, "z", &i32);       /* 8 malformed type (warn) */
+    sdexec_params_read (o, "a{vs}", &a);     /* 8b non-basic dict key (warn) */
+    sdexec_params_read (o, "{sv}", &a);      /* 8c bare dict entry (warn)   */
+    sdexec_params_read (o, "%s");            /* 8d over-length type (warn)  */
+    sdexec_params_read (o, "v", "t", &i32);  /* 9 int* -> variant t     */
+    sdexec_value_read (o, "ss", &s, &s);     /* 10 two types (warn)     */
+    sdexec_reply_read (f, "u", &t64);        /* 11 uint64* -> u         */
+
+    sdexec_proplist_add (pl, "X", "x", i32); /* 12 int -> x (needs 64)  */
+    sdexec_proplist_add (pl, "S", "s", i32); /* 13 int -> s             */
+    sdexec_proplist_add (pl, "A", "as", a);  /* 14 not basic (warn)     */
+    sdexec_proplist_add (pl, "D", "d", 1);   /* 15 int constant -> d    */
+}
+"""
+
 
 def main():
     if not os.path.exists(CHECKER):
@@ -120,22 +223,21 @@ def main():
         for name, text in (
             ("jansson.h", JANSSON_H),
             ("wrap.h", WRAP_H),
+            ("sdexec.h", SDEXEC_H),
             ("good.c", GOOD_C),
             ("bad.c", BAD_C),
+            ("good_dbus.c", GOOD_DBUS_C),
+            ("bad_dbus.c", BAD_DBUS_C % ("y" * 256)),
         ):
             with open(os.path.join(d, name), "w") as f:
                 f.write(text)
         cc = [
             {
                 "directory": d,
-                "file": "good.c",
-                "arguments": ["cc", "-c", "good.c", "-I."],
-            },
-            {
-                "directory": d,
-                "file": "bad.c",
-                "arguments": ["cc", "-c", "bad.c", "-I."],
-            },
+                "file": src,
+                "arguments": ["cc", "-c", src, "-I."],
+            }
+            for src in ("good.c", "bad.c", "good_dbus.c", "bad_dbus.c")
         ]
         ccpath = os.path.join(d, "compile_commands.json")
         with open(ccpath, "w") as f:
@@ -159,13 +261,18 @@ def main():
         print(out, end="")
         print(err, file=sys.stderr, end="")
 
-        good_lines = [ln for ln in out.splitlines() if ln.startswith("good.c")]
+        good_lines = [
+            ln
+            for ln in out.splitlines()
+            if ln.startswith("good.c") or ln.startswith("good_dbus.c")
+        ]
         bad_lines = [ln for ln in out.splitlines() if ln.startswith("bad.c")]
+        bad_dbus_lines = [ln for ln in out.splitlines() if ln.startswith("bad_dbus.c")]
 
         failures = []
         if good_lines:
             failures.append(
-                "good.c produced findings (should be clean):\n  "
+                "good fixtures produced findings (should be clean):\n  "
                 + "\n  ".join(good_lines)
             )
 
@@ -174,6 +281,14 @@ def main():
         if len(bad_lines) != expected_bad:
             failures.append(
                 "bad.c: expected %d findings, got %d" % (expected_bad, len(bad_lines))
+            )
+
+        # bad_dbus.c has 18 intentionally defective call sites
+        expected_bad_dbus = 18
+        if len(bad_dbus_lines) != expected_bad_dbus:
+            failures.append(
+                "bad_dbus.c: expected %d findings, got %d"
+                % (expected_bad_dbus, len(bad_dbus_lines))
             )
 
         # spot-check a few signature messages
@@ -185,6 +300,14 @@ def main():
             "implies 2 argument(s) but 3 passed",
             "myx_pack",
             "myx_unpack",
+            "expects uint64_t *",
+            "expects json_t **",
+            "type '(ss)' implies 2 argument(s) but 1 passed",
+            "malformed type string",
+            "expects a single complete type",
+            "is not a basic D-Bus type",
+            "255 byte limit",
+            "sdexec_proplist_add() arg 1 for 'x'",
         ]
         for m in must_contain:
             if m not in out:
@@ -196,7 +319,8 @@ def main():
                 print(" - " + f, file=sys.stderr)
             sys.exit(1)
         print(
-            "\nPASS: good.c clean, bad.c flagged %d sites" % len(bad_lines),
+            "\nPASS: good fixtures clean, bad.c flagged %d sites, "
+            "bad_dbus.c flagged %d sites" % (len(bad_lines), len(bad_dbus_lines)),
             file=sys.stderr,
         )
 
