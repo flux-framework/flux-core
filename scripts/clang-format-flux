@@ -22,18 +22,32 @@ limit.  Logical operators (&& ||) are never touched, and overflowing
 joins are left peeled -- both match existing flux source.
 
 Usage:
-    clang-format-flux [--check] FILE...
+    clang-format-flux [--check] [--base REF | --staged] FILE...
 
 --check prints a unified diff of what would change and exits non-zero if
 any file is not already formatted; without it, files are edited in place.
+
+--base REF formats only lines changed relative to git REF; REF may be
+"auto" for the merge-base of HEAD with upstream master.  --staged formats
+only staged changes.  With either, FILE may be omitted to mean every C
+file with changes.  This is
+the intended mode for day to day use: new and modified code is held to
+RFC 7 while untouched (often older, non-conforming) code is left alone.
 """
 import difflib
 import fnmatch
+import os
 import re
 import subprocess
 import sys
 
 COLUMN_LIMIT = 80
+
+# Always use the project style, even for files outside the source tree
+# (otherwise clang-format silently falls back to its LLVM default).
+STYLE_FILE = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".clang-format"
+)
 
 # Vendored or copied code that is maintained upstream, not to flux style.
 # Kept in sync with the exclusion lists in Makefile.am and .typos.toml.
@@ -52,6 +66,7 @@ EXCLUDE = [
     "*src/bindings/python/_flux/*",
     # individually copied files (no directory of their own)
     "*src/common/libutil/sha1.c",
+    "*src/common/libutil/sha256.[ch]",
     "*src/common/libutil/test/sha1.c",
     "*src/common/libutil/test/blobref.c",
     "*src/common/libutil/test/levenshtein.c",
@@ -72,16 +87,79 @@ _OP_LINE = re.compile(
     r"(?P<op><=|>=|==|!=|<|>)\s+"
     r"(?P<operand>[A-Za-z_][A-Za-z0-9_]*|-?[0-9]+)"
     r"(?P<close>\)*)"
-    r"(?P<tail>\s*[;,])?\s*$"
+    r"(?P<tail>\s*(?:[;,]|\{))?\s*$"
 )
 
 
-def reattach(text):
-    """Reattach peeled comparison operators to the preceding line."""
-    lines = text.split("\n")
+def split_call(line):
+    """Split a single-line call ending at end of line one-arg-per-line.
+
+    "    if (foo (a, b (c, d), e)" becomes
+    ["    if (foo (a,", "             b (c, d),", "             e)"]
+    (continuation lines aligned after the call's open paren), or None if
+    line doesn't end in a call with two or more top-level arguments.
+    """
+    if not line.endswith(")"):
+        return None
+    # find the open paren matching the final ')', skipping literals
+    depth = 0
+    stack = []
+    commas = {}
+    i = 0
+    quote = None
+    while i < len(line):
+        ch = line[i]
+        if quote:
+            if ch == "\\":
+                i += 1
+            elif ch == quote:
+                quote = None
+        elif ch in "\"'":
+            quote = ch
+        elif ch in "([{":
+            stack.append(i)
+            commas[i] = []
+        elif ch in ")]}":
+            if not stack:
+                return None
+            open_pos = stack.pop()
+            if i == len(line) - 1:
+                break
+        elif ch == "," and stack:
+            commas[stack[-1]].append(i)
+        i += 1
+    else:
+        return None
+    if quote or line[open_pos] != "(" or not commas.get(open_pos):
+        return None
+    if open_pos == 0 or not re.match(r"[A-Za-z0-9_]\s", line[open_pos - 2 :]):
+        return None  # not "name (" -- e.g. a cast or grouping paren
+    pad = " " * (open_pos + 1)
     out = []
-    for line in lines:
-        m = _OP_LINE.match(line)
+    start = 0
+    for c in commas[open_pos]:
+        out.append(line[start : c + 1].rstrip())
+        start = c + 1
+    out.append(line[start:].strip())
+    return [out[0]] + [pad + a.strip() for a in out[1:]]
+
+
+def reattach(text, original=None):
+    """Reattach peeled comparison operators to the preceding line.
+
+    If original is given, only lines that clang-format introduced (i.e. not
+    present unchanged in original) are candidates, so hand-written code
+    outside the reformatted region is never touched.
+    """
+    lines = text.split("\n")
+    fresh = set(range(len(lines)))
+    if original is not None:
+        sm = difflib.SequenceMatcher(None, original.split("\n"), lines, autojunk=False)
+        for blk in sm.get_matching_blocks():
+            fresh -= set(range(blk.b, blk.b + blk.size))
+    out = []
+    for i, line in enumerate(lines):
+        m = _OP_LINE.match(line) if i in fresh else None
         if m and out and out[-1].rstrip().endswith(")"):
             prev = out[-1].rstrip()
             tail = m.group("tail") or ""
@@ -95,30 +173,129 @@ def reattach(text):
             if len(joined) <= COLUMN_LIMIT:
                 out[-1] = joined
                 continue
+            # Too long to join: flux style puts the call's arguments one
+            # per line (RFC 7 section 9) with the comparison attached.
+            split = split_call(prev)
+            if split:
+                split[-1] = "{} {} {}{}{}".format(
+                    split[-1],
+                    m.group("op"),
+                    m.group("operand"),
+                    m.group("close"),
+                    tail,
+                )
+                if all(len(x) <= COLUMN_LIMIT for x in split):
+                    out[-1:] = split
+                    continue
         out.append(line)
     return "\n".join(out)
 
 
-def format_text(path, text):
-    """Return clang-format output for text, with the reattach fixup."""
+def resolve_base(base):
+    """Resolve "auto" to the merge-base of HEAD with upstream master."""
+    if base != "auto":
+        return base
+    for ref in ("upstream/master", "origin/master", "master"):
+        r = subprocess.run(
+            ["git", "merge-base", "HEAD", ref], capture_output=True, text=True
+        )
+        if r.returncode == 0:
+            return r.stdout.strip()
+    sys.exit("clang-format-flux: cannot determine merge-base, use --base REF")
+
+
+def changed_files(base):
+    """C sources changed relative to base (plus untracked ones)."""
+    rev = [base] if base != "--cached" else ["--cached"]
+    out = subprocess.run(
+        ["git", "diff", "--name-only", "--diff-filter=d", *rev],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.split()
+    if base != "--cached":
+        out += subprocess.run(
+            ["git", "ls-files", "--others", "--exclude-standard"],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.split()
+    return sorted(set(f for f in out if f.endswith((".c", ".h"))))
+
+
+def changed_ranges(path, base):
+    """Return [(first, last), ...] lines of path changed relative to git base.
+
+    base is a commit-ish, or "--cached" for staged changes.  New (untracked)
+    files are treated as entirely changed.
+    """
+    rev = [base] if base != "--cached" else ["--cached"]
     r = subprocess.run(
-        ["clang-format", "--assume-filename=" + path],
+        ["git", "diff", "-U0", "--no-color", *rev, "--", path],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    tracked = subprocess.run(
+        ["git", "ls-files", "--error-unmatch", path], capture_output=True
+    )
+    if tracked.returncode != 0:
+        return None  # whole file
+    ranges = []
+    for m in re.finditer(r"^@@ -\S+ \+(\d+)(?:,(\d+))? @@", r.stdout, re.M):
+        start, count = int(m.group(1)), int(m.group(2) or 1)
+        if count > 0:
+            ranges.append((start, start + count - 1))
+    return ranges
+
+
+def format_text(path, text, ranges=None):
+    """Return clang-format output for text, with the reattach fixup.
+
+    If ranges is a list, only those line ranges are reformatted.
+    """
+    cmd = ["clang-format", "--style=file:" + STYLE_FILE, "--assume-filename=" + path]
+    if ranges is not None:
+        if not ranges:
+            return text
+        cmd += ["--lines={}:{}".format(a, b) for a, b in ranges]
+    r = subprocess.run(
+        cmd,
         input=text,
         capture_output=True,
         text=True,
         check=True,
     )
-    return reattach(r.stdout)
+    return reattach(r.stdout, text if ranges is not None else None)
 
 
 def main():
     args = sys.argv[1:]
     check = False
-    if args and args[0] == "--check":
-        check = True
-        args = args[1:]
+    base = None
+    while args and args[0].startswith("--"):
+        if args[0] == "--check":
+            check = True
+            args = args[1:]
+        elif args[0] == "--base" and len(args) > 1:
+            base = args[1]
+            args = args[2:]
+        elif args[0] == "--staged":
+            base = "--cached"
+            args = args[1:]
+        else:
+            break
+    if base:
+        base = resolve_base(base)
+        if not args:
+            args = changed_files(base)
+            if not args:
+                return 0
     if not args:
-        print("usage: clang-format-flux [--check] FILE...", file=sys.stderr)
+        print(
+            "usage: clang-format-flux [--check] [--base REF | --staged] FILE...",
+            file=sys.stderr,
+        )
         return 2
 
     rc = 0
@@ -127,7 +304,8 @@ def main():
             continue
         with open(path) as f:
             original = f.read()
-        formatted = format_text(path, original)
+        ranges = changed_ranges(path, base) if base else None
+        formatted = format_text(path, original, ranges)
         if check:
             if formatted != original:
                 rc = 1
