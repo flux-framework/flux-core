@@ -31,244 +31,76 @@ exponential backoff (minimum 2 seconds, maximum 60 seconds).  Existing
 subscribers are notified of the disconnect via ``EAGAIN``.  When the connection
 is restored, queued requests are drained.
 
-Message Translation
-===================
+Protocol
+========
 
-Flux RPC payloads in JSON are translated to and from D-Bus messages.
-D-Bus type signatures follow the `D-Bus specification
-<https://dbus.freedesktop.org/doc/dbus-specification.html>`_.
-The supported (interface, member) tuples and their type signatures
-are enumerated in ``interface.c``.  Low-level type encoding and decoding is
-in ``message.c``.  Both files should be amended when new D-Bus methods need
-to be supported.
+The ``sdbus.call`` and ``sdbus.subscribe`` RPCs, and the JSON encoding of
+D-Bus message bodies they carry, are defined in :rfc:`52`.  Requests carry
+the full D-Bus address and type signature of each method call, and responses
+carry the signature of each reply or signal, so sdbus needs no knowledge of
+the methods being called.  ``message.c`` translates any D-Bus type, walking
+the type signature to convert JSON to D-Bus, and walking the message itself
+to convert D-Bus to JSON.
 
 Because sdbus operates at a low level, it handles method-reply/method-error
 matching itself rather than delegating to the higher-level libsystemd helpers
 that would normally do this.
 
-The following table shows how supported D-Bus types map to JSON.  All integer
-types map to JSON integers regardless of signedness or width.  Object paths
-are decoded from D-Bus hex-escape encoding to plain strings.  Variants are
-represented as a two-element JSON array of ``[type_signature, value]``, and
-property dictionaries (``a{sv}``) become JSON objects whose values are
-variant arrays.
+Using sdbus with systemd
+========================
 
-.. list-table::
-   :header-rows: 1
-   :widths: 25 10 65
+:rfc:`52` is not specific to systemd.  The following notes apply when the
+peer is the systemd manager.
 
-   * - D-Bus type
-     - Signature
-     - JSON representation
-   * - byte
-     - y
-     - integer
-   * - boolean
-     - b
-     - true / false
-   * - int16, int32, int64
-     - n, i, x
-     - integer
-   * - uint16, uint32, uint64
-     - q, u, t
-     - integer
-   * - double
-     - d
-     - number
-   * - string
-     - s
-     - string
-   * - object path
-     - o
-     - string (decoded via ``sd_bus_path_decode``; systemd-specific)
-   * - signature
-     - g
-     - string
-   * - unix fd
-     - h
-     - integer
-   * - variant
-     - v
-     - ``["type", value]``, e.g. ``["s", "active"]``;
-       ``a(ss)`` variants are also supported
-   * - array of basic type
-     - aX
-     - JSON array, e.g. ``[1, 2, 3]`` for ``ai``
-   * - array of string pairs
-     - a(ss)
-     - JSON array of two-element string arrays,
-       e.g. ``[["/dev/nvidiactl", "rw"], ["/dev/nvidia0", "rw"]]``
-       for ``DeviceAllow`` (device specifier, permissions)
-   * - property dictionary
-     - a{sv}
-     - object, e.g. ``{"ActiveState": ["s", "active"]}``
+Addressing
+   Manager methods such as StartTransientUnit use destination
+   org.freedesktop.systemd1, path /org/freedesktop/systemd1, and
+   interface org.freedesktop.systemd1.Manager.  Unit properties are read
+   with the Get and GetAll methods of interface
+   org.freedesktop.DBus.Properties on the unit's object path, naming a
+   unit interface such as org.freedesktop.systemd1.Service as the first
+   argument.  libsdexec defines these names in ``bus.h``.
 
-The type translation covers the current systemd interface but not all D-Bus
-types.  Complex variants with unknown content are decoded as JSON null rather
-than failing explicitly.  Until a complete translation engine is implemented,
-new D-Bus methods requiring unsupported types must be handled by manually
-extending ``message.c`` and registering the new signature in ``interface.c``.
+Unit object paths
+   Each unit has an object path under /org/freedesktop/systemd1/unit/
+   derived from its name, as described in :ref:`libsdexec_object_paths`.
+   sdbus carries object paths verbatim, so callers that start from a unit
+   name must encode it, and callers that receive a unit path must decode it.
 
-.. list-table::
-   :header-rows: 1
-   :widths: 50 10 10
+Signals
+   systemd emits unit signals such as PropertiesChanged only to clients
+   that have called the manager's Subscribe method.  sdbus calls
+   Subscribe, then AddMatch with ``type=signal``, each time it
+   connects, so clients need only send ``sdbus.subscribe``.
 
-   * - D-Bus type
-     - Read
-     - Write
-   * - Basic types (y, b, n, q, i, u, x, t, h, d, s, g, o)
-     - yes
-     - yes
-   * - Variant (v) with basic or simple array content, or a(ss) content
-     - yes
-     - yes
-   * - Variant (v) with other complex content
-     - null
-     - yes
-   * - Array of basic type (aX)
-     - yes
-     - yes
-   * - Property dictionary (a{sv})
-     - yes
-     - no
-   * - a(sv), a(sasb)
-     - no
-     - yes
-   * - Arbitrary struct (...)
-     - no
-     - no
-   * - Other dict and array signatures
-     - no
-     - no
+64-bit values
+   Many unit properties have type *t*, which is encoded as a decimal
+   string.  systemd uses UINT64_MAX, encoded as
+   ``"18446744073709551615"``, to mean "infinity" or "unset", for example
+   in MemoryMax.  Timestamps are in microseconds.
 
-RPC Interface
-=============
+Transient unit properties
+   The third argument of StartTransientUnit has signature ``a(sv)``, an
+   array of [name, [signature, value]] pairs, for example
+   ``["MemoryMax", ["t", "18446744073709551615"]]``.  The signature of each
+   property is given in the systemd D-Bus documentation and introspection
+   files (see `Exploring the D-Bus Interface`_).
 
-.. object:: sdbus.call request
+File descriptors
+   The StandardInputFileDescriptor, StandardOutputFileDescriptor,
+   and StandardErrorFileDescriptor properties have type *h*, an
+   object like ``{"fd": 5, "pid": 1234}``.  As required by :rfc:`52`,
+   sdbus rejects an *h* value unless *pid* matches its own process id,
+   so these properties can only be sent by sdexec, which runs in the same
+   broker process as sdbus.  They are write-only: Get and GetAll return
+   related string properties such as StandardInputFileDescriptorName
+   instead, so unit property replies never carry *h* values, which
+   :rfc:`52` does not allow to be encoded.
 
-   Invoke a D-Bus method call.  Returns a single response when the reply
-   arrives.
-
-   member (str, required)
-      D-Bus method name.
-
-   params (array, required)
-      Method arguments as a JSON array.
-
-   interface (str)
-      D-Bus interface.  Default: ``org.freedesktop.systemd1.Manager``.
-
-   path (str)
-      D-Bus object path.  Default: ``/org/freedesktop/systemd1``.
-
-   destination (str)
-      D-Bus service name.  Default: ``org.freedesktop.systemd1``.
-
-.. object:: sdbus.call response
-
-   params (array)
-      Method return values as a JSON array.
-
-.. object:: sdbus.subscribe request
-
-   Subscribe to D-Bus signals.  Sends ``Subscribe`` followed by
-   ``AddMatch`` on the bus connection, then streams one response per
-   matching signal.  All fields are optional signal filters; omitting a
-   field matches any value.
-
-   path (str)
-      Filter by D-Bus object path.
-
-   interface (str)
-      Filter by D-Bus interface name.
-
-   member (str)
-      Filter by signal member name.
-
-.. object:: sdbus.subscribe response
-
-   One response is streamed per matching signal.
-
-   path (str)
-      Object path of the signal source.
-
-   interface (str)
-      Interface name.
-
-   member (str)
-      Signal name.
-
-   params (array)
-      Signal parameters as a JSON array.
-
-
-Supported Methods
-=================
-
-The following ``(interface, member)`` pairs are registered in ``interface.c``
-and may be called via ``sdbus.call``.  Signatures use D-Bus notation; ``o``
-is an object path, ``ay`` is a byte array.
-
-.. list-table::
-   :header-rows: 1
-   :widths: 45 27 10 10
-
-   * - Interface
-     - Member
-     - In
-     - Out
-   * - org.freedesktop.systemd1.Manager
-     - Subscribe
-     -
-     -
-   * - org.freedesktop.systemd1.Manager
-     - Unsubscribe
-     -
-     -
-   * - org.freedesktop.systemd1.Manager
-     - ListUnitsByPatterns
-     - asas
-     - a(ssssssouso)
-   * - org.freedesktop.systemd1.Manager
-     - KillUnit
-     - ssi
-     -
-   * - org.freedesktop.systemd1.Manager
-     - StopUnit
-     - ss
-     - o
-   * - org.freedesktop.systemd1.Manager
-     - ResetFailedUnit
-     - s
-     -
-   * - org.freedesktop.systemd1.Manager
-     - StartTransientUnit
-     - ssa(sv)a(sa(sv))
-     - o
-   * - org.freedesktop.systemd1.Manager
-     - GetUnitByInvocationID
-     - ay
-     - o
-   * - org.freedesktop.DBus
-     - AddMatch
-     - s
-     -
-   * - org.freedesktop.DBus
-     - RemoveMatch
-     - s
-     -
-   * - org.freedesktop.DBus.Properties
-     - GetAll
-     - s
-     - a{sv}
-   * - org.freedesktop.DBus.Properties
-     - Get
-     - ss
-     - v
-   * - org.freedesktop.DBus.Properties
-     - PropertiesChanged (signal)
-     -
-     - sa{sv}as
+Errors
+   systemd method errors carry D-Bus error names, which sdbus includes in the
+   error string, for example
+   ``org.freedesktop.systemd1.NoSuchUnit: Unit foo.service not loaded.``
 
 Exploring the D-Bus Interface
 =============================
@@ -279,24 +111,31 @@ Use ``tree`` to list object paths under the systemd service::
    busctl tree org.freedesktop.systemd1
 
 To list all properties of a running unit with their D-Bus type signatures, use
-``introspect``.  Unit names are encoded as D-Bus object paths by replacing
-special characters with their hex escape (e.g. ``.`` becomes ``_2e``)::
+``introspect`` with the unit's object path (see
+:ref:`libsdexec_object_paths`).  GetUnit returns the object path of a
+loaded unit::
+
+   busctl --user call org.freedesktop.systemd1 /org/freedesktop/systemd1 \
+       org.freedesktop.systemd1.Manager GetUnit s some.service
+
+
 
    busctl introspect org.freedesktop.systemd1 \
        /org/freedesktop/systemd1/unit/some_2eservice \
        org.freedesktop.systemd1.Service
 
 The same information is available statically in the D-Bus introspection XML
-files installed by the ``systemd-dev`` package under
+files installed by the systemd-dev package under
 ``/usr/share/dbus-1/interfaces/``, one file per interface.  These files are
 the authoritative source for property type signatures used in
-``StartTransientUnit`` calls.
+StartTransientUnit calls.
 
 ******************
 External Resources
 ******************
 
+- :rfc:`52` — D-Bus Bridge Protocol
 - `D-Bus specification <https://dbus.freedesktop.org/doc/dbus-specification.html>`_
 - `The new sd-bus API of systemd <https://0pointer.net/blog/the-new-sd-bus-api-of-systemd.html>`_
 - `org.freedesktop.systemd1 D-Bus interface <https://www.freedesktop.org/software/systemd/man/latest/org.freedesktop.systemd1.html>`_
-- :linux:man5:`systemd.resource-control` — resource control properties including ``DeviceAllow``
+- :linux:man5:`systemd.resource-control` — resource control properties including DeviceAllow
