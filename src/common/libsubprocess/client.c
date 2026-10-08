@@ -464,6 +464,7 @@ int subprocess_rexec_get (flux_future_t *f)
     }
     else if (!streq (ctx->response.type, "started")
         && !streq (ctx->response.type, "stopped")
+        && !streq (ctx->response.type, "continued")
         && !streq (ctx->response.type, "finished")
         && !streq (ctx->response.type, "attached")) {
         errno = EPROTO;
@@ -508,6 +509,16 @@ bool subprocess_rexec_is_stopped (flux_future_t *f)
     if ((ctx = flux_future_aux_get (f, "flux::rexec"))
         && ctx->response.type != NULL
         && streq (ctx->response.type, "stopped"))
+        return true;
+    return false;
+}
+
+bool subprocess_rexec_is_continued (flux_future_t *f)
+{
+    struct rexec_ctx *ctx;
+    if ((ctx = flux_future_aux_get (f, "flux::rexec"))
+        && ctx->response.type != NULL
+        && streq (ctx->response.type, "continued"))
         return true;
     return false;
 }
