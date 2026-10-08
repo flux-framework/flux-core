@@ -23,6 +23,7 @@
 #include "ccan/array_size/array_size.h"
 
 #include "message.h"
+#include "rfc52_vectors.h"
 
 /* Message diag is not proper TAP output so set to 0 except during development.
  */
@@ -477,18 +478,244 @@ void test_write_errors (sd_bus *bus)
         "unknown type code fails with EPROTO");
     ok (write_error (bus, "g", "[\"(\"]") == -EPROTO,
         "invalid signature string fails with EPROTO");
-    ok (write_error (bus, "g", "[\"{sv}\"]") == -EPROTO,
-        "bare dict entry in g value fails with EPROTO");
-    ok (write_error (bus, "{sv}", "[{}]") == -EPROTO,
-        "bare dict entry signature fails with EPROTO");
-    ok (write_error (bus, "a{vs}", "[[]]") == -EPROTO,
-        "dict with non-basic key fails with EPROTO");
-    ok (write_error (bus, "a{svs}", "[{}]") == -EPROTO,
-        "dict entry with three members fails with EPROTO");
-    ok (write_error (bus, "v", "[[\"s\",\"x\",\"y\"]]") == -EPROTO,
-        "variant with extra element fails with EPROTO");
     ok (write_error (bus, "o", "[\"not/a/path\"]") == -EPROTO,
         "invalid object path fails with EPROTO");
+}
+
+/* Minimal parser for the busctl(1) parameter notation used by the RFC 52
+ * test vectors: a signature followed by values, where an array is its
+ * element count followed by its elements, a variant is its signature
+ * followed by its value, and structs and dict entries are their members.
+ * Tokens are separated by spaces; "" is the empty string.
+ */
+struct tokens {
+    char *buf;
+    char *next;
+};
+
+static const char *token_next (struct tokens *t)
+{
+    char *tok;
+
+    while (*t->next == ' ')
+        t->next++;
+    if (*t->next == '\0')
+        return NULL;
+    tok = t->next;
+    while (*t->next != '\0' && *t->next != ' ')
+        t->next++;
+    if (*t->next == ' ')
+        *t->next++ = '\0';
+    if (streq (tok, "\"\""))
+        tok[0] = '\0';
+    return tok;
+}
+
+static int nota_type_len (const char *sig)
+{
+    if (sig[0] == 'a')
+        return 1 + nota_type_len (sig + 1);
+    if (sig[0] == '(' || sig[0] == '{') {
+        char close = sig[0] == '(' ? ')' : '}';
+        int i = 1;
+        while (sig[i] != close)
+            i += nota_type_len (sig + i);
+        return i + 1;
+    }
+    return 1;
+}
+
+static int nota_append (sd_bus_message *m,
+                        const char *type,
+                        int len,
+                        struct tokens *t);
+
+static int nota_append_basic (sd_bus_message *m, char type, const char *tok)
+{
+    union {
+        uint8_t y; int b; int16_t n; uint16_t q; int32_t i; uint32_t u;
+        int64_t x; uint64_t t; double d;
+    } v;
+
+    switch (type) {
+        case 's':
+        case 'o':
+        case 'g':
+            return sd_bus_message_append_basic (m, type, tok);
+        case 'b':
+            v.b = streq (tok, "true");
+            break;
+        case 'd':
+            v.d = strtod (tok, NULL);
+            break;
+        case 'y': v.y = strtol (tok, NULL, 10); break;
+        case 'n': v.n = strtol (tok, NULL, 10); break;
+        case 'q': v.q = strtoul (tok, NULL, 10); break;
+        case 'i': v.i = strtol (tok, NULL, 10); break;
+        case 'u': v.u = strtoul (tok, NULL, 10); break;
+        case 'x': v.x = strtoll (tok, NULL, 10); break;
+        case 't': v.t = strtoull (tok, NULL, 10); break;
+        case 'h': {
+            // the token is ignored since a real descriptor is required
+            int fd = open ("/dev/null", O_RDONLY);
+            int e;
+            if (fd < 0)
+                return -errno;
+            e = sd_bus_message_append_basic (m, type, &fd);
+            close (fd); // sd-bus duplicated it
+            return e;
+        }
+        default:
+            return -EINVAL;
+    }
+    return sd_bus_message_append_basic (m, type, &v);
+}
+
+static int nota_append_members (sd_bus_message *m,
+                                const char *sig,
+                                int len,
+                                struct tokens *t)
+{
+    int e;
+    for (int i = 0; i < len; ) {
+        int n = nota_type_len (sig + i);
+        if ((e = nota_append (m, sig + i, n, t)) < 0)
+            return e;
+        i += n;
+    }
+    return 0;
+}
+
+static int nota_append (sd_bus_message *m,
+                        const char *type,
+                        int len,
+                        struct tokens *t)
+{
+    const char *tok;
+    char contents[256];
+    int e;
+
+    if (type[0] == 'a') {
+        long count;
+        snprintf (contents, sizeof (contents), "%.*s", len - 1, type + 1);
+        if (!(tok = token_next (t)))
+            return -EINVAL;
+        count = strtol (tok, NULL, 10);
+        if ((e = sd_bus_message_open_container (m, 'a', contents)) < 0)
+            return e;
+        for (long i = 0; i < count; i++) {
+            if (type[1] == '{') {
+                char entry[256];
+                snprintf (entry, sizeof (entry), "%.*s", len - 3, type + 2);
+                if ((e = sd_bus_message_open_container (m, 'e', entry)) < 0
+                    || (e = nota_append_members (m, entry, len - 3, t)) < 0
+                    || (e = sd_bus_message_close_container (m)) < 0)
+                    return e;
+            }
+            else if ((e = nota_append (m, type + 1, len - 1, t)) < 0)
+                return e;
+        }
+        return sd_bus_message_close_container (m);
+    }
+    if (type[0] == '(') {
+        snprintf (contents, sizeof (contents), "%.*s", len - 2, type + 1);
+        if ((e = sd_bus_message_open_container (m, 'r', contents)) < 0
+            || (e = nota_append_members (m, contents, len - 2, t)) < 0)
+            return e;
+        return sd_bus_message_close_container (m);
+    }
+    if (!(tok = token_next (t)))
+        return -EINVAL;
+    if (type[0] == 'v') {
+        snprintf (contents, sizeof (contents), "%s", tok);
+        if ((e = sd_bus_message_open_container (m, 'v', contents)) < 0
+            || (e = nota_append (m,
+                                 contents,
+                                 strlen (contents),
+                                 t)) < 0)
+            return e;
+        return sd_bus_message_close_container (m);
+    }
+    return nota_append_basic (m, type[0], tok);
+}
+
+/* Create a sealed message from busctl notation 'body'.
+ */
+static sd_bus_message *nota_message (sd_bus *bus, const char *body)
+{
+    struct tokens t;
+    const char *sig;
+    sd_bus_message *m;
+
+    if (sd_bus_message_new (bus, &m, SD_BUS_MESSAGE_METHOD_CALL) < 0
+        || !(t.buf = strdup (body)))
+        BAIL_OUT ("could not create message for %s", body);
+    t.next = t.buf;
+    if ((sig = token_next (&t))
+        && nota_append_members (m, sig, strlen (sig), &t) < 0)
+        BAIL_OUT ("could not build message for %s", body);
+    if (token_next (&t))
+        BAIL_OUT ("extra tokens in %s", body);
+    free (t.buf);
+    seal (m);
+    return m;
+}
+
+/* RFC 52 Valid Bodies: encoding the D-Bus body produces params, and
+ * decoding params with the body's signature produces the D-Bus body.
+ * The message built from busctl notation is independent of sdmsg_write(),
+ * and decoding is lossless, so a correct decode plus a JSON round trip
+ * shows that encoding produces the same body.
+ */
+void test_rfc52_valid (sd_bus *bus)
+{
+    for (int i = 0; i < ARRAY_SIZE (valid_vectors); i++) {
+        const struct valid_vector *v = &valid_vectors[i];
+        sd_bus_message *m = nota_message (bus, v->body);
+        const char *sig = sd_bus_message_get_signature (m, true);
+        json_t *expect = json_loads (v->params, 0, NULL);
+        json_t *o = json_array ();
+
+        if (!expect || !o)
+            BAIL_OUT ("could not create json objects");
+        ok (sdmsg_read (m, o) == 0 && json_equal (o, expect),
+            "RFC 52 vector %d decodes: %.40s", i, v->body);
+        ok (roundtrip (bus, sig, v->params),
+            "RFC 52 vector %d round trips: %.40s", i, v->params);
+        json_decref (o);
+        json_decref (expect);
+        sd_bus_message_unref (m);
+    }
+}
+
+/* RFC 52 Invalid Params: decoding params with signature fails.
+ */
+void test_rfc52_invalid_params (sd_bus *bus)
+{
+    for (int i = 0; i < ARRAY_SIZE (invalid_params_vectors); i++) {
+        const struct invalid_params_vector *v = &invalid_params_vectors[i];
+        ok (write_error (bus, v->signature, v->params) < 0,
+            "RFC 52 invalid params %s %s fails (%s)",
+            v->signature, v->params, v->reason);
+    }
+}
+
+/* RFC 52 Invalid D-Bus Bodies: encoding the D-Bus body fails.
+ */
+void test_rfc52_invalid_body (sd_bus *bus)
+{
+    for (int i = 0; i < ARRAY_SIZE (invalid_body_vectors); i++) {
+        const struct invalid_body_vector *v = &invalid_body_vectors[i];
+        sd_bus_message *m = nota_message (bus, v->body);
+        json_t *o = json_array ();
+
+        if (!o)
+            BAIL_OUT ("could not create json array");
+        ok (sdmsg_read (m, o) < 0,
+            "RFC 52 invalid body %s fails (%s)", v->body, v->reason);
+        json_decref (o);
+        sd_bus_message_unref (m);
+    }
 }
 
 int main (int argc, char **argv)
@@ -518,6 +745,9 @@ int main (int argc, char **argv)
     test_systemd (bus);
     test_read_complex_variant (bus);
     test_write_errors (bus);
+    test_rfc52_valid (bus);
+    test_rfc52_invalid_params (bus);
+    test_rfc52_invalid_body (bus);
 
     sd_bus_flush (bus);
     sd_bus_close (bus);

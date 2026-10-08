@@ -67,7 +67,9 @@ TEST_EXTENSIONS = .t
 T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
 	$(top_srcdir)/config/tap-driver.sh
 
-test_message_t_SOURCES = test/message.c
+test_message_t_SOURCES = \
+	test/message.c \
+	test/rfc52_vectors.h
 test_message_t_CPPFLAGS = $(test_cppflags)
 test_message_t_LDADD = $(test_ldadd)
 test_message_t_LDFLAGS = $(test_ldflags)
