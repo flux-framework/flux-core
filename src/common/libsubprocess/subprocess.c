@@ -430,8 +430,13 @@ void sigchld_notify_start (flux_subprocess_t *p)
 
 void sigchld_notify_stop (flux_subprocess_t *p)
 {
+    /* N.B. must also stop idle watcher.  SIGSTOP/SIGCONT in quick
+     * succession could cancel out the need to call the check watcher
+     * after after prep started the idle watcher.  See sigchld_cb().
+     */
     if (p->ops.on_sigchld) {
         flux_watcher_stop (p->sigchld_prep_w);
+        flux_watcher_stop (p->sigchld_idle_w);
         flux_watcher_stop (p->sigchld_check_w);
     }
 }
@@ -1398,6 +1403,8 @@ flux_subprocess_sigchld_string (flux_subprocess_sigchld_t sigchld)
     {
     case FLUX_SUBPROCESS_SIGCHLD_STOPPED:
         return "Stopped";
+    case FLUX_SUBPROCESS_SIGCHLD_CONTINUED:
+        return "Continued";
     }
     return NULL;
 }
