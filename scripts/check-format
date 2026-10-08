@@ -39,13 +39,16 @@ else
   exit 1
 fi
 
+# C: only lines changed relative to the merge-base with master are checked
+# (override with FORMAT_BASE=REF).  Older code is not required to conform
+# until it is modified.
 if command -v clang-format 2>&1 > /dev/null ; then
     if [[ $# -eq 0 ]]; then
-        # clang-format-flux skips vendored/copied code itself.
-        find src -type f \( -name "*.c" -o -name "*.h" \) -print \
-            | xargs scripts/clang-format-flux --check
+        scripts/clang-format-flux --check --base ${FORMAT_BASE:-auto}
     else
-        filter_cfiles "$@" | xargs --no-run-if-empty scripts/clang-format-flux --check
+        filter_cfiles "$@" \
+            | xargs --no-run-if-empty \
+              scripts/clang-format-flux --check --base ${FORMAT_BASE:-auto}
     fi
 else
   echo "clang-format not found, failing"

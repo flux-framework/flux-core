@@ -1,5 +1,11 @@
 #!/bin/bash
-
+#
+# Format python with black, and C with clang-format (via clang-format-flux).
+#
+# C formatting applies only to lines changed relative to the merge-base with
+# master, so new and modified code follows RFC 7 without reformatting older
+# code that nobody is touching.  Use --all to reformat every C file.
+#
 if command -v black 2>&1 > /dev/null ; then
     # awk cmd copied from:
     # https://unix.stackexchange.com/questions/66097/find-all-files-with-a-python-shebang
@@ -14,9 +20,12 @@ else
 fi
 
 if command -v clang-format 2>&1 > /dev/null ; then
-    # clang-format-flux skips vendored/copied code itself.
-    find src -type f \( -name "*.c" -o -name "*.h" \) -print \
-        | xargs scripts/clang-format-flux
+    if [[ $1 == "--all" ]]; then
+        # clang-format-flux skips vendored/copied code itself.
+        git ls-files 'src/*.c' 'src/*.h' | xargs scripts/clang-format-flux
+    else
+        scripts/clang-format-flux --base ${FORMAT_BASE:-auto}
+    fi
 else
-  echo "clang-format not found, C/C++ left unformatted"
+  echo "clang-format not found, C left unformatted (pip install -r scripts/requirements-dev.txt)"
 fi

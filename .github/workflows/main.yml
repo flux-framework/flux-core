@@ -77,6 +77,13 @@ jobs:
       run: pip install -r scripts/requirements-dev.txt
     - name: format and linting checks
       run: pre-commit run --all-files
+    - name: C format check (changed lines only)
+      if: github.event_name == 'pull_request'
+      env:
+        FORMAT_BASE: ${{ github.event.pull_request.base.sha }}
+      run: |
+        scripts/clang-format-flux --check t/clang-format/rfc7.c
+        scripts/clang-format-flux --check --base $(git merge-base HEAD $FORMAT_BASE)
 
   check-sched:
     needs: [python-lint]
