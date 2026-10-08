@@ -791,7 +791,9 @@ struct jobtap *jobtap_create (struct job_manager *ctx)
 
     if (conf_register_callback (ctx->conf,
                                 &error,
+                                "jobtap",
                                 jobtap_parse_config,
+                                NULL,
                                 jobtap) < 0) {
         flux_log (ctx->h, LOG_ERR, "%s", error.text);
         goto error;

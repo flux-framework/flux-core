@@ -147,6 +147,12 @@ int jobtap_notify_subscribers (struct jobtap *jobtap,
  *  reported as an error with `errno` left as the caller set it: plugins are
  *  always delivered an object, never a JSON null. "No queues configured" is
  *  an object whose "queues" array is empty.
+ *
+ *  Plugins are notified in load order and the walk stops at the first
+ *  rejection, leaving plugins ahead of the rejecting one holding a
+ *  configuration the instance will not commit. This function does not
+ *  unwind them; the caller's rollback must re-deliver the configuration it
+ *  restores to every plugin.
  */
 int jobtap_notify_queues_update (struct jobtap *jobtap,
                                  json_t *conf,

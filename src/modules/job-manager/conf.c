@@ -25,7 +25,9 @@
 #include "conf.h"
 
 struct conf_callback {
+    const char *name;
     conf_update_f cb;
+    conf_update_f rollback;     // NULL: roll back by replaying to 'cb'
     void *arg;
 };
 
@@ -53,13 +55,18 @@ static void conf_callback_destructor (void **item)
     }
 }
 
-static struct conf_callback *conf_callback_create (conf_update_f cb, void *arg)
+static struct conf_callback *conf_callback_create (const char *name,
+                                                   conf_update_f cb,
+                                                   conf_update_f rollback,
+                                                   void *arg)
 {
     struct conf_callback *ccb;
 
     if (!(ccb = calloc (1, sizeof (*ccb))))
         return NULL;
+    ccb->name = name;
     ccb->cb = cb;
+    ccb->rollback = rollback;
     ccb->arg = arg;
     return ccb;
 }
@@ -80,7 +87,9 @@ void conf_unregister_callback (struct conf *conf, conf_update_f cb)
 
 int conf_register_callback (struct conf *conf,
                             flux_error_t *error,
+                            const char *name,
                             conf_update_f cb,
+                            conf_update_f rollback,
                             void *arg)
 {
     struct conf_callback *ccb;
@@ -93,7 +102,7 @@ int conf_register_callback (struct conf *conf,
         return -1;
     }
     if (rc == 1) {
-        if (!(ccb = conf_callback_create (cb, arg))
+        if (!(ccb = conf_callback_create (name, cb, rollback, arg))
             || zlistx_add_end (conf->callbacks, ccb) == NULL) {
             conf_callback_destroy (ccb);
             errprintf (error, "out of memory adding config callback");
@@ -102,6 +111,44 @@ int conf_register_callback (struct conf *conf,
         }
     }
     return 0;
+}
+
+/* Replay the committed configuration to every callback through 'last'
+ * inclusive, or to all of them if 'last' is NULL. The commit is the final
+ * step of a reload, so until then flux_get_conf() returns the configuration
+ * in effect before this one.
+ *
+ * 'last' is the callback that rejected the configuration. It is rolled back
+ * along with those that accepted, since it may have applied part of the
+ * configuration before failing, and it accepted the replayed configuration
+ * once already.
+ *
+ * The callbacks are independent, so the replay runs in registration order,
+ * matching the broker's revert_updates() at module scope.
+ *
+ * A failure here has nowhere to go, so log it naming the registrant and
+ * carry on: the remaining callbacks may still roll back cleanly.
+ */
+static void conf_rollback (struct conf *conf, struct conf_callback *last)
+{
+    const flux_conf_t *committed = flux_get_conf (conf->ctx->h);
+    struct conf_callback *ccb;
+    flux_error_t error;
+
+    ccb = zlistx_first (conf->callbacks);
+    while (ccb) {
+        conf_update_f rollback = ccb->rollback ? ccb->rollback : ccb->cb;
+
+        if (rollback (committed, &error, ccb->arg) < 0)
+            flux_log (conf->ctx->h,
+                      LOG_ERR,
+                      "error rolling back %s config: %s",
+                      ccb->name,
+                      error.text);
+        if (ccb == last)
+            break;
+        ccb = zlistx_next (conf->callbacks);
+    }
 }
 
 static void config_reload_cb (flux_t *h,
@@ -127,6 +174,10 @@ static void config_reload_cb (flux_t *h,
     while (ccb) {
         if (ccb->cb (instance_conf, &error, ccb->arg) < 0) {
             errstr = error.text;
+            /* N.B. conf_rollback() reuses the list cursor, so the walk
+             * cannot be resumed after this point.
+             */
+            conf_rollback (conf, ccb);
             errno = EINVAL;
             goto error_decref;
         }
@@ -134,6 +185,7 @@ static void config_reload_cb (flux_t *h,
     }
     if (flux_set_conf_new (h, instance_conf) < 0) {
         errstr = "error updating cached configuration";
+        conf_rollback (conf, NULL);
         goto error_decref;
     }
     if (flux_respond (h, msg, NULL) < 0)

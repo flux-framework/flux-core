@@ -733,7 +733,9 @@ struct queue_ctx *queue_ctx_create (struct job_manager *ctx)
         goto error;
     if (conf_register_callback (ctx->conf,
                                 &error,
+                                "queue",
                                 queue_configure,
+                                NULL,
                                 qctx) < 0) {
         flux_log (ctx->h,
                   LOG_ERR,
