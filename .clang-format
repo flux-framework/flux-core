@@ -1,3 +1,6 @@
+# Flux C style, per RFC 7.  Requires clang-format 23 (pinned in
+# scripts/requirements-dev.txt).  Use via scripts/format, which runs
+# scripts/clang-format-flux on lines changed since the merge-base with master.
 BasedOnStyle : google
 SpaceBeforeParens : Always
 IndentWidth : 4
@@ -13,13 +16,20 @@ AllowShortLoopsOnASingleLine : false
 BinPackParameters : false
 BinPackArguments : false
 AllowAllParametersOfDeclarationOnNextLine : false
-AlignTrailingComments : true
+# hand-aligned trailing comments are common; leave them be
+AlignTrailingComments :
+  Kind : Leave
+# RFC 7 section 8: int *ptr
+DerivePointerAlignment : false
+PointerAlignment : Right
 ColumnLimit : 80
 
 # do not put all arguments on one line unless it's the same line as the call
 PenaltyBreakBeforeFirstCallParameter : 10000000
 PenaltyReturnTypeOnItsOwnLine : 65000
 PenaltyBreakString : 10
+# an unsplittable long string should overflow, not force a break after '('
+PenaltyExcessCharacter : 10000
 
 # Preserve the hand-authored layout of jansson-style pack/unpack calls.
 # This must be a literal list -- clang-format does not accept a regex here.
@@ -110,14 +120,25 @@ ForEachMacros :
 - json_object_foreach
 
 SortIncludes : false
+# C style initializers: { a, b }, and multi-line tables keep block indent
+Cpp11BracedListStyle : Block
+# keep log/error messages greppable
+BreakStringLiterals : false
+IndentGotoLabels : NoIndent
 BreakBeforeBinaryOperators : NonAssignment
+# RFC 7 section 10: long && / || chains get one test per line
+BreakBinaryOperations :
+  Default : Never
+  PerOperator :
+    - Operators : ['&&', '||']
+      Style : OnePerLine
+      MinChainLength : 0
 AlignAfterOpenBracket: Align
 AlignOperands : true
 BreakBeforeTernaryOperators : true
 SpaceBeforeSquareBrackets: false
 IndentPPDirectives: None
 
-# will appear in clang-20
 AlignConsecutiveMacros: true
 
 #
