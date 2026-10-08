@@ -60,9 +60,17 @@ typedef enum {
  * EXITED or FAILED has been reported.  Without an on_state_change
  * callback, a sigchld is reported as soon as it is received and is
  * suppressed once the subprocess has actually exited or failed.
+ *
+ * If a subprocess receives a SIGCONT and a pending
+ * FLUX_SUBPROCESS_SIGCHLD_STOPPED has not yet been reported, the
+ * pending FLUX_SUBPROCESS_SIGCHLD_STOPPED will be discarded.
+ * Likewise, if a subprocess receives a SIGSTOP and a pending
+ * FLUX_SUBPROCESS_SIGCHLD_CONTINUED has not yet been reported, the
+ * pending FLUX_SUBPROCESS_SIGCHLD_CONTINUED will be discarded.
  */
 typedef enum {
     FLUX_SUBPROCESS_SIGCHLD_STOPPED = 1, /* SIGSTOP received */
+    FLUX_SUBPROCESS_SIGCHLD_CONTINUED = 2, /* SIGCONT received */
 } flux_subprocess_sigchld_t;
 
 /*

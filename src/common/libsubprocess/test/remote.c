@@ -667,6 +667,7 @@ static void stop_output_cb (flux_subprocess_t *p, const char *stream)
 }
 
 static int sigchld_stopped_count;
+static int sigchld_continued_count;
 
 static void sigchld_stop_cb (flux_subprocess_t *p,
                              flux_subprocess_sigchld_t sigchld)
@@ -675,19 +676,26 @@ static void sigchld_stop_cb (flux_subprocess_t *p,
     pid_t pid = flux_subprocess_pid (p);
     diag ("sigchld callback sigchld=%s",
           flux_subprocess_sigchld_string (sigchld));
-    ok (sigchld == FLUX_SUBPROCESS_SIGCHLD_STOPPED,
-        "sigchld callback sigchld == STOPPED");
     ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
         "sigchld returned when job was running");
-    if (pid < 0 || kill (pid, SIGCONT) < 0) {
-        diag ("could not continue test proc: %s", strerror (errno));
-        flux_reactor_stop_error (r);
+    if (sigchld == FLUX_SUBPROCESS_SIGCHLD_STOPPED) {
+        ok (sigchld == FLUX_SUBPROCESS_SIGCHLD_STOPPED,
+            "sigchld callback sigchld == STOPPED");
+        if (pid < 0 || kill (pid, SIGCONT) < 0) {
+            diag ("could not continue test proc: %s", strerror (errno));
+            flux_reactor_stop_error (r);
+        }
+        if (flux_subprocess_close (p, "stdin") < 0) {
+            diag ("could not close remote stdin");
+            flux_reactor_stop_error (r);
+        }
+        sigchld_stopped_count++;
     }
-    if (flux_subprocess_close (p, "stdin") < 0) {
-        diag ("could not close remote stdin");
-        flux_reactor_stop_error (r);
+    else if (sigchld == FLUX_SUBPROCESS_SIGCHLD_CONTINUED) {
+        ok (sigchld == FLUX_SUBPROCESS_SIGCHLD_CONTINUED,
+            "sigchld callback sigchld == CONTINUED");
+        sigchld_continued_count++;
     }
-    sigchld_stopped_count++;
 }
 
 flux_subprocess_ops_t sigchld_stoptest_ops = {
@@ -709,6 +717,7 @@ void sigchld_sigstop_test (flux_t *h)
         BAIL_OUT ("flux_cmd_create failed");
 
     sigchld_stopped_count = 0;
+    sigchld_continued_count = 0;
 
     p = flux_rexec_ex (h,
                        SERVER_NAME,
@@ -728,6 +737,8 @@ void sigchld_sigstop_test (flux_t *h)
         "sigchld stoptest: reactor ran successfully");
     ok (sigchld_stopped_count == 1,
         "sigchld stoptest: on_sigchld called once with STOPPED");
+    ok (sigchld_continued_count == 1,
+        "sigchld stoptest: on_sigchld called once with CONTINUED");
 
     flux_subprocess_destroy (p);
     flux_cmd_destroy (cmd);
