@@ -35,7 +35,6 @@ the intended mode for day to day use: new and modified code is held to
 RFC 7 while untouched (often older, non-conforming) code is left alone.
 """
 import difflib
-import fnmatch
 import os
 import re
 import subprocess
@@ -43,40 +42,84 @@ import sys
 
 COLUMN_LIMIT = 80
 
+TOPDIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 # Always use the project style, even for files outside the source tree
 # (otherwise clang-format silently falls back to its LLVM default).
-STYLE_FILE = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".clang-format"
-)
+STYLE_FILE = os.path.join(TOPDIR, ".clang-format")
 
-# Vendored or copied code that is maintained upstream, not to flux style.
-# Kept in sync with the exclusion lists in Makefile.am and .typos.toml.
-# Patterns are matched against the path as given on the command line, with
-# any leading "./" stripped, using shell-glob semantics ('*' spans '/').
-EXCLUDE = [
-    "*src/common/libccan/*",
-    "*src/common/libczmqcontainers/*",
-    "*src/common/libev/*",
-    "*src/common/liblsd/*",
-    "*src/common/libmissing/*",
-    "*src/common/liboptparse/getopt*",
-    "*src/common/libtap/*",
-    "*src/common/libtomlc99/*",
-    "*src/common/libyuarel/*",
-    "*src/bindings/python/_flux/*",
-    # individually copied files (no directory of their own)
-    "*src/common/libutil/sha1.c",
-    "*src/common/libutil/sha256.[ch]",
-    "*src/common/libutil/test/sha1.c",
-    "*src/common/libutil/test/blobref.c",
-    "*src/common/libutil/test/levenshtein.c",
-]
+# Vendored code is listed in .clang-format-ignore, which clang-format
+# also reads, so editors and agents running clang-format directly skip it.
+IGNORE_FILE = os.path.join(TOPDIR, ".clang-format-ignore")
+
+
+def glob_to_regex(pat):
+    """Convert a .clang-format-ignore pattern to a regex.
+
+    Same rules as clang-format: '*' and '?' do not match '/', '**'
+    matches across directories, '[...]' is a character class.
+    """
+    out = ""
+    i = 0
+    while i < len(pat):
+        if pat.startswith("**/", i):
+            out += "(?:.*/)?"
+            i += 3
+        elif pat.startswith("**", i):
+            out += ".*"
+            i += 2
+        elif pat[i] == "*":
+            out += "[^/]*"
+            i += 1
+        elif pat[i] == "?":
+            out += "[^/]"
+            i += 1
+        elif pat[i] == "[":
+            j = pat.find("]", i + 1)
+            if j < 0:
+                out += re.escape(pat[i])
+                i += 1
+            else:
+                cls = pat[i + 1 : j]
+                if cls.startswith("!"):
+                    cls = "^" + cls[1:]
+                out += "[" + cls + "]"
+                i = j + 1
+        else:
+            out += re.escape(pat[i])
+            i += 1
+    return re.compile(out + r"\Z")
+
+
+def load_ignore():
+    """Return [(negated, regex), ...] from .clang-format-ignore."""
+    rules = []
+    try:
+        with open(IGNORE_FILE) as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                neg = line.startswith("!")
+                if neg:
+                    line = line[1:]
+                rules.append((neg, glob_to_regex(line.lstrip("/"))))
+    except FileNotFoundError:
+        pass
+    return rules
+
+
+IGNORE = load_ignore()
 
 
 def is_excluded(path):
-    """True if path is vendored/copied code that must not be reformatted."""
-    norm = path[2:] if path.startswith("./") else path
-    return any(fnmatch.fnmatch(norm, pat) for pat in EXCLUDE)
+    """True if path matches .clang-format-ignore (last match wins)."""
+    rel = os.path.relpath(os.path.abspath(path), TOPDIR)
+    excluded = False
+    for neg, rx in IGNORE:
+        if rx.match(rel):
+            excluded = not neg
+    return excluded
 
 
 # A line that is nothing but a comparison operator, a simple operand, an

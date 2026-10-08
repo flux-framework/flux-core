@@ -21,7 +21,7 @@ fi
 
 if command -v clang-format 2>&1 > /dev/null ; then
     if [[ $1 == "--all" ]]; then
-        # clang-format-flux skips vendored/copied code itself.
+        # clang-format-flux skips files in .clang-format-ignore.
         git ls-files 'src/*.c' 'src/*.h' | xargs scripts/clang-format-flux
     else
         scripts/clang-format-flux --base ${FORMAT_BASE:-auto}

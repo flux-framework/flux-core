@@ -11,7 +11,7 @@ function filter_pyfiles() {
 }
 
 function filter_cfiles() {
-    # echo C/C++ files; clang-format-flux skips vendored/copied code itself
+    # echo C files; clang-format-flux skips files in .clang-format-ignore
     for infile in "$@"; do
         case $infile in
             *.c|*.h)
