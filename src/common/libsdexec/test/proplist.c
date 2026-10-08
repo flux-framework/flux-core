@@ -136,7 +136,7 @@ void test_errors (void)
 {
     struct sdexec_proplist *pl;
     flux_error_t error;
-    // non-literal so check-json-pack skips this deliberate error
+    // non-literal so check-format-args skips this deliberate error
     const char *badtype = "zz";
 
     if (!(pl = sdexec_proplist_create ()))

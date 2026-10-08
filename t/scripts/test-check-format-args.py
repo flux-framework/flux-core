@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Self-test for scripts/check-json-pack.
+# Self-test for scripts/check-format-args.
 #
 # Generates stub jansson + wrapper + libsdexec headers and good/bad fixture
 # sources in a temporary directory, builds a compile_commands.json for them,
@@ -7,8 +7,8 @@
 # for both the jansson pack/unpack family and the libsdexec D-Bus value
 # readers.  Requires only clang (no flux build).
 #
-# The checker is located relative to this file (../../scripts/check-json-pack
-# in the source tree).  If the environment variable CHECK_JSON_PACK_CLANG is
+# The checker is located relative to this file (../../scripts/check-format-args
+# in the source tree).  If the environment variable CHECK_FORMAT_ARGS_CLANG is
 # set, its value is passed to the checker as the clang binary to use; this
 # lets the sharness driver select a versioned clang (e.g. clang-15).
 
@@ -19,7 +19,9 @@ import sys
 import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-CHECKER = os.path.normpath(os.path.join(HERE, "..", "..", "scripts", "check-json-pack"))
+CHECKER = os.path.normpath(
+    os.path.join(HERE, "..", "..", "scripts", "check-format-args")
+)
 
 JANSSON_H = """\
 #ifndef JANSSON_H
@@ -247,7 +249,7 @@ def main():
         # on stderr (surfaced below), turning an opaque count mismatch into a
         # diagnosable failure in CI logs.
         cmd = [sys.executable, CHECKER, "-v", "-p", ccpath]
-        clang = os.environ.get("CHECK_JSON_PACK_CLANG")
+        clang = os.environ.get("CHECK_FORMAT_ARGS_CLANG")
         if clang:
             cmd += ["--clang", clang]
         proc = subprocess.run(

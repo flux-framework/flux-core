@@ -49,7 +49,7 @@ void test_dict (void)
         && errno == EPROTO,
         "sdexec_property_dict_read name=unknown fails with EPROTO");
     errno = 0;
-    badtype = "u"; // non-literal so check-json-pack skips negative tests
+    badtype = "u"; // non-literal so check-format-args skips negative tests
     ok (sdexec_property_dict_read (dict, "foo", badtype, &val) < 0
         && errno == EPROTO,
         "sdexec_property_dict_read with the wrong type fails with EPROTO");
@@ -67,7 +67,7 @@ void test_inval (void)
     flux_t *h;
     flux_future_t *f;
     json_t *dict;
-    // non-literal so check-json-pack skips calls with an unused bad type
+    // non-literal so check-format-args skips calls with an unused bad type
     const char *badtype = "foo";
 
     if (!(h = flux_open ("loop://", 0)))

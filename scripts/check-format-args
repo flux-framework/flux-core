@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# check-json-pack - verify jansson pack/unpack format specifiers match the
+# check-format-args - verify jansson pack/unpack format specifiers match the
 # types of the variadic arguments passed to them.
 #
 # jansson's json_pack()/json_unpack() families (and the many flux wrappers
@@ -23,7 +23,7 @@
 # contents type, and when it is computed, the rest of the call is skipped.
 #
 # Usage:
-#   scripts/check-json-pack [options] [FILE ...]
+#   scripts/check-format-args [options] [FILE ...]
 #
 # Requires a compile_commands.json (see scripts/generate_compile_commands)
 # and a clang binary.  FILE arguments, if given, restrict the check to

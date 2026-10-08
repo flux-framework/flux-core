@@ -203,7 +203,7 @@ void test_variant (void)
     ok (sdexec_variant_read (o, "t", &t) == 0 && t == UINT64_MAX,
         "sdexec_variant_read works");
     errno = 0;
-    badtype = "u"; // non-literal so check-json-pack skips negative tests
+    badtype = "u"; // non-literal so check-format-args skips negative tests
     ok (sdexec_variant_read (o, badtype, &t) < 0 && errno == EPROTO,
         "sdexec_variant_read with a different type fails with EPROTO");
     json_decref (o);
@@ -276,7 +276,7 @@ void test_inval (void)
     ok (sdexec_value_read (o, NULL) < 0 && errno == EINVAL,
         "sdexec_value_read type=NULL fails with EINVAL");
     errno = 0;
-    badtype = "ii"; // non-literal so check-json-pack skips negative tests
+    badtype = "ii"; // non-literal so check-format-args skips negative tests
     ok (sdexec_value_read (o, badtype, &i, &i) < 0 && errno == EINVAL,
         "sdexec_value_read with two types fails with EINVAL");
     errno = 0;
