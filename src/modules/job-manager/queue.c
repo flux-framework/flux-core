@@ -16,7 +16,7 @@
  * - struct queue_ctx: job_manager back-pointer, msg handlers, queues
  *   object, and stop_on_restart flag.
  * - Four RPC callbacks: queue-list, queue-status, queue-enable, queue-start.
- * - queue_configure: flux_conf_t glue.
+ * - queue_configure/queue_rollback: flux_conf_t glue.
  * - enqueue_jobs/dequeue_jobs: driven from the change-notification callback.
  * - queue_submit_check: submission gate.
  * - queue_started: alloc helper.
@@ -76,7 +76,9 @@ struct queue_ctx {
     struct job_manager *ctx;
     flux_msg_handler_t **handlers;
     struct queues *queues;
-    bool stop_on_restart;   // stop started queues on restart
+    bool stop_on_restart;           // stop started queues on restart
+    struct queues *saved;           // pre-configure copy, for rollback
+    bool saved_stop_on_restart;
 };
 
 static int enqueue_jobs (struct queue_ctx *qctx, const char *name);
@@ -116,15 +118,18 @@ json_t *queue_ctx_get_conf (struct queue_ctx *qctx)
     return queues_get_conf (qctx->queues);
 }
 
-/* N.B. the basic queue configuration should have already been validated by
+/* Apply 'conf' to the queue table, then deliver the resolved effective queue
+ * configuration to jobtap plugins. A plugin that rejects it fails the config
+ * reload.
+ *
+ * N.B. the basic queue configuration should have already been validated by
  * policy_validate() so we shouldn't need to produce detailed configuration
  * errors for users here.
  */
-static int queue_configure (const flux_conf_t *conf,
-                            flux_error_t *error,
-                            void *arg)
+static int queue_apply (struct queue_ctx *qctx,
+                        const flux_conf_t *conf,
+                        flux_error_t *error)
 {
-    struct queue_ctx *qctx = arg;
     json_t *config = NULL;
     json_t *policy = NULL;
 
@@ -148,12 +153,71 @@ static int queue_configure (const flux_conf_t *conf,
      */
     queues_set_global_policy (qctx->queues, policy);
     /* Now that all queue mutations are settled, deliver the resolved
-     * effective queue configuration to jobtap plugins. A plugin that rejects
-     * the new configuration fails the config reload.
+     * effective queue configuration to jobtap plugins.
      */
-    if (jobtap_notify_queues_update (qctx->ctx->jobtap,
-                                     queue_ctx_get_conf (qctx),
-                                     error) < 0)
+    return jobtap_notify_queues_update (qctx->ctx->jobtap,
+                                        queue_ctx_get_conf (qctx),
+                                        error);
+}
+
+/* conf.c rollback callback: put back the queue table as it was before the
+ * reload, and tell plugins about it.
+ *
+ * The copy is restored rather than replaying 'conf' (which is unused here)
+ * because queue_configure() is not a pure function of the configuration:
+ * a replay would restore a removed queue but reset its administrative state
+ * - the enable/start bits and operator reasons - to defaults.
+ *
+ * N.B. conf.c rolls back only callbacks at or before the one that failed,
+ * so if this runs, queue_configure() ran in the same reload and 'saved' is
+ * that reload's pre-mutation copy, never a stale one.
+ */
+static int queue_rollback (const flux_conf_t *conf,
+                           flux_error_t *error,
+                           void *arg)
+{
+    struct queue_ctx *qctx = arg;
+
+    /* A NULL 'saved' means queues_copy() failed at the top of
+     * queue_configure(), before anything was mutated, so there is nothing
+     * to undo.
+     */
+    if (!qctx->saved)
+        return 0;
+    queues_set (qctx->queues, &qctx->saved);
+    qctx->stop_on_restart = qctx->saved_stop_on_restart;
+    /* Restore the table before notifying, since the configuration delivered
+     * to plugins is read back from it. Unlike queue_apply(), plugins are not
+     * offered the change first, because a plugin cannot reject a rollback.
+     *
+     * Notifying every plugin also unwinds any that accepted the rejected
+     * configuration before another plugin refused it. If this fails, those
+     * plugins keep the rejected configuration and conf.c can only log it.
+     */
+    return jobtap_notify_queues_update (qctx->ctx->jobtap,
+                                        queue_ctx_get_conf (qctx),
+                                        error);
+}
+
+static int queue_configure (const flux_conf_t *conf,
+                            flux_error_t *error,
+                            void *arg)
+{
+    struct queue_ctx *qctx = arg;
+
+    /* Copy the table before mutating it, for queue_rollback(). Replaced on
+     * each configure so that a rollback restores the state as of the reload
+     * being undone.
+     */
+    queues_destroy (qctx->saved);
+    if (!(qctx->saved = queues_copy (qctx->queues))) {
+        errprintf (error,
+                   "error copying queue state: %s",
+                   strerror (errno));
+        return -1;
+    }
+    qctx->saved_stop_on_restart = qctx->stop_on_restart;
+    if (queue_apply (qctx, conf, error) < 0)
         return -1;
     return 1;
 }
@@ -436,6 +500,7 @@ void queue_ctx_destroy (struct queue_ctx *qctx)
         conf_unregister_callback (qctx->ctx->conf, queue_configure);
         flux_msg_handler_delvec (qctx->handlers);
         queues_destroy (qctx->queues);
+        queues_destroy (qctx->saved);
         free (qctx);
         errno = saved_errno;
     }
@@ -735,7 +800,7 @@ struct queue_ctx *queue_ctx_create (struct job_manager *ctx)
                                 &error,
                                 "queue",
                                 queue_configure,
-                                NULL,
+                                queue_rollback,
                                 qctx) < 0) {
         flux_log (ctx->h,
                   LOG_ERR,
