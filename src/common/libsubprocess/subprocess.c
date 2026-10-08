@@ -1395,6 +1395,8 @@ flux_subprocess_sigchld_string (flux_subprocess_sigchld_t sigchld)
     {
     case FLUX_SUBPROCESS_SIGCHLD_STOPPED:
         return "Stopped";
+    case FLUX_SUBPROCESS_SIGCHLD_CONTINUED:
+        return "Continued";
     }
     return NULL;
 }
