@@ -620,6 +620,10 @@ static void sdbus_cb (flux_reactor_t *r,
         if (m) {
             // sdbus_recv() may call sdbus_recover() which sets ctx->bus = NULL
             sdbus_recv (ctx, m);
+            /* N.B. the unref closes any descriptors that arrived with the
+             * message.  RFC 52 forbids encoding h values, so a received
+             * descriptor must not outlive its message.
+             */
             sd_bus_message_unref (m);
         }
     } while (e > 0 && ctx->bus != NULL);

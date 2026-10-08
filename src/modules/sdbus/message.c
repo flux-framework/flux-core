@@ -26,6 +26,7 @@
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <systemd/sd-bus.h>
 
 #include "ccan/str/str.h"
@@ -249,14 +250,30 @@ static int put_integer (char type, json_t *o, value_t *v)
                 return -EPROTO;
             v->u = i;
             break;
-        case 'h':
-            if (i < INT32_MIN || i > INT32_MAX)
-                return -EPROTO;
-            v->h = i;
-            break;
         default:
             return -EPROTO;
     }
+    return 0;
+}
+
+/* RFC 52: h is an object with fd and pid members, where pid is the
+ * process id of the requesting process.  Since a descriptor number is
+ * only valid within the process that owns it, fail with ESRCH unless
+ * pid matches this process.
+ */
+static int put_unix_fd (json_t *o, value_t *v)
+{
+    json_int_t fd;
+    json_int_t pid;
+
+    if (json_unpack (o, "{s:I s:I}", "fd", &fd, "pid", &pid) < 0
+        || fd < 0
+        || fd > INT32_MAX
+        || pid <= 0)
+        return -EPROTO;
+    if (pid != getpid ())
+        return -ESRCH;
+    v->h = fd;
     return 0;
 }
 
@@ -301,6 +318,10 @@ static int put_basic (sd_bus_message *m, char type, json_t *o)
         case 'x':
         case 't':
             if ((e = put_int64 (type, o, &v)) < 0)
+                return e;
+            break;
+        case 'h':
+            if ((e = put_unix_fd (o, &v)) < 0)
                 return e;
             break;
         default:
@@ -575,8 +596,12 @@ static int get_basic (sd_bus_message *m, char type, json_t **op)
             break;
         }
         case 'h':
-            o = json_integer (v.h);
-            break;
+            /* RFC 52: encoding h fails.  Ownership of the descriptor
+             * cannot be safely transferred through a response.  The
+             * descriptor remains owned by the message and is closed
+             * when the message is unreferenced.
+             */
+            return -EPROTO;
         case 'd':
             if (!isfinite (v.d))
                 return -EPROTO;

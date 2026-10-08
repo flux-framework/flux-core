@@ -75,7 +75,9 @@ sd_bus_message *interface_request_fromjson (sd_bus *bus,
         errprintf (error,
                    "error translating JSON to %s method-call: %s",
                    member,
-                   strerror (-e));
+                   e == -ESRCH
+                       ? "file descriptors cannot be passed between processes"
+                       : strerror (-e));
         sd_bus_message_unref (m);
         return NULL;
     }

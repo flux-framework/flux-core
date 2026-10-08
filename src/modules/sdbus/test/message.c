@@ -13,6 +13,9 @@
 #endif
 
 #include <jansson.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <sys/stat.h>
 #include <systemd/sd-bus.h>
 
 #include "src/common/libtap/tap.h"
@@ -274,6 +277,60 @@ void test_int64 (sd_bus *bus)
         "hex t fails with EPROTO");
 }
 
+/* sd-bus duplicates a file descriptor when it is appended to a message,
+ * so the number is not preserved.  Check that the descriptor in the
+ * message refers to the same file as the one written.  Per RFC 52,
+ * reading h back fails, and writing requires a matching pid.
+ */
+void test_unix_fd (sd_bus *bus)
+{
+    sd_bus_message *m;
+    json_t *in;
+    json_t *out;
+    char buf[64];
+    struct stat sb1, sb2;
+    int fd;
+    int fd2;
+
+    if ((fd = open ("/dev/null", O_RDONLY)) < 0
+        || fstat (fd, &sb1) < 0)
+        BAIL_OUT ("could not open /dev/null");
+    if (!(in = json_pack ("[{s:i s:i}]", "fd", fd, "pid", (int)getpid ()))
+        || !(out = json_array ()))
+        BAIL_OUT ("could not create json objects");
+    if (sd_bus_message_new (bus, &m, SD_BUS_MESSAGE_METHOD_CALL) < 0)
+        BAIL_OUT ("could not create method call message");
+    ok (sdmsg_write (m, "h", in) == 0,
+        "sdmsg_write h with fd/pid object works");
+    seal (m);
+    ok (sd_bus_message_read_basic (m, 'h', &fd2) > 0
+        && fd2 >= 0
+        && fstat (fd2, &sb2) == 0
+        && sb1.st_dev == sb2.st_dev
+        && sb1.st_ino == sb2.st_ino,
+        "message contains a descriptor for the same file");
+    (void)sd_bus_message_rewind (m, true);
+    ok (sdmsg_read (m, out) == -EPROTO,
+        "sdmsg_read h fails with EPROTO");
+    sd_bus_message_unref (m);
+    json_decref (out);
+    json_decref (in);
+    close (fd);
+
+    snprintf (buf,
+              sizeof (buf),
+              "[{\"fd\":0,\"pid\":%d}]",
+              (int)getpid () + 1);
+    ok (write_error (bus, "h", buf) == -ESRCH,
+        "h with mismatched pid fails with ESRCH");
+    snprintf (buf,
+              sizeof (buf),
+              "[{\"fd\":2147483648,\"pid\":%d}]",
+              (int)getpid ());
+    ok (write_error (bus, "h", buf) == -EPROTO,
+        "out of range h fails with EPROTO");
+}
+
 void test_containers (sd_bus *bus)
 {
     ok (roundtrip (bus, "(sasb)", "[[\"foo\",[\"a1\",\"a2\"],true]]"),
@@ -454,6 +511,7 @@ int main (int argc, char **argv)
     test_typestr (bus);
     test_basic (bus);
     test_int64 (bus);
+    test_unix_fd (bus);
     test_containers (bus);
     test_dict_pairs (bus);
     test_variants (bus);

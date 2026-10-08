@@ -13,6 +13,7 @@
 #endif
 #include <stdint.h>
 #include <stdarg.h>
+#include <unistd.h>
 #include <errno.h>
 #include <jansson.h>
 #include <flux/core.h>
@@ -49,7 +50,7 @@ void test_basic (void)
 {
     json_t *o = load ("[255,true,-32768,65535,-2147483648,4294967295,"
                       "\"-9223372036854775808\",\"18446744073709551615\","
-                      "2.5,3,\"str\",\"/a/b\",\"a{sv}\"]");
+                      "2.5,\"str\",\"/a/b\",\"a{sv}\"]");
     uint8_t y;
     int b;
     int16_t n;
@@ -63,7 +64,7 @@ void test_basic (void)
     const char *s, *op, *g;
 
     ok (sdexec_params_read (o,
-                            "ybnqiuxtdhsog",
+                            "ybnqiuxtdsog",
                             &y,
                             &b,
                             &n,
@@ -73,13 +74,12 @@ void test_basic (void)
                             &x,
                             &t,
                             &d,
-                            &h,
                             &s,
                             &op,
                             &g) == 0
         && y == 255 && b == 1 && n == INT16_MIN && q == UINT16_MAX
         && i == INT32_MIN && u == UINT32_MAX && x == INT64_MIN
-        && t == UINT64_MAX && d == 2.5 && h == 3
+        && t == UINT64_MAX && d == 2.5
         && streq (s, "str") && streq (op, "/a/b") && streq (g, "a{sv}"),
         "sdexec_params_read reads every basic type at its limits");
     json_decref (o);
@@ -87,6 +87,21 @@ void test_basic (void)
     o = load ("[1]");
     ok (sdexec_params_read (o, "d", &d) == 0 && d == 1.0,
         "sdexec_params_read accepts an integer for d");
+    json_decref (o);
+
+    if (!(o = json_pack ("[{s:i s:i}]", "fd", 3, "pid", (int)getpid ())))
+        BAIL_OUT ("could not create h object");
+    ok (sdexec_params_read (o, "h", &h) == 0
+        && h == 3,
+        "sdexec_params_read reads h with matching pid");
+    json_decref (o);
+
+    if (!(o = json_pack ("[{s:i s:i}]", "fd", 3, "pid", (int)getpid () + 1)))
+        BAIL_OUT ("could not create h object");
+    errno = 0;
+    ok (sdexec_params_read (o, "h", &h) < 0
+        && errno == EPROTO,
+        "sdexec_params_read h with mismatched pid fails with EPROTO");
     json_decref (o);
 }
 
@@ -117,7 +132,10 @@ static const struct bad bad_tab[] = {
     { "t", "[\" 5\"]" },
     { "t", "[\"0x10\"]" },
     { "t", "[\"\"]" },
-    { "h", "[-1]" },
+    { "h", "[5]" },
+    { "h", "[{\"fd\":-1,\"pid\":1}]" },
+    { "h", "[{\"pid\":1}]" },
+    { "h", "[{\"fd\":5}]" },
     { "(si)", "[[\"x\"]]" },
     { "as", "[\"a\"]" },
     { "a{sv}", "[[]]" },

@@ -19,6 +19,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include <errno.h>
 #include <inttypes.h>
 #include <jansson.h>
@@ -111,8 +112,12 @@ json_t *sdexec_value_encode (char type, va_list *ap)
         case 'n':
         case 'q':
         case 'i':
-        case 'h':
             return json_integer (va_arg (*ap, int));
+        case 'h':
+            // RFC 52: h is an object with fd and pid members
+            return json_pack ("{s:i s:i}",
+                              "fd", va_arg (*ap, int),
+                              "pid", (int)getpid ());
         case 'u':
             return json_integer (va_arg (*ap, uint32_t));
         case 'x':
@@ -240,11 +245,18 @@ static int read_basic (json_t *val, char type, va_list *ap)
                 return -1;
             *va_arg (*ap, uint32_t *) = i;
             return 0;
-        case 'h':
-            if (read_integer (val, 0, INT32_MAX, &i) < 0)
+        case 'h': {
+            // RFC 52: the pid member must match the reading process
+            json_int_t fd;
+            json_int_t pid;
+            if (json_unpack (val, "{s:I s:I}", "fd", &fd, "pid", &pid) < 0
+                || fd < 0
+                || fd > INT32_MAX
+                || pid != getpid ())
                 return -1;
-            *va_arg (*ap, int *) = i;
+            *va_arg (*ap, int *) = fd;
             return 0;
+        }
         case 'x': {
             int64_t x;
             if (read_decimal (val, true, &x, NULL) < 0)

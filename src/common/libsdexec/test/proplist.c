@@ -12,6 +12,8 @@
 #include "config.h"
 #endif
 #include <stdint.h>
+#include <stdio.h>
+#include <unistd.h>
 #include <errno.h>
 #include <jansson.h>
 #include <flux/core.h>
@@ -52,6 +54,7 @@ static bool finish_is (struct sdexec_proplist *pl, const char *expect)
 void test_basic (void)
 {
     struct sdexec_proplist *pl;
+    char expect[1024];
 
     if (!(pl = sdexec_proplist_create ()))
         BAIL_OUT ("could not create proplist");
@@ -70,20 +73,23 @@ void test_basic (void)
     sdexec_proplist_add (pl, "O", "o", "/a/b");
     sdexec_proplist_add (pl, "G", "g", "a{sv}");
     sdexec_proplist_add (pl, "H", "h", 3);
-    ok (finish_is (pl,
-                   "[[\"Y\",[\"y\",255]],"
-                   "[\"B\",[\"b\",true]],"
-                   "[\"N\",[\"n\",-32768]],"
-                   "[\"Q\",[\"q\",65535]],"
-                   "[\"I\",[\"i\",-1]],"
-                   "[\"U\",[\"u\",4294967295]],"
-                   "[\"X\",[\"x\",\"-9223372036854775808\"]],"
-                   "[\"T\",[\"t\",\"18446744073709551615\"]],"
-                   "[\"D\",[\"d\",2.5]],"
-                   "[\"S\",[\"s\",\"hello\"]],"
-                   "[\"O\",[\"o\",\"/a/b\"]],"
-                   "[\"G\",[\"g\",\"a{sv}\"]],"
-                   "[\"H\",[\"h\",3]]]"),
+    snprintf (expect,
+              sizeof (expect),
+              "[[\"Y\",[\"y\",255]],"
+              "[\"B\",[\"b\",true]],"
+              "[\"N\",[\"n\",-32768]],"
+              "[\"Q\",[\"q\",65535]],"
+              "[\"I\",[\"i\",-1]],"
+              "[\"U\",[\"u\",4294967295]],"
+              "[\"X\",[\"x\",\"-9223372036854775808\"]],"
+              "[\"T\",[\"t\",\"18446744073709551615\"]],"
+              "[\"D\",[\"d\",2.5]],"
+              "[\"S\",[\"s\",\"hello\"]],"
+              "[\"O\",[\"o\",\"/a/b\"]],"
+              "[\"G\",[\"g\",\"a{sv}\"]],"
+              "[\"H\",[\"h\",{\"fd\":3,\"pid\":%d}]]]",
+              (int)getpid ());
+    ok (finish_is (pl, expect),
         "sdexec_proplist_add encodes every basic type per RFC 52");
     sdexec_proplist_destroy (pl);
 }
