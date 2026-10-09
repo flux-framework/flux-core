@@ -26,7 +26,8 @@ struct jobspec {
     int slots_per_node;         // number of slots per node (-1=unspecified)
     int node_count;             // number of nodes (-1=unspecified)
     bool node_exclusive;        // exclusive=true on node resource
-    json_t *command;
+    json_t *tasks;              // full tasks array (borrowed from jobspec)
+    json_t *command;           // command to run (borrowed; tasks[N].command)
     const char *cwd;
     json_t *environment;
     json_t *options;            // attributes.system.shell.options, if any
@@ -36,6 +37,16 @@ struct jobspec {
 
 struct jobspec *jobspec_parse (const char *jobspec, rcalc_t *r, json_error_t *error);
 void jobspec_destroy (struct jobspec *job);
+
+/*  Select the task command bound to a matched slot `label` and point
+ *  job->command at it. If `label` is NULL or empty, job->command is left as
+ *  tasks[0].command (unchanged default behavior). If `label` is set but no
+ *  task has a matching `slot`, return -1 with errno set to ENOENT.
+ *
+ *  Both job->command and each task's command are borrowed references into
+ *  job->jobspec, so repointing requires no reference count changes.
+ */
+int jobspec_resolve_task_command (struct jobspec *job, const char *label);
 
 #endif /* !_SHELL_JOBSPEC_H */
 
