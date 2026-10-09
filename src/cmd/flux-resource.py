@@ -562,10 +562,17 @@ class ResourceSetExtra(ResourceSet):
     @property
     def propertiesx(self):
         properties = json.loads(self.get_properties())
-        #  Strip all configured queue names from properties, so that
-        #  properties used only for queue membership are not displayed.
-        for q in self.queue_config:
-            properties.pop(q, None)
+        #  Strip properties used only for queue membership, so they are not
+        #  displayed as ordinary resource properties: the queue names, and
+        #  each queue's instance-local membership property (the "+NAME" of a
+        #  queue that declares 'hosts'). An ordinary property named by
+        #  'requires' is kept, since it describes the resource itself and is
+        #  meaningful outside the queue.
+        for name, entry in self.queue_config.items():
+            properties.pop(name, None)
+            for prop in entry.get("requires", []):
+                if prop.startswith("+"):
+                    properties.pop(prop, None)
         return ",".join(properties.keys())
 
     @property

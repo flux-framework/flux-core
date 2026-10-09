@@ -501,8 +501,10 @@ The following field names can be specified for the **list** subcommand:
    Properties associated with resources.
 
 **propertiesx**
-   Properties associated with resources, but with all configured queue names
-   removed, regardless of any ``-q, --queue`` filter in effect.
+   Properties associated with resources, but with the properties used only
+   for queue membership removed, regardless of any ``-q, --queue`` filter in
+   effect.  These are the configured queue names and, for a queue that
+   declares ``hosts``, its derived membership property ``+NAME``.
 
 **nnodes**
    number of nodes
@@ -576,6 +578,13 @@ dynamic discovery
 
 Once the inventory has been determined, it is stored the KVS ``resource.R``
 key, in RFC 20 (R version 1) format.
+
+The stored resource set records the resources themselves.  It does not
+include properties Flux derives from other configuration, such as the
+membership property of a queue that declares ``hosts`` (see
+:man5:`flux-config-queues`).  Those are added to the resource set the
+``resource`` module serves and the scheduler acquires, so use
+`R`_ to view them rather than reading the KVS key.
 
 Events that affect the availability of resources and should persist across
 a Flux restart are posted to the KVS *resource.eventlog*.  Such events include:
