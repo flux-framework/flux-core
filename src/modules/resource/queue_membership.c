@@ -69,7 +69,7 @@ done:
 /* True if any queue in 'queues' declares 'hosts', i.e. there is a membership
  * property to derive.
  */
-bool queue_membership_configured (json_t *queues)
+static bool queue_membership_configured (json_t *queues)
 {
     const char *name;
     json_t *entry;

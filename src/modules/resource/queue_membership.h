@@ -25,12 +25,19 @@
  *
  * The job-manager is the authority for queue configuration, so deriving
  * membership here is a deliberate exception, limited to the queues defined
- * in the configuration. It closes a startup race: the job-manager loads
- * after this module, and the scheduler acquires R from it, so there is no
- * one to ask when R is first built. The configuration is always present
- * and re-read on every load, so it can be consulted directly, and the
- * result is correct across a reload of this module, of the scheduler, or
- * of the whole instance.
+ * in the configuration.
+ *
+ * It exists because there is no way to synchronize with the scheduler that
+ * properties have been established: the acquire stream is one-way, so a
+ * scheduler cannot acknowledge that it applied them. A scheduler that has
+ * not applied "+NAME" may reject a job that names it as unsatisfiable, and
+ * that rejection is permanent. The properties must therefore be sent with
+ * the initial acquire response, which only this module can do.
+ *
+ * The configuration is always present and is re-read on every load, so it
+ * can be consulted directly here. Queues created at runtime have no such
+ * authority to read, and will need both a push from the job-manager and a
+ * way to synchronize with the scheduler.
  *
  * The result is derived state and is not meant to be stored: 'R' here is
  * the copy the module serves to the scheduler and to resource.status, not
@@ -57,11 +64,6 @@ int queue_membership_apply (json_t *R,
  * json_decref() the result.
  */
 json_t *queue_membership_copy (json_t *R);
-
-/* True if any queue in 'queues' (the [queues] config table, or NULL)
- * declares 'hosts', i.e. there is a membership property to derive.
- */
-bool queue_membership_configured (json_t *queues);
 
 #endif /* !_RESOURCE_QUEUE_MEMBERSHIP_H */
 

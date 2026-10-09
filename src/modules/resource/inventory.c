@@ -102,12 +102,18 @@
 #include "reslog.h"
 #include "acquire.h"
 #include "inventory.h"
+#include "queue_membership.h"
 
 
 struct inventory {
     struct resource_ctx *ctx;
 
-    json_t *R;
+    json_t *R;                     /* R as served, with queue membership */
+
+    json_t *R_stored;              /* R as received, committed to the KVS.
+                                    * Always a distinct object from 'R'.
+                                    * See inventory_put().
+                                    */
     char *method;
     double saved_expiration;       /* expiration for use with rediscover */
 
@@ -155,13 +161,16 @@ static void inventory_put_continuation (flux_future_t *f, void *arg)
     (void)inventory_put_finalize (inv);
 }
 
+/* Commit R to the KVS. R_stored is committed rather than R, so that the
+ * queue membership this module derives is not stored. See inventory_put().
+ */
 static flux_future_t *inventory_put_R (struct inventory *inv)
 {
     flux_kvs_txn_t *txn = NULL;
     flux_future_t *f = NULL;
 
     if (!(txn = flux_kvs_txn_create ())
-        || flux_kvs_txn_pack (txn, 0, "resource.R", "O", inv->R) < 0)
+        || flux_kvs_txn_pack (txn, 0, "resource.R", "O", inv->R_stored) < 0)
         goto error;
     f = flux_kvs_commit (inv->ctx->h, NULL, 0, txn);
 error:
@@ -169,6 +178,10 @@ error:
     return f;
 }
 
+/* N.B. 'R' and 'R_stored' are distinct objects that do not share
+ * 'execution' (see queue_membership_copy()), so the expiration is set on
+ * both.
+ */
 static int inventory_update_expiration (struct inventory *inv,
                                         double expiration)
 {
@@ -177,7 +190,8 @@ static int inventory_update_expiration (struct inventory *inv,
     int rc = -1;
 
     if (!(o = json_real (expiration))
-        || jpath_set (inv->R, "execution.expiration", o) < 0) {
+        || jpath_set (inv->R, "execution.expiration", o) < 0
+        || jpath_set (inv->R_stored, "execution.expiration", o) < 0) {
         flux_log (h, LOG_ERR, "failed to update expiration in inventory R");
         goto out;
     }
@@ -194,6 +208,7 @@ int inventory_put (struct inventory *inv, json_t *R, const char *method)
 
 {
     char *cpy;
+    flux_error_t error;
 
     if (inv->ctx->rank != 0) {
         errno = EINVAL;
@@ -203,7 +218,42 @@ int inventory_put (struct inventory *inv, json_t *R, const char *method)
         errno = EEXIST;
         return -1;
     }
-    inv->R = json_incref (R);
+    /* Apply the membership properties of the statically configured queues
+     * (queues.NAME.hosts -> "+NAME") to the R this module serves. This is
+     * the single point through which R from every source (config, hwloc,
+     * job-info, kvs, reload) passes on rank 0, which is the R the scheduler
+     * acquires.
+     *
+     * R is kept in two forms: R_stored as received, which is committed to
+     * the KVS, and R with the derivation, which this module serves. The
+     * derivation goes into a copy so that it is never stored. R_stored
+     * keeps every property R arrived with, including any instance-local
+     * one; it lacks only the properties derived here.
+     *
+     * Storing the derivation would break a reload that reads R back from
+     * the KVS (method=kvs), because the derived properties would then be
+     * indistinguishable from the resources' own. Consider a queue 'batch'
+     * configured with hosts="test[0-1]", later changed to "test[2-3]".
+     * On reload, R arrives with +batch on test[0-1] from the previous
+     * load. The module cannot tell that apart from a property an admin
+     * assigned, so it cannot remove it, and +batch ends up on all four
+     * nodes. Deleting the queue outright is worse: +batch stays forever.
+     *
+     * The copy is made whether or not a queue declares 'hosts', so the two
+     * forms are always distinct objects. A property applied to the served
+     * R after this point then cannot reach the stored one. The copy is
+     * thin, sharing all of R but the one key the derivation modifies.
+     */
+    inv->R_stored = json_incref (R);
+    if (!(inv->R = queue_membership_copy (R)))
+        goto error;
+    if (queue_membership_apply (inv->R,
+                                flux_get_conf (inv->ctx->h),
+                                &error) < 0) {
+        flux_log (inv->ctx->h, LOG_ERR, "%s", error.text);
+        errno = EINVAL;
+        goto error;
+    }
     if (inv->saved_expiration != 0.
         && inventory_update_expiration (inv, inv->saved_expiration))
         goto error;
@@ -218,6 +268,13 @@ int inventory_put (struct inventory *inv, json_t *R, const char *method)
     inv->method = cpy;
     return 0;
 error:
+    /* Leave no partial state behind, so that 'R' and 'R_stored' are either
+     * both set or both unset when returning this function.
+     */
+    ERRNO_SAFE_WRAP (json_decref, inv->R_stored);
+    inv->R_stored = NULL;
+    ERRNO_SAFE_WRAP (json_decref, inv->R);
+    inv->R = NULL;
     flux_future_destroy (inv->put_f);
     inv->put_f = NULL;
     return -1;
@@ -931,6 +988,8 @@ static void resource_reload (flux_t *h,
     if (inv->R) {
         json_decref (inv->R);
         inv->R = NULL;
+        json_decref (inv->R_stored);
+        inv->R_stored = NULL;
         free (inv->method);
         inv->method = NULL;
     }
@@ -1006,6 +1065,7 @@ void inventory_destroy (struct inventory *inv)
         int saved_errno = errno;
         flux_msg_handler_delvec (inv->handlers);
         json_decref (inv->R);
+        json_decref (inv->R_stored);
         free (inv->method);
         flux_future_destroy (inv->put_f);
         R_watch_destroy (inv);
