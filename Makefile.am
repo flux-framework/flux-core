@@ -18,7 +18,7 @@ EXTRA_DIST = \
 	scripts/install-deps-macos.sh \
 	scripts/configure-macos.sh \
 	scripts/check-macos.sh \
-	scripts/check-json-pack
+	scripts/check-format-args
 
 ACLOCAL_AMFLAGS = -I config
 

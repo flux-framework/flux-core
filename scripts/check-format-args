@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# check-json-pack - verify jansson pack/unpack format specifiers match the
+# check-format-args - verify jansson pack/unpack format specifiers match the
 # types of the variadic arguments passed to them.
 #
 # jansson's json_pack()/json_unpack() families (and the many flux wrappers
@@ -14,8 +14,16 @@
 # C++ plugin required), parses the format strings, and compares the implied
 # types against the actual argument types found in the AST.
 #
+# The libsdexec D-Bus value readers (sdexec_value_read() and friends) and
+# sdexec_proplist_add() are checked the same way: their D-Bus type string
+# implies the C type of each variadic argument (RFC 52, in the manner of
+# sd_bus_message_read(3)), and the compiler does not check them either.
+# A 'v' in a read type string consumes a variant contents type as a string
+# argument; when that argument is a literal, checking continues into the
+# contents type, and when it is computed, the rest of the call is skipped.
+#
 # Usage:
-#   scripts/check-json-pack [options] [FILE ...]
+#   scripts/check-format-args [options] [FILE ...]
 #
 # Requires a compile_commands.json (see scripts/generate_compile_commands)
 # and a clang binary.  FILE arguments, if given, restrict the check to
@@ -48,6 +56,29 @@ JANSSON_CORE = {
     "json_unpack": (2, "unpack"),
     "json_unpack_ex": (4, "unpack"),
     "json_vunpack_ex": None,
+}
+
+# libsdexec D-Bus value functions: name -> (num_fixed_params, direction).
+# 'dbus-read' args are out pointers named by D-Bus type (RFC 52);
+# 'dbus-write' args are values as for sd_bus_message_append(3).
+SDEXEC_DBUS = {
+    "sdexec_value_read": (2, "dbus-read"),
+    "sdexec_variant_read": (2, "dbus-read"),
+    "sdexec_variant_vread": None,   # va_list variant: no inline args
+    "sdexec_params_read": (2, "dbus-read"),
+    "sdexec_reply_read": (2, "dbus-read"),
+    "sdexec_property_get_read": (2, "dbus-read"),
+    "sdexec_property_dict_read": (3, "dbus-read"),
+    "sdexec_proplist_add": (3, "dbus-write"),
+}
+
+# dbus-read functions whose type string must be a single complete type
+# (the others take a message body signature, zero or more complete types)
+DBUS_SINGLE_TYPE = {
+    "sdexec_value_read",
+    "sdexec_variant_read",
+    "sdexec_property_get_read",
+    "sdexec_property_dict_read",
 }
 
 # Integer base-type classification by promotion / guaranteed width.
@@ -362,6 +393,224 @@ def check_arg(kind, t, enum_types=None, const_val=None):
 
 
 # ---------------------------------------------------------------------------
+# libsdexec D-Bus type strings (RFC 52)
+# ---------------------------------------------------------------------------
+
+# dbus-read out-pointer base types, exact width (libsdexec value.c writes
+# through exactly these pointer types)
+DBUS_READ_PTR_BASES = {
+    "y": {"uint8_t", "unsigned char"},
+    "b": {"int", "signed int", "int32_t"},
+    "n": {"int16_t", "short", "short int", "signed short",
+          "signed short int"},
+    "q": {"uint16_t", "unsigned short", "unsigned short int"},
+    "i": {"int32_t", "int", "signed int", "pid_t", "__pid_t"},
+    "u": {"uint32_t", "unsigned int", "unsigned"},
+    "x": {"int64_t", "long long", "long long int", "signed long long",
+          "signed long long int", "json_int_t"},
+    "t": {"uint64_t", "unsigned long long", "unsigned long long int",
+          "flux_jobid_t", "fluid_t"},
+    "h": {"int", "signed int", "int32_t"},
+    "d": {"double"},
+}
+
+# dbus-write value arguments map onto the jansson expectation kinds: int
+# promotions for the small integers, 64-bit for x/t, and strings
+DBUS_WRITE_KIND = {
+    "y": "INT", "b": "INT", "n": "INT", "q": "INT", "i": "INT",
+    "u": "INT", "h": "INT",
+    "x": "LLONG", "t": "LLONG",
+    "d": "DOUBLE",
+    "s": "STR_IN", "o": "STR_IN", "g": "STR_IN",
+}
+
+DBUS_EXPECTED_DESC = {
+    "DB_y": "uint8_t *", "DB_b": "int *", "DB_n": "int16_t *",
+    "DB_q": "uint16_t *", "DB_i": "int32_t *", "DB_u": "uint32_t *",
+    "DB_x": "int64_t *", "DB_t": "uint64_t *", "DB_h": "int *",
+    "DB_d": "double *",
+    "DB_STR_OUT": "const char **",
+    "DB_JSON_OUT": "json_t **",
+    "DB_TYPESTR": "const char * (variant contents type)",
+}
+
+
+def dbus_dict_len(sig, i):
+    """Length of the dict entry type at sig[i:] ('{' position), or -1.
+
+    Per the D-Bus specification a dict entry has exactly two members,
+    its key is a basic type, and it may only appear as an array element
+    (the caller enforces the latter by dispatching from 'a').
+    """
+    if i + 1 >= len(sig) or sig[i + 1] not in "ybnqiuxtdsogh":
+        return -1
+    n = dbus_type_len(sig, i + 2)
+    if n < 0 or i + 2 + n >= len(sig) or sig[i + 2 + n] != "}":
+        return -1
+    return n + 3
+
+
+def dbus_type_len(sig, i=0):
+    """Length of the single complete D-Bus type at sig[i:], or -1."""
+    if i >= len(sig):
+        return -1
+    c = sig[i]
+    if c == "a":
+        if i + 1 < len(sig) and sig[i + 1] == "{":
+            n = dbus_dict_len(sig, i + 1)
+        else:
+            n = dbus_type_len(sig, i + 1)
+        return -1 if n < 0 else n + 1
+    if c == "(":
+        j = i + 1
+        while j < len(sig) and sig[j] != ")":
+            n = dbus_type_len(sig, j)
+            if n < 0:
+                return -1
+            j += n
+        if j >= len(sig) or j == i + 1:
+            return -1
+        return j - i + 1
+    if c in "ybnqiuxtdsoghv":
+        return 1
+    return -1
+
+
+def dbus_read_exps(sig, var_args):
+    """Expand a D-Bus type string into per-argument read expectations.
+
+    Returns (exps, err, complete).  exps is a list of (kind, code) where
+    expectation k consumes var_args[k].  A struct reads one argument per
+    member; an array or dict reads one json_t *.  A variant consumes a
+    contents type string argument and, when it is a literal, continues
+    into the contents type; otherwise checking of the remaining arguments
+    is abandoned (complete=False).
+    """
+    exps = []
+    state = {"err": None, "complete": True}
+
+    def expand(s):
+        i = 0
+        while i < len(s):
+            if state["err"] or not state["complete"]:
+                return
+            c = s[i]
+            n = dbus_type_len(s, i)
+            if n < 0:
+                state["err"] = "malformed type string"
+                return
+            if c == "(":
+                expand(s[i + 1:i + n - 1])
+            elif c == "a":
+                exps.append(("DB_JSON_OUT", s[i:i + n]))
+            elif c == "v":
+                exps.append(("DB_TYPESTR", "v"))
+                k = len(exps) - 1
+                if k >= len(var_args):
+                    return              # too few args; count check reports
+                vtype = find_string_literal(var_args[k])
+                if vtype is None:
+                    state["complete"] = False
+                    return
+                if dbus_type_len(vtype) != len(vtype):
+                    state["err"] = ("variant contents %r is not a single "
+                                    "complete type" % vtype)
+                    return
+                expand(vtype)
+            elif c in "sog":
+                exps.append(("DB_STR_OUT", c))
+            else:
+                exps.append(("DB_" + c, c))
+            i += n
+
+    expand(sig)
+    return exps, state["err"], state["complete"]
+
+
+def check_dbus_read_arg(kind, t):
+    """Return (ok, note) for argument type t against dbus-read kind."""
+    base, depth, arr = type_base_depth(t)
+    isnull = base == "void" and depth == 1
+    if isnull:
+        return True, ""
+    if kind == "DB_TYPESTR":
+        return (base == "char" and (depth == 1 or arr)), ""
+    if kind == "DB_STR_OUT":
+        return (base == "char" and depth == 2), ""
+    if kind == "DB_JSON_OUT":
+        return (base == "json_t" and depth == 2), ""
+    accept = DBUS_READ_PTR_BASES.get(kind[3:], set())
+    if depth == 1 and not arr and base in accept:
+        return True, ""
+    note = ""
+    if depth == 1 and base in PLATFORM_BASES:
+        note = "platform-dependent width; not portable"
+    return False, note
+
+
+def check_dbus_call(name, direction, fmt, var_args, loc, cfile_abs,
+                    cline, ccol, enum_types):
+    """Check one dbus-read or dbus-write call; return findings."""
+    findings = []
+
+    def add(sev, msg):
+        findings.append({
+            "loc": loc, "abs": cfile_abs, "line": cline, "col": ccol,
+            "sev": sev, "msg": msg,
+        })
+
+    if direction == "dbus-write":
+        # one basic type code, one value argument
+        if len(fmt) != 1 or fmt not in DBUS_WRITE_KIND:
+            add("warning",
+                "%s() type %r is not a basic D-Bus type" % (name, fmt))
+            return findings
+        if len(var_args) != 1:
+            add("error",
+                "%s() type %r implies 1 argument but %d passed"
+                % (name, fmt, len(var_args)))
+        if var_args:
+            kind = DBUS_WRITE_KIND[fmt]
+            t = arg_type(var_args[0])
+            cval = eval_int_const(var_args[0])
+            ok, note = check_arg(kind, t, enum_types, cval)
+            if not ok:
+                extra = "; " + note if note else ""
+                add("error",
+                    "%s() arg 1 for '%s' expects %s but got %r%s"
+                    % (name, fmt, EXPECTED_DESC.get(kind, kind), t, extra))
+        return findings
+
+    if len(fmt) > 255:
+        add("warning",
+            "%s() type string exceeds the D-Bus 255 byte limit" % name)
+        return findings
+    exps, perr, complete = dbus_read_exps(fmt, var_args)
+    if perr:
+        add("warning", "%s() type %r: %s" % (name, fmt, perr))
+    elif name in DBUS_SINGLE_TYPE and dbus_type_len(fmt) != len(fmt):
+        add("warning",
+            "%s() expects a single complete type, got %r" % (name, fmt))
+    if not perr and complete and len(exps) != len(var_args):
+        add("error",
+            "%s() type %r implies %d argument(s) but %d passed"
+            % (name, fmt, len(exps), len(var_args)))
+    for k, (kind, code) in enumerate(exps):
+        if k >= len(var_args):
+            break
+        t = arg_type(var_args[k])
+        ok, note = check_dbus_read_arg(kind, t)
+        if ok:
+            continue
+        extra = "; " + note if note else ""
+        add("error",
+            "%s() arg %d for '%s' expects %s but got %r%s"
+            % (name, k + 1, code, DBUS_EXPECTED_DESC.get(kind, kind),
+               t, extra))
+    return findings
+
+
+# ---------------------------------------------------------------------------
 # clang AST handling
 # ---------------------------------------------------------------------------
 
@@ -482,6 +731,9 @@ def analyze_ast(root, main_file, repo_root, directory):
     for name, spec in JANSSON_CORE.items():
         if spec is not None:
             table[name] = spec
+    for name, spec in SDEXEC_DBUS.items():
+        if spec is not None:
+            table[name] = spec
 
     calls = []
     enum_types = set()          # typedef names whose underlying type is an enum
@@ -565,16 +817,6 @@ def analyze_ast(root, main_file, repo_root, directory):
         if fmt is None:
             continue                      # non-literal format: cannot check
         var_args = call_args[num_params:]
-        exps, perr = parse_format(fmt, direction)
-
-        # In JSON_VALIDATE_ONLY mode, json_unpack_ex() consumes only object
-        # keys (to navigate), never value outputs.  Detect via the flags
-        # argument (the parameter just before the format) and drop value
-        # expectations so validate-only calls do not look under-supplied.
-        if direction == "unpack" and name.endswith("_ex") and fmt_index >= 1:
-            flags = eval_int_flags(call_args[fmt_index - 1])
-            if flags is not None and (flags & JSON_VALIDATE_ONLY):
-                exps = [e for e in exps if e[2] == "key"]
 
         # clang may report the file relative to its cwd (the entry
         # directory), so resolve against that, not the checker's cwd.
@@ -588,6 +830,23 @@ def analyze_ast(root, main_file, repo_root, directory):
             continue
         loc = "%s:%s:%s" % (os.path.relpath(cfile_abs, repo_root),
                             cline, ccol)
+
+        if direction in ("dbus-read", "dbus-write"):
+            findings.extend(check_dbus_call(name, direction, fmt, var_args,
+                                            loc, cfile_abs, cline, ccol,
+                                            enum_types))
+            continue
+
+        exps, perr = parse_format(fmt, direction)
+
+        # In JSON_VALIDATE_ONLY mode, json_unpack_ex() consumes only object
+        # keys (to navigate), never value outputs.  Detect via the flags
+        # argument (the parameter just before the format) and drop value
+        # expectations so validate-only calls do not look under-supplied.
+        if direction == "unpack" and name.endswith("_ex") and fmt_index >= 1:
+            flags = eval_int_flags(call_args[fmt_index - 1])
+            if flags is not None and (flags & JSON_VALIDATE_ONLY):
+                exps = [e for e in exps if e[2] == "key"]
 
         if perr:
             findings.append({

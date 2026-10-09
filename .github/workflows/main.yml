@@ -61,8 +61,8 @@ jobs:
       # Ubuntu ships bear 3.x, whose CLI differs from the 2.x form used by
       # scripts/generate_compile_commands, so invoke bear directly here.
       run: bear --output compile_commands.json -- make -j$(nproc)
-    - name: run check-json-pack
-      run: ./scripts/check-json-pack --clang clang -p compile_commands.json
+    - name: run check-format-args
+      run: ./scripts/check-format-args --clang clang -p compile_commands.json
 
   python-lint:
     name: python linting

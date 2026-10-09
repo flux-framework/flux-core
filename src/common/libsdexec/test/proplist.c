@@ -136,12 +136,14 @@ void test_errors (void)
 {
     struct sdexec_proplist *pl;
     flux_error_t error;
+    // non-literal so check-format-args skips this deliberate error
+    const char *badtype = "zz";
 
     if (!(pl = sdexec_proplist_create ()))
         BAIL_OUT ("could not create proplist");
     sdexec_proplist_add (pl, "Good", "s", "ok");
     sdexec_proplist_add (pl, "Bad", "s", NULL);
-    sdexec_proplist_add (pl, "Later", "zz", 42);
+    sdexec_proplist_add (pl, "Later", badtype, 42);
     errno = 0;
     ok (sdexec_proplist_finish (pl, &error) == NULL
         && errno == EINVAL

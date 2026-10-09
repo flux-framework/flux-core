@@ -27,6 +27,7 @@ void test_dict (void)
     int32_t val;
     uint64_t max;
     const char *str;
+    const char *badtype;
 
     if (!(dict = json_pack ("{s:[si] s:[ss] s:[ss]}",
                             "foo", "i", 42,
@@ -48,11 +49,13 @@ void test_dict (void)
         && errno == EPROTO,
         "sdexec_property_dict_read name=unknown fails with EPROTO");
     errno = 0;
-    ok (sdexec_property_dict_read (dict, "foo", "u", &val) < 0
+    badtype = "u"; // non-literal so check-format-args skips negative tests
+    ok (sdexec_property_dict_read (dict, "foo", badtype, &val) < 0
         && errno == EPROTO,
         "sdexec_property_dict_read with the wrong type fails with EPROTO");
     errno = 0;
-    ok (sdexec_property_dict_read (dict, "MemoryMax", "x", &max) < 0
+    badtype = "x";
+    ok (sdexec_property_dict_read (dict, "MemoryMax", badtype, &max) < 0
         && errno == EPROTO,
         "sdexec_property_dict_read t property as x fails with EPROTO");
 
@@ -64,6 +67,8 @@ void test_inval (void)
     flux_t *h;
     flux_future_t *f;
     json_t *dict;
+    // non-literal so check-format-args skips calls with an unused bad type
+    const char *badtype = "foo";
 
     if (!(h = flux_open ("loop://", 0)))
         BAIL_OUT ("could not create loop flux_t handle for testing");
@@ -90,7 +95,7 @@ void test_inval (void)
         "sdexec_property_get name=NULL fails with EINVAL");
 
     errno = 0;
-    ok (sdexec_property_get_read (NULL, "foo") < 0 && errno == EINVAL,
+    ok (sdexec_property_get_read (NULL, badtype) < 0 && errno == EINVAL,
         "sdexec_property_get_read f=NULL fails with EINVAL");
     errno = 0;
     ok (sdexec_property_get_read (f, NULL) < 0 && errno == EINVAL,
@@ -126,11 +131,11 @@ void test_inval (void)
         "sdexec_property_changed_path f=NULL fails with EINVAL");
 
     errno = 0;
-    ok (sdexec_property_dict_read (NULL, "foo", "bar") < 0
+    ok (sdexec_property_dict_read (NULL, "foo", badtype) < 0
         && errno == EINVAL,
         "sdexec_property_dict_read dict=NULL fails with EINVAL");
     errno = 0;
-    ok (sdexec_property_dict_read (dict, NULL, "bar") < 0
+    ok (sdexec_property_dict_read (dict, NULL, badtype) < 0
         && errno == EINVAL,
         "sdexec_property_dict_read name=NULL fails with EINVAL");
     ok (sdexec_property_dict_read (dict, "foo", NULL) < 0

@@ -196,13 +196,15 @@ void test_variant (void)
     json_t *o;
     uint64_t t;
     const char *s;
+    const char *badtype;
     json_t *a;
 
     o = load ("[\"t\",\"18446744073709551615\"]");
     ok (sdexec_variant_read (o, "t", &t) == 0 && t == UINT64_MAX,
         "sdexec_variant_read works");
     errno = 0;
-    ok (sdexec_variant_read (o, "u", &t) < 0 && errno == EPROTO,
+    badtype = "u"; // non-literal so check-format-args skips negative tests
+    ok (sdexec_variant_read (o, badtype, &t) < 0 && errno == EPROTO,
         "sdexec_variant_read with a different type fails with EPROTO");
     json_decref (o);
 
@@ -265,6 +267,7 @@ void test_inval (void)
 {
     json_t *o = load ("[1]");
     int32_t i;
+    const char *badtype;
 
     errno = 0;
     ok (sdexec_value_read (NULL, "i", &i) < 0 && errno == EINVAL,
@@ -273,19 +276,24 @@ void test_inval (void)
     ok (sdexec_value_read (o, NULL) < 0 && errno == EINVAL,
         "sdexec_value_read type=NULL fails with EINVAL");
     errno = 0;
-    ok (sdexec_value_read (o, "ii", &i, &i) < 0 && errno == EINVAL,
+    badtype = "ii"; // non-literal so check-format-args skips negative tests
+    ok (sdexec_value_read (o, badtype, &i, &i) < 0 && errno == EINVAL,
         "sdexec_value_read with two types fails with EINVAL");
     errno = 0;
-    ok (sdexec_value_read (o, "(i", &i) < 0 && errno == EINVAL,
+    badtype = "(i";
+    ok (sdexec_value_read (o, badtype, &i) < 0 && errno == EINVAL,
         "sdexec_value_read with a bad type fails with EINVAL");
     errno = 0;
-    ok (sdexec_value_read (o, "{sv}", &i) < 0 && errno == EINVAL,
+    badtype = "{sv}";
+    ok (sdexec_value_read (o, badtype, &i) < 0 && errno == EINVAL,
         "sdexec_value_read with bare dict entry type fails with EINVAL");
     errno = 0;
-    ok (sdexec_value_read (o, "a{vs}", &i) < 0 && errno == EINVAL,
+    badtype = "a{vs}";
+    ok (sdexec_value_read (o, badtype, &i) < 0 && errno == EINVAL,
         "sdexec_value_read with non-basic dict key fails with EINVAL");
     errno = 0;
-    ok (sdexec_value_read (o, "a{svs}", &i) < 0 && errno == EINVAL,
+    badtype = "a{svs}";
+    ok (sdexec_value_read (o, badtype, &i) < 0 && errno == EINVAL,
         "sdexec_value_read with 3-member dict entry fails with EINVAL");
     errno = 0;
     ok (sdexec_params_read (NULL, "i", &i) < 0 && errno == EINVAL,
