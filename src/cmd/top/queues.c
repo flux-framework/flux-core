@@ -36,24 +36,30 @@ struct queues {
     struct queue *current;
 };
 
-/* Create a queue from its [queues.NAME] config entry.  'name' NULL (with
- * 'entry' NULL too) means the synthetic "all" queue, which has no
- * constraint.
+/* Create a queue from its conf entry, or the synthetic "all" queue (no name,
+ * no constraint) if 'entry' is NULL.
  */
-static struct queue *queue_create (const char *name, json_t *entry)
+static struct queue *queue_create (json_t *entry)
 {
     struct queue *q = calloc (1, sizeof (*q));
     if (!q)
         fatal (0, "could not allocate queue entry");
 
-    if (name) {
+    if (entry) {
+        const char *name;
         json_t *requires = NULL;
 
+        /* 'requires' is the effective membership: an RFC 33 virtual queue
+         * already carries its parent's.  A queue with none covers all
+         * resources.
+         */
+        if (json_unpack (entry,
+                         "{s:s s?o}",
+                         "name", &name,
+                         "requires", &requires) < 0)
+            fatal (0, "error parsing queue configuration");
         if (!(q->name = strdup (name)))
             fatal (0, "could not duplicate queue name entry");
-
-        /* not required to be configured */
-        (void) json_unpack (entry, "{s?o}", "requires", &requires);
         if (requires) {
             if (!(q->constraint = json_pack ("{s:O}",
                                              "properties",
@@ -92,41 +98,41 @@ void queues_destroy (struct queues *queues)
     }
 }
 
-/* Build the queue list from the broker config 'flux_config'.  Nothing from
- * it is retained: each queue keeps only the constraint built here.
+/* Build the queue list from 'conf', the job-manager.queue-list "conf"
+ * object, or just the "all" queue if 'conf' is NULL.  Nothing from 'conf'
+ * is retained: each queue keeps only the constraint built here.
  */
-static void queues_list_setup (struct queues *queues, json_t *flux_config)
+static void queues_list_setup (struct queues *queues, json_t *conf)
 {
     struct queue *q;
-    json_t *o;
-    const char *name;
-    json_t *value;
+    json_t *entries;
+    size_t index;
+    json_t *entry;
 
     list_head_init (&queues->queues_list);
 
     /* first, we add a queue for "all" queues with NULL queue name. */
-    q = queue_create (NULL, NULL);
+    q = queue_create (NULL);
     list_add_tail (&queues->queues_list, &q->list_node);
 
-    /* return if no queues configured */
-    if (json_unpack (flux_config, "{s:o}", "queues", &o) < 0)
+    if (json_unpack (conf, "{s:o}", "queues", &entries) < 0)
         return;
 
-    json_object_foreach (o, name, value) {
-        q = queue_create (name, value);
+    json_array_foreach (entries, index, entry) {
+        q = queue_create (entry);
         list_add_tail (&queues->queues_list, &q->list_node);
         queues->count++;
     }
 }
 
-struct queues *queues_create (json_t *flux_config)
+struct queues *queues_create (json_t *conf)
 {
     struct queues *queues;
 
     if (!(queues = calloc (1, sizeof (*queues))))
         return NULL;
 
-    queues_list_setup (queues, flux_config);
+    queues_list_setup (queues, conf);
 
     /* must work, minimally the "all" queue is configured */
     queues->current = list_top (&queues->queues_list, struct queue, list_node);
