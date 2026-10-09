@@ -40,7 +40,6 @@ struct simple_scorecard {
     unsigned int running:1;
     unsigned int failed:1;
     unsigned int exited:1;
-    unsigned int stopped:1;
 
     // output
     unsigned int stdout_eof:1;
@@ -112,7 +111,7 @@ static void simple_state_cb (flux_subprocess_t *p,
             flux_reactor_stop (flux_get_reactor (ctx->h));
             break;
         case FLUX_SUBPROCESS_STOPPED:
-            ctx->scorecard.stopped = 1;
+            /* deprecated, do not track */
             break;
     }
 }
@@ -187,9 +186,6 @@ void simple_run_check (flux_t *h,
     ok (ctx.scorecard.failed == exp->failed,
         "%s: subprocess state=FAILED was %sreported",
         prefix, exp->failed ? "" : "not ");
-    ok (ctx.scorecard.stopped == exp->stopped,
-        "%s: subprocess state=STOPPED was %sreported",
-        prefix, exp->stopped ? "" : "not ");
     ok (ctx.scorecard.completion == exp->completion,
         "%s: subprocess completion callback was %sinvoked",
         prefix, exp->completion ? "" : "not ");
@@ -636,8 +632,8 @@ void local_unbuf_multiline_test (flux_t *h)
 }
 
 /* In SIGSTOP test, a 'cat' subprocess is sent SIGSTOP upon starting.
- * If remote SIGSTOP handling works, the state callback is called again
- * with state == STOPPED, which triggers closure of stdin and natural
+ * If remote SIGSTOP handling works, the sigchld callback is called again
+ * with sigchld == STOPPED, which triggers closure of stdin and natural
  * termination of the process, which causes the reactor to exit.
  */
 
@@ -651,17 +647,6 @@ static void stop_state_cb (flux_subprocess_t *p,
         pid_t pid = flux_subprocess_pid (p);
         if (pid < 0 || kill (pid, SIGSTOP) < 0) {
             diag ("could not stop test proc: %s", strerror (errno));
-            flux_reactor_stop_error (r);
-        }
-    }
-    else if (state == FLUX_SUBPROCESS_STOPPED) {
-        pid_t pid = flux_subprocess_pid (p);
-        if (pid < 0 || kill (pid, SIGCONT) < 0) {
-            diag ("could not continue test proc: %s", strerror (errno));
-            flux_reactor_stop_error (r);
-        }
-        if (flux_subprocess_close (p, "stdin") < 0) {
-            diag ("could not close remote stdin");
             flux_reactor_stop_error (r);
         }
     }
@@ -680,13 +665,38 @@ static void stop_output_cb (flux_subprocess_t *p, const char *stream)
         diag ("%s: %d bytes", stream, len);
 }
 
-flux_subprocess_ops_t stoptest_ops = {
+static int sigchld_stopped_count;
+
+static void sigchld_stop_cb (flux_subprocess_t *p,
+                             flux_subprocess_sigchld_t sigchld)
+{
+    flux_reactor_t *r = flux_subprocess_aux_get (p, "reactor");
+    pid_t pid = flux_subprocess_pid (p);
+    diag ("sigchld callback sigchld=%s",
+          flux_subprocess_sigchld_string (sigchld));
+    ok (sigchld == FLUX_SUBPROCESS_SIGCHLD_STOPPED,
+        "sigchld callback sigchld == STOPPED");
+    ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
+        "sigchld returned when job was running");
+    if (pid < 0 || kill (pid, SIGCONT) < 0) {
+        diag ("could not continue test proc: %s", strerror (errno));
+        flux_reactor_stop_error (r);
+    }
+    if (flux_subprocess_close (p, "stdin") < 0) {
+        diag ("could not close remote stdin");
+        flux_reactor_stop_error (r);
+    }
+    sigchld_stopped_count++;
+}
+
+flux_subprocess_ops_t sigchld_stoptest_ops = {
     .on_state_change    = stop_state_cb,
     .on_stdout          = stop_output_cb,
     .on_stderr          = stop_output_cb,
+    .on_sigchld         = sigchld_stop_cb,
 };
 
-void sigstop_test (flux_t *h)
+void sigchld_sigstop_test (flux_t *h)
 {
     char *av[] = { "/bin/cat", NULL };
     flux_subprocess_t *p;
@@ -697,22 +707,26 @@ void sigstop_test (flux_t *h)
     if (!cmd)
         BAIL_OUT ("flux_cmd_create failed");
 
+    sigchld_stopped_count = 0;
+
     p = flux_rexec_ex (h,
                        SERVER_NAME,
                        FLUX_NODEID_ANY,
                        0,
                        cmd,
-                       &stoptest_ops,
+                       &sigchld_stoptest_ops,
                        tap_logger,
                        NULL);
     ok (p != NULL,
-        "stoptest: created subprocess");
+        "sigchld stoptest: created subprocess");
     if (flux_subprocess_aux_set (p, "reactor", flux_get_reactor (h), NULL) < 0)
         BAIL_OUT ("could not stash reactor in subprocess aux container");
 
     rc = flux_reactor_run (flux_get_reactor (h), 0);
     ok (rc >= 0,
-        "stoptest: reactor ran successfully");
+        "sigchld stoptest: reactor ran successfully");
+    ok (sigchld_stopped_count == 1,
+        "sigchld stoptest: on_sigchld called once with STOPPED");
 
     flux_subprocess_destroy (p);
     flux_cmd_destroy (cmd);
@@ -1221,8 +1235,8 @@ int main (int argc, char *argv[])
     local_unbuf_test (h);
     diag ("local_unbuf_multiline_test");
     local_unbuf_multiline_test (h);
-    diag ("sigstop_test");
-    sigstop_test (h);
+    diag ("sigchld_sigstop_test");
+    sigchld_sigstop_test (h);
     diag ("background_test");
     background_waitable_test (h);
     diag ("background_output_test");
