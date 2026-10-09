@@ -189,6 +189,17 @@ def queue_conf_from_config(config):
     """
     queues = config.get("queues", {})
     global_policy = config.get("policy") or {}
+
+    def effective_requires(name, entry):
+        # A queue's membership: its configured 'requires', else the property
+        # derived from 'hosts' (RFC 33), which is the queue name prefixed
+        # with the RFC 20 instance-local marker. The two keys are mutually
+        # exclusive in config, so 'requires' never masks a 'hosts' queue.
+        requires = entry.get("requires")
+        if requires is None and entry.get("hosts") is not None:
+            requires = ["+" + name]
+        return requires
+
     entries = []
     for name, entry in queues.items():
         conf = {"name": name}
@@ -203,10 +214,10 @@ def queue_conf_from_config(config):
                     f"queue '{name}': parent queue '{parent}' is not configured"
                 )
             conf["parent"] = parent
-            requires = queues[parent].get("requires")
+            requires = effective_requires(parent, queues[parent])
             base_policy = queues[parent].get("policy")
         else:
-            requires = entry.get("requires")
+            requires = effective_requires(name, entry)
             base_policy = None
         if requires is not None:
             conf["requires"] = requires
