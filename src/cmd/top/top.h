@@ -30,7 +30,6 @@ enum {
 struct top {
     flux_t *h;
     char *title;
-    json_t *flux_config;
     struct queues *queues;
     flux_jobid_t id;
 

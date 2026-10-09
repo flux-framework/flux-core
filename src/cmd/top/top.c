@@ -200,7 +200,6 @@ void top_destroy (struct top *top)
         summary_pane_destroy (top->summary_pane);
         keys_destroy (top->keys);
         queues_destroy (top->queues);
-        json_decref (top->flux_config);
         if (top->testf)
             fclose (top->testf);
         flux_close (top->h);
@@ -228,7 +227,9 @@ static char * build_title (struct top *top, const char *title)
     return strdup (title);
 }
 
-static void get_config (struct top *top)
+/* Returns a new reference, which the caller gives to queues_create().
+ */
+static json_t *get_config (struct top *top)
 {
     flux_future_t *f;
     json_t *o;
@@ -237,8 +238,9 @@ static void get_config (struct top *top)
         || flux_rpc_get_unpack (f, "o", &o) < 0)
         fatal (errno, "Error fetching flux config");
 
-    top->flux_config = json_incref (o);
-    flux_future_destroy (f);
+    json_incref (o);
+    flux_future_destroy (f); // 'o' outlives the future
+    return o;
 }
 
 struct top *top_create (const char *uri,
@@ -247,6 +249,7 @@ struct top *top_create (const char *uri,
                         flux_error_t *errp)
 {
     struct top *top = calloc (1, sizeof (*top));
+    json_t *conf;
 
     if (!top || !(top->h = open_flux_instance (uri, errp)))
         goto fail;
@@ -255,9 +258,10 @@ struct top *top_create (const char *uri,
     if (!(top->title = build_title (top, title)))
         goto fail;
 
-    get_config (top);
-
-    if (!(top->queues = queues_create (top->flux_config)))
+    conf = get_config (top);
+    top->queues = queues_create (conf);
+    json_decref (conf); // queues_create() retains nothing from 'conf'
+    if (!top->queues)
         goto fail;
 
     /* setup / configure queue before calls to joblist_pane_create() and
