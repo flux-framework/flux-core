@@ -45,13 +45,13 @@ from typing import Dict, List, Tuple
 
 from flux.idset import IDset
 from flux.job import JobID
-from flux.resource.ResourceCount import ResourceCount
 from flux.resource.ResourcePoolImplementation import (
     InfeasibleRequest,
     InsufficientResources,
     ResourcePoolImplementation,
 )
 from flux.resource.Rv1Set import Rv1Set
+from flux.resourcecount import ResourceCount
 
 # Maximum resource nesting depth accepted by the recursive jobspec parser.
 # jobspecs nest only a handful of levels (node/slot/core/gpu); this bound is
@@ -76,7 +76,7 @@ class ResourceRequest:
         slot_count (ResourceCount): RFC 14 slot count.  For node-based layouts
             this is the per-node slot count; for slot-only layouts it is the
             total slot count; for exclusive slot-only layouts it is
-            ``ResourceCount(1, 1)``.
+            ``ResourceCount(1)``.
         slot_size (int): Cores per slot.
         gpu_per_slot (int): GPUs per slot.
         duration (float): Walltime in seconds; 0.0 means unlimited.
@@ -127,28 +127,28 @@ class ResourceRequest:
     @property
     def nnodes(self):
         """Minimum node count; 0 for slot-only layouts."""
-        return self.node_count.min if self.node_count is not None else 0
+        return self.node_count.first if self.node_count is not None else 0
 
     @property
     def nnodes_max(self):
         """Maximum node count; 0 for slot-only; None for unbounded."""
-        return self.node_count.max if self.node_count is not None else 0
+        return self.node_count.last if self.node_count is not None else 0
 
     @property
     def nslots(self):
         """Minimum total slot count."""
         if self.node_count is None:
-            return self.slot_count.min
-        return self.slot_count.min * self.node_count.min
+            return self.slot_count.first
+        return self.slot_count.first * self.node_count.first
 
     @property
     def nslots_max(self):
         """Maximum total slot count; None for unbounded."""
         if self.node_count is None:
-            return self.slot_count.max
-        if self.node_count.max is None or self.slot_count.max is None:
+            return self.slot_count.last
+        if self.node_count.last is None or self.slot_count.last is None:
             return None
-        return self.slot_count.max * self.node_count.max
+        return self.slot_count.last * self.node_count.last
 
     @classmethod
     def from_jobspec(cls, jobspec):
@@ -190,7 +190,7 @@ class ResourceRequest:
                 )
             for vertex in res_list:
                 rtype = vertex.get("type", "")
-                count = ResourceCount.from_count_spec(vertex.get("count", 1))
+                count = ResourceCount(vertex.get("count", 1))
                 children = vertex.get("with", [])
                 if rtype == "node":
                     state["nnodes"] = count
@@ -202,15 +202,15 @@ class ResourceRequest:
                 else:
                     # Non-node: accumulate nodefactor (use min for ranges),
                     # then record known types and recurse.
-                    new_nf = nodefactor * count.min
+                    new_nf = nodefactor * count.first
                     if rtype == "slot":
                         state["nslots"] = count
                         if vertex.get("exclusive", False):
                             state["exclusive"] = True
                     elif rtype == "core":
-                        state["slot_size"] = count.min
+                        state["slot_size"] = count.first
                     elif rtype == "gpu":
-                        state["gpu_per_slot"] = count.min
+                        state["gpu_per_slot"] = count.first
                     # else: unknown type — ignore, continue recursing
                     if children:
                         walk(children, new_nf, depth + 1)
@@ -236,7 +236,7 @@ class ResourceRequest:
         sc = state["nslots"]  # ResourceCount for the slot vertex
 
         if state["nnodes"] is not None:
-            node_count = state["nnodes"].scaled(nf)
+            node_count = state["nnodes"].scale(nf)
             slot_count = sc  # per-node slot ResourceCount
         else:
             node_count = None
@@ -587,16 +587,16 @@ class Rv1Pool(Rv1Set, ResourcePoolImplementation):
             InfeasibleRequest: If the request can never be satisfied by
                 this pool's total capacity.
         """
-        # Reject stepped/IDset counts that this scheduler cannot honor.
-        # The stepped count form encodes constraints (e.g. power-of-two node
-        # counts) that the simple range allocator ignores; reject immediately
-        # rather than silently violating the constraint.
-        if request.node_count is not None and request.node_count._values is not None:
+        # Reject stepped and non-contiguous idset counts that this scheduler
+        # cannot honor.  Such counts encode constraints (e.g. power-of-two
+        # node counts) that the simple range allocator ignores; reject
+        # immediately rather than silently violating the constraint.
+        if request.node_count is not None and request.node_count.is_discrete:
             raise InfeasibleRequest(
                 "node count specifies discrete valid values that this scheduler "
                 "does not support; use a simple min-max range instead"
             )
-        if request.slot_count is not None and request.slot_count._values is not None:
+        if request.slot_count is not None and request.slot_count.is_discrete:
             raise InfeasibleRequest(
                 "slot count specifies discrete valid values that this scheduler "
                 "does not support; use a simple min-max range instead"
@@ -618,12 +618,12 @@ class Rv1Pool(Rv1Set, ResourcePoolImplementation):
             InsufficientResources: Resources temporarily insufficient.
             InfeasibleRequest: Request structurally infeasible.
         """
-        if request.node_count is not None and request.node_count._values is not None:
+        if request.node_count is not None and request.node_count.is_discrete:
             raise InfeasibleRequest(
                 "node count specifies discrete valid values that this scheduler "
                 "does not support; use a simple min-max range instead"
             )
-        if request.slot_count is not None and request.slot_count._values is not None:
+        if request.slot_count is not None and request.slot_count.is_discrete:
             raise InfeasibleRequest(
                 "slot count specifies discrete valid values that this scheduler "
                 "does not support; use a simple min-max range instead"

@@ -70,13 +70,13 @@ from collections.abc import Mapping
 
 from flux.idset import IDset
 from flux.resource import InsufficientResources
-from flux.resource.ResourceCount import ResourceCount
 from flux.resource.ResourcePool import ResourcePool
 from flux.resource.ResourcePoolImplementation import (
     InfeasibleRequest,
     ResourcePoolImplementation,
 )
 from flux.resource.Rv1Pool import ResourceRequest, Rv1Pool
+from flux.resourcecount import ResourceCount
 
 # Guard against pathological (or malicious) jobspec resource nesting.  Real
 # jobspecs nest only a handful of levels (node/slot/core/gpu); this bound is
@@ -168,9 +168,11 @@ class TreeResourceRequest(ResourceRequest):
                 )
             for vertex in res_list:
                 rtype = vertex.get("type", "")
-                count = ResourceCount.from_count_spec(vertex.get("count", 1))
+                count = ResourceCount(vertex.get("count", 1))
                 children = vertex.get("with", [])
                 if rtype == "node":
+                    if nodefactor < 0:
+                        raise ValueError("Non-integer count not allowed above node")
                     state["nnodes"] = count
                     state["nodefactor"] = nodefactor
                     if state["nslots"] is not None:
@@ -180,15 +182,19 @@ class TreeResourceRequest(ResourceRequest):
                     if children:
                         walk(children, nodefactor, depth + 1)
                 else:
-                    new_nf = nodefactor * count.min
+                    if count.first == count.last:
+                        new_nf = nodefactor * count.first
+                    else:
+                        # Set negative as flag to indicate non-integer count found
+                        new_nf = -1
                     if rtype == "slot":
                         state["nslots"] = count
                         if vertex.get("exclusive", False):
                             state["exclusive"] = True
                     elif rtype == "core":
-                        state["slot_size"] = count.min
+                        state["slot_size"] = count.first
                     elif rtype == "gpu":
-                        state["gpu_per_slot"] = count.min
+                        state["gpu_per_slot"] = count.first
                     elif vertex.get("exclusive", False) and not children:
                         # Exclusive topo-container vertex (e.g. socket{x},
                         # numa{x}): resource counts resolved from pool topo.
@@ -218,15 +224,12 @@ class TreeResourceRequest(ResourceRequest):
         sc = state["nslots"]
 
         if state["nnodes"] is not None:
-            node_count = state["nnodes"].scaled(nf)
-            if state["slot_above_node"] and nf > 1 and sc.min % nf == 0:
+            node_count = state["nnodes"].scale(nf)
+            if state["slot_above_node"] and nf > 1 and sc.first % nf == 0:
                 # slot is an ancestor of node: the slot count was folded into
                 # the nodefactor, so divide it back out to recover the per-node
-                # slot count.
-                slot_count = ResourceCount(
-                    sc.min // nf,
-                    None if sc.max is None else sc.max // nf,
-                )
+                # slot count (and only integer counts allowed above node).
+                slot_count = ResourceCount(sc.first // nf)
             else:
                 # Either a normal node-above-slot layout, or a slot-above-node
                 # layout whose slot count does not divide evenly into the
@@ -245,7 +248,7 @@ class TreeResourceRequest(ResourceRequest):
         # Skip for container-exclusive: slots pack across nodes by container.
         if exclusive and node_count is None and container_level is None:
             node_count = slot_count
-            slot_count = ResourceCount(1, 1)
+            slot_count = ResourceCount(1)
         attrs = system or {}
         duration = attrs.get("duration") or 0.0
         constraint = attrs.get("constraints") or None
