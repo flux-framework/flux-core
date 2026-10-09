@@ -14,8 +14,8 @@ state.
 Unit States
 ===========
 
-Unit state is tracked with two enums that map to the ``ActiveState``
-and ``SubState`` D-Bus properties on ``org.freedesktop.systemd1.Unit``.
+Unit state is tracked with two enums that map to the ActiveState
+and SubState D-Bus properties on org.freedesktop.systemd1.Unit.
 
 .. c:enum:: sdexec_state_t
 
@@ -229,13 +229,13 @@ Properties
 
    Issue a ``Get`` call on the D-Bus Properties interface at object path
    *path* via *service* (typically ``"sdbus"``).  Use
-   :c:func:`sdexec_property_get_unpack` to extract the result.
+   :c:func:`sdexec_property_get_read` to extract the result.
 
-.. c:function:: int sdexec_property_get_unpack(flux_future_t *f, const char *fmt, ...)
+.. c:function:: int sdexec_property_get_read(flux_future_t *f, const char *type, ...)
 
-   Unpack the variant value from a fulfilled :c:func:`sdexec_property_get`
-   future.  *fmt* is a Jansson-style unpack format string applied to the
-   unwrapped value.  Returns 0 on success, -1 on error.
+   Read the property value from a fulfilled :c:func:`sdexec_property_get`
+   future.  The value must have D-Bus type *type*, and is read into C
+   variables as described in `Values`_.  Returns 0 on success, -1 on error.
 
 .. c:function:: flux_future_t *sdexec_property_get_all(flux_t *h, const char *service, uint32_t rank, const char *path)
 
@@ -246,7 +246,7 @@ Properties
 
    Return the property dictionary from a fulfilled
    :c:func:`sdexec_property_get_all` future.  The dict is valid for the
-   lifetime of *f* and can be queried with :c:func:`sdexec_property_dict_unpack`
+   lifetime of *f* and can be queried with :c:func:`sdexec_property_dict_read`
    or passed to :c:func:`sdexec_unit_update`.
 
 .. c:function:: flux_future_t *sdexec_property_changed(flux_t *h, const char *service, uint32_t rank, const char *path)
@@ -264,11 +264,75 @@ Properties
    valid for the lifetime of the current fulfillment.  The dict can be passed
    directly to :c:func:`sdexec_unit_update`.
 
-.. c:function:: int sdexec_property_dict_unpack(json_t *dict, const char *name, const char *fmt, ...)
+.. c:function:: int sdexec_property_dict_read(json_t *dict, const char *name, const char *type, ...)
 
-   Look up property *name* in a property dictionary and unpack its variant
-   value using the Jansson format string *fmt*.  Returns 0 on success, -1
-   if the property is absent or the type does not match.
+   Look up property *name* in a property dictionary and read its value,
+   which must have D-Bus type *type*, as described in `Values`_.  Returns 0
+   on success, -1 with ``errno`` set to ``EPROTO`` if the property is absent
+   or has a different type.
+
+Values
+======
+
+sdbus encodes D-Bus values as JSON as described in :rfc:`52`.  These
+functions read such values into C variables named by D-Bus type, in the
+manner of :linux:man3:`sd_bus_message_read`: ``u`` reads into a
+``uint32_t *``, ``t`` into a ``uint64_t *``, ``s`` into a
+``const char **``, and so on.  A struct type reads one argument per member.
+A variant reads its expected contents type, then that type's arguments.  An
+array or dict reads into a ``json_t **``.  Strings and JSON values are
+borrowed from the JSON being read.  A value that does not match its type
+fails with ``EPROTO``.
+
+.. c:function:: int sdexec_value_read(json_t *val, const char *type, ...)
+
+   Read *val*, a value of single complete type *type*.
+
+.. c:function:: int sdexec_variant_read(json_t *val, const char *type, ...)
+
+   Read *val*, a variant expected to contain a value of type *type*.
+
+.. c:function:: int sdexec_params_read(json_t *params, const char *sig, ...)
+
+   Read *params*, a message body with signature *sig*.
+
+.. c:function:: int sdexec_reply_read(flux_future_t *f, const char *sig, ...)
+
+   Read the body of the current sdbus response in *f*, which must have
+   signature *sig*.
+
+Unit Properties
+===============
+
+:c:func:`sdexec_start_transient_unit` builds the unit property array with a
+property list builder.  Errors are sticky: after the first failed add,
+later adds do nothing, and :c:func:`sdexec_proplist_finish` reports the
+first error.
+
+.. c:function:: struct sdexec_proplist *sdexec_proplist_create(void)
+                void sdexec_proplist_destroy(struct sdexec_proplist *pl)
+
+   Create or destroy a property list.
+
+.. c:function:: void sdexec_proplist_add(struct sdexec_proplist *pl, const char *name, const char *type, ...)
+
+   Add property *name* with a value of basic D-Bus type *type*, passed as
+   for :linux:man3:`sd_bus_message_append`.
+
+.. c:function:: void sdexec_proplist_add_array(struct sdexec_proplist *pl, const char *name, const char *type, const void *ptr, size_t count)
+
+   Add property *name* with an array of *count* elements of fixed-size type
+   *type* at *ptr*, as for :linux:man3:`sd_bus_message_append_array`.
+
+.. c:function:: void sdexec_proplist_add_json(struct sdexec_proplist *pl, const char *name, const char *type, json_t *val)
+
+   Add property *name* with value *val*, already encoded as JSON for D-Bus
+   type *type*.
+
+.. c:function:: json_t *sdexec_proplist_finish(struct sdexec_proplist *pl, flux_error_t *error)
+
+   Return the property array, or NULL with ``errno`` set and *error*
+   describing the first failed add.
 
 I/O Channels
 ============
@@ -383,21 +447,21 @@ Unit List
    false when the list is exhausted.  Pointers in *info* are valid
    until the next call or until *f* is destroyed.
 
+.. _libsdexec_object_paths:
+
 ************
 Object Paths
 ************
 
 systemd maps unit names to D-Bus object paths by appending an encoded form of
-the unit name to ``/org/freedesktop/systemd1/unit/``.  Any character that is
-not alphanumeric or underscore is replaced with ``_XX`` where XX is the
-lowercase hex byte value.  libsdexec handles this via :linux:man3:`sd_bus_path_encode` and
-:linux:man3:`sd_bus_path_decode` in ``objpath.c``.
-
-.. note::
-
-   This encoding is a systemd convention, not a D-Bus standard.  Its presence
-   in sdbus's object-path type handler means sdbus has inadvertently absorbed
-   systemd-specific knowledge that ideally would live only here.
+the unit name to /org/freedesktop/systemd1/unit/.  Each byte that is not
+alphanumeric, and a leading digit, is replaced with ``_XX`` where XX is the
+lowercase hex byte value.  sdbus carries object paths verbatim (:rfc:`52`),
+so libsdexec does this conversion with ``sdexec_unit_path_encode()`` and
+``sdexec_unit_path_decode()``.  ``sdexec_unit_path_glob()`` converts
+a glob on unit names to a glob on unit object paths.  It supports only the
+``*`` wildcard, and may also match other units, so callers should check
+decoded names.
 
 .. list-table::
    :header-rows: 1
@@ -412,6 +476,8 @@ lowercase hex byte value.  libsdexec handles this via :linux:man3:`sd_bus_path_e
      - /org/freedesktop/systemd1/unit/flux_2djob_2df23abc_2eservice
    * - user\@1000.service
      - /org/freedesktop/systemd1/unit/user_401000_2eservice
+   * - 9foo.service
+     - /org/freedesktop/systemd1/unit/_39foo_2eservice
 
 *************************
 D-Bus Interface Reference

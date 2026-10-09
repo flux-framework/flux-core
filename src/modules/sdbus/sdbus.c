@@ -27,7 +27,6 @@
 #include "watcher.h"
 #include "subscribe.h"
 #include "connect.h"
-#include "objpath.h"
 #include "sdbus.h"
 
 struct sdbus_ctx {
@@ -116,10 +115,8 @@ static bool match_subscription (const flux_msg_t *msg, sd_bus_message *m)
     if (member && !streq (member, sd_bus_message_get_member (m)))
         return false;
     if (path_glob) {
-        char *m_path = objpath_decode (sd_bus_message_get_path (m));
-        bool match = (m_path && fnmatch (path_glob, m_path, FNM_PATHNAME) == 0);
-        free (m_path);
-        if (!match)
+        const char *m_path = sd_bus_message_get_path (m);
+        if (!m_path || fnmatch (path_glob, m_path, FNM_PATHNAME) != 0)
             return false;
     }
     return true;
@@ -176,25 +173,19 @@ static const flux_msg_t *find_request_by_cookie (struct sdbus_ctx *ctx,
 }
 
 /* Log a signal message.
- * If path refers to a systemd unit, make it pretty for the logs.
  */
 static void log_msg_signal (flux_t *h,
                             sd_bus_message *m,
                             const char *disposition)
 {
-    const char *prefix = "/org/freedesktop/systemd1/unit";
     const char *path = sd_bus_message_get_path (m);
-    char *s = NULL;
 
-    if (path)
-        (void)sd_bus_path_decode (path, prefix, &s);
     sdbus_log_debug (h,
                      "bus %s %s %s %s",
                      disposition,
                      sdmsg_typestr (m),
-                     s ? s : path,
+                     path ? path : "(null)",
                      sd_bus_message_get_member (m));
-    free (s);
 }
 
 /* Log a method-reply or method-error.
@@ -260,7 +251,17 @@ static void sdbus_recv (struct sdbus_ctx *ctx, sd_bus_message *m)
         log_msg_method_reply (ctx->h, m, info);
         if (errnum == 0)
             errnum = EINVAL;
-        if (flux_respond_error (ctx->h, msg, errnum, error->message) < 0)
+        /* RFC 52: the error string is "name: message", or just "name"
+         * if there is no message.
+         */
+        char errstr[512];
+        if (error && error->message && strlen (error->message) > 0)
+            snprintf (errstr, sizeof (errstr), "%s: %s",
+                      error->name, error->message);
+        else
+            snprintf (errstr, sizeof (errstr), "%s",
+                      error && error->name ? error->name : "unknown error");
+        if (flux_respond_error (ctx->h, msg, errnum, errstr) < 0)
             flux_log_error (ctx->h, "error responding to sdbus.call");
         flux_msglist_delete (ctx->requests); // cursor is on completed message
     }
@@ -285,13 +286,12 @@ static void sdbus_recv (struct sdbus_ctx *ctx, sd_bus_message *m)
          * developing support for new methods, if nothing else.
          */
         log_msg_method_reply (ctx->h, m, info);
-        if ((rep = interface_reply_tojson (m,
-                                           info->interface,
-                                           info->member,
-                                           &error)))
+        if ((rep = interface_reply_tojson (m, &error)))
             rc = flux_respond_pack (ctx->h, msg, "O", rep);
-        else
-            rc = flux_respond_error (ctx->h, msg, EINVAL, error.text);
+        else {
+            // RFC 52: a method return that cannot be translated
+            rc = flux_respond_error (ctx->h, msg, EPROTO, error.text);
+        }
         if (rc < 0)
             flux_log_error (ctx->h, "error responding to sdbus.call");
         json_decref (rep);
@@ -356,7 +356,7 @@ static int handle_call_request (struct sdbus_ctx *ctx,
         return -1;
     }
     if (!(m = interface_request_fromjson (ctx->bus, req, error))) {
-        errno = EINVAL;
+        errno = EPROTO; // RFC 52: a request that cannot be translated
         goto error;
     }
     if ((e = sd_bus_send (NULL, m, &cookie)) < 0) {
@@ -620,6 +620,10 @@ static void sdbus_cb (flux_reactor_t *r,
         if (m) {
             // sdbus_recv() may call sdbus_recover() which sets ctx->bus = NULL
             sdbus_recv (ctx, m);
+            /* N.B. the unref closes any descriptors that arrived with the
+             * message.  RFC 52 forbids encoding h values, so a received
+             * descriptor must not outlive its message.
+             */
             sd_bus_message_unref (m);
         }
     } while (e > 0 && ctx->bus != NULL);

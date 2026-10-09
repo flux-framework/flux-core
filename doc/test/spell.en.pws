@@ -1128,6 +1128,7 @@ ExecMainStatus
 freedesktop
 frominfo
 GetAll
+GetUnit
 GetUnitByInvocationID
 ioencode
 KillUnit
@@ -1267,3 +1268,6 @@ deserialize
 STARTPID
 BROKERPID
 fJOBID
+proplist
+ptr
+StandardInputFileDescriptorName

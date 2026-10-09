@@ -18,11 +18,14 @@
 
 #include "ccan/ptrint/ptrint.h"
 
+#include "bus.h"
 #include "list.h"
+#include "value.h"
 
 static int parse_unit (json_t *units, size_t index, struct unit_info *info)
 {
     json_t *entry;
+    uint32_t job_id;
 
     if (!units
         || !info
@@ -30,21 +33,20 @@ static int parse_unit (json_t *units, size_t index, struct unit_info *info)
         errno = EINVAL;
         return -1;
     }
-    if (json_unpack (entry,
-                     "[sssssssIss]",
-                     &info->name,
-                     &info->description,
-                     &info->load_state,
-                     &info->active_state,
-                     &info->sub_state,
-                     &info->name_follower,
-                     &info->path,
-                     &info->job_id,
-                     &info->job_type,
-                     &info->job_path) < 0) {
-        errno = EPROTO;
+    if (sdexec_value_read (entry,
+                           "(ssssssouso)",
+                           &info->name,
+                           &info->description,
+                           &info->load_state,
+                           &info->active_state,
+                           &info->sub_state,
+                           &info->name_follower,
+                           &info->path,
+                           &job_id,
+                           &info->job_type,
+                           &info->job_path) < 0)
         return -1;
-    }
+    info->job_id = job_id;
     return 0;
 }
 
@@ -55,7 +57,7 @@ bool sdexec_list_units_next (flux_future_t *f, struct unit_info *infop)
     int index = ptr2int (flux_future_aux_get (f, "index")); // zero if not set
 
     if (!infop
-        || flux_rpc_get_unpack (f, "{s:[o]}", "params", &units) < 0
+        || sdexec_reply_read (f, "a(ssssssouso)", &units) < 0
         || parse_unit (units, index, &info) < 0
         || flux_future_aux_set (f, "index", int2ptr (index + 1), NULL) < 0)
         return false;
@@ -81,8 +83,12 @@ flux_future_t *sdexec_list_units (flux_t *h,
                           topic,
                           rank,
                           0,
-                          "{s:s s:[[] [s]]}",
+                          "{s:s s:s s:s s:s s:s s:[[] [s]]}",
+                          "destination", SDEXEC_DESTINATION,
+                          "path", SDEXEC_MANAGER_PATH,
+                          "interface", SDEXEC_MANAGER_IFACE,
                           "member", "ListUnitsByPatterns",
+                          "signature", "asas",
                           "params", pattern);
 }
 

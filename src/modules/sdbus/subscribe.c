@@ -39,11 +39,12 @@ static void subscribe_continuation (flux_future_t *f1, void *arg)
                               topic,
                               FLUX_NODEID_ANY,
                               0,
-                              "{s:s s:s s:s s:s s:[s]}",
+                              "{s:s s:s s:s s:s s:s s:[s]}",
                               "destination", "org.freedesktop.DBus",
                               "path", "/org/freedesktop/DBus",
                               "interface", "org.freedesktop.DBus",
                               "member", "AddMatch",
+                              "signature", "s",
                               "params", match_signal_all))
         || flux_future_continue (f1, f2) < 0) {
         errmsg = "error continuing subscribe request";
@@ -69,8 +70,12 @@ flux_future_t *sdbus_subscribe (flux_t *h)
                               topic,
                               FLUX_NODEID_ANY,
                               0,
-                              "{s:s s:[]}",
+                              "{s:s s:s s:s s:s s:s s:[]}",
+                              "destination", "org.freedesktop.systemd1",
+                              "path", "/org/freedesktop/systemd1",
+                              "interface", "org.freedesktop.systemd1.Manager",
                               "member", "Subscribe",
+                              "signature", "",
                               "params"))
         || !(fc = flux_future_and_then (f1, subscribe_continuation, NULL))) {
         flux_future_destroy (f1);

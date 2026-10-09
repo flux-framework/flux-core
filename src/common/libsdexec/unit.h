@@ -21,6 +21,27 @@
 
 /* Create/destroy a unit object.
  */
+/* Convert a unit name to its systemd D-Bus object path, e.g.
+ * "foo.service" => "/org/freedesktop/systemd1/unit/foo_2eservice".
+ * The caller must free the result.
+ */
+char *sdexec_unit_path_encode (const char *name);
+
+/* Convert a systemd unit object path to a unit name.
+ * Fails with EINVAL if 'path' is not a unit object path.
+ * The caller must free the result.
+ */
+char *sdexec_unit_path_decode (const char *path);
+
+/* Convert a fnmatch(3) glob on unit names to a glob on unit object paths.
+ * Only the '*' wildcard is supported, since one name character may encode
+ * to three path characters.  The result may match paths of units whose
+ * names do not match 'name_glob', so callers should check decoded names.
+ * Fails with EINVAL if the glob contains '?', '[', or a backslash.
+ * The caller must free the result.
+ */
+char *sdexec_unit_path_glob (const char *name_glob);
+
 struct unit *sdexec_unit_create (const char *name);
 void sdexec_unit_destroy (struct unit *unit);
 

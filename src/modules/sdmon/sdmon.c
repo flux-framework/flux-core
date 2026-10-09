@@ -33,7 +33,6 @@
 #include "ccan/array_size/array_size.h"
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libutil/errno_safe.h"
-#include "src/common/libutil/basename.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libsdexec/list.h"
 #include "src/common/libsdexec/property.h"
@@ -62,8 +61,6 @@ struct sdmon_ctx {
 };
 
 static void sdmon_bus_restart (struct sdmon_bus *bus);
-
-static const char *path_prefix = "/org/freedesktop/systemd1/unit";
 
 static const char *def_sys_glob = "flux-*";
 static const char *def_usr_glob = "*shell-*"; // match with and without imp- prefix
@@ -222,7 +219,7 @@ static void sdmon_property_continuation (flux_future_t *f, void *arg)
     struct sdmon_ctx *ctx = arg;
     struct sdmon_bus *bus = f == ctx->usr.fp ? &ctx->usr : &ctx->sys;
     const char *path;
-    const char *name;
+    char *name = NULL;
     json_t *dict;
     struct unit *unit;
     bool unit_is_new = false;
@@ -241,8 +238,7 @@ static void sdmon_property_continuation (flux_future_t *f, void *arg)
     }
     if (!bus->unmute_property_updates)
         goto done;
-    name = basename_simple (path);
-    if (!match_unit_name (name))
+    if (!(name = sdexec_unit_path_decode (path)) || !match_unit_name (name))
         goto done;
     if (!(unit = zhashx_lookup (bus->units, name))) {
         if (!(unit = sdexec_unit_create (name))) {
@@ -271,6 +267,7 @@ static void sdmon_property_continuation (flux_future_t *f, void *arg)
     }
     sdmon_group_join_if_ready (ctx);
 done:
+    free (name);
     flux_future_reset (f);
     return;
 restart:
@@ -377,15 +374,19 @@ static int sdmon_bus_start (struct sdmon_bus *bus, flux_error_t *error)
     struct sdmon_ctx *ctx = bus->ctx;
     flux_future_t *fp = NULL;
     flux_future_t *fl = NULL;
-    char path[256];
+    char *path;
 
-
-    snprintf (path, sizeof (path), "%s/%s", path_prefix, bus->unit_glob);
+    if (!(path = sdexec_unit_path_glob (bus->unit_glob))) {
+        errprintf (error, "invalid unit glob %s", bus->unit_glob);
+        goto error;
+    }
     if (!(fp = sdexec_property_changed (ctx->h, bus->service, ctx->rank, path))
         || flux_future_then (fp, -1, sdmon_property_continuation, ctx) < 0) {
         errprintf (error, "%s.subscribe: %s", bus->service, strerror (errno));
+        free (path);
         goto error;
     }
+    free (path);
     if (!(fl = sdexec_list_units (ctx->h,
                                   bus->service,
                                   ctx->rank,

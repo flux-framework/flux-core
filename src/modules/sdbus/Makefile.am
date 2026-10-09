@@ -25,8 +25,6 @@ if HAVE_LIBSYSTEMD
 libsdbus_la_SOURCES += \
 	sdbus.c \
 	sdbus.h \
-	objpath.c \
-	objpath.h \
 	message.c \
 	message.h \
 	interface.c \
@@ -60,7 +58,6 @@ TESTS =
 
 if HAVE_LIBSYSTEMD
 TESTS += \
-	 test_objpath.t \
 	 test_message.t
 endif
 
@@ -70,12 +67,9 @@ TEST_EXTENSIONS = .t
 T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
 	$(top_srcdir)/config/tap-driver.sh
 
-test_objpath_t_SOURCES = test/objpath.c
-test_objpath_t_CPPFLAGS = $(test_cppflags)
-test_objpath_t_LDADD = $(test_ldadd)
-test_objpath_t_LDFLAGS = $(test_ldflags)
-
-test_message_t_SOURCES = test/message.c
+test_message_t_SOURCES = \
+	test/message.c \
+	test/rfc52_vectors.h
 test_message_t_CPPFLAGS = $(test_cppflags)
 test_message_t_LDADD = $(test_ldadd)
 test_message_t_LDFLAGS = $(test_ldflags)

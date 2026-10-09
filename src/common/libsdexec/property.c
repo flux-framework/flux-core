@@ -26,10 +26,12 @@
 #include "ccan/str/str.h"
 #include "src/common/libutil/errno_safe.h"
 
+#include "bus.h"
 #include "property.h"
+#include "value.h"
 
-static const char *serv_interface = "org.freedesktop.systemd1.Service";
-static const char *prop_interface = "org.freedesktop.DBus.Properties";
+static const char *serv_interface = SDEXEC_SERVICE_IFACE;
+static const char *prop_interface = SDEXEC_PROPERTIES_IFACE;
 
 flux_future_t *sdexec_property_get_all (flux_t *h,
                                         const char *service,
@@ -48,10 +50,12 @@ flux_future_t *sdexec_property_get_all (flux_t *h,
                              topic,
                              rank,
                              0,
-                             "{s:s s:s s:s s:[s]}",
+                             "{s:s s:s s:s s:s s:s s:[s]}",
+                             "destination", SDEXEC_DESTINATION,
                              "path", path,
                              "interface", prop_interface,
                              "member", "GetAll",
+                             "signature", "s",
                              "params", serv_interface)))
         return NULL;
     return f;
@@ -72,13 +76,15 @@ flux_future_t *sdexec_property_get (flux_t *h,
     }
     snprintf (topic, sizeof (topic), "%s.call", service);
     if (!(f = flux_rpc_pack (h,
-                             "sdbus.call",
+                             topic,
                              rank,
                              0,
-                             "{s:s s:s s:s s:[ss]}",
+                             "{s:s s:s s:s s:s s:s s:[ss]}",
+                             "destination", SDEXEC_DESTINATION,
                              "path", path,
                              "interface", prop_interface,
                              "member", "Get",
+                             "signature", "ss",
                              "params", serv_interface, name)))
         return NULL;
     return f;
@@ -124,66 +130,61 @@ error:
     return NULL;
 }
 
-int sdexec_property_get_unpack (flux_future_t *f, const char *fmt, ...)
+int sdexec_property_get_read (flux_future_t *f, const char *type, ...)
 {
-    const char *type; // ignored
+    const char *sig;
     json_t *val;
     va_list ap;
     int rc;
 
-    if (!f || !fmt) {
+    if (!f || !type) {
         errno = EINVAL;
         return -1;
     }
-    if (flux_rpc_get_unpack (f, "{s:[[so]]}", "params", &type, &val) < 0)
+    // Get returns one variant; read it with the caller's expected type
+    if (flux_rpc_get_unpack (f,
+                             "{s:s s:[o]}",
+                             "signature", &sig,
+                             "params", &val) < 0)
         return -1;
-    va_start (ap, fmt);
-    rc = json_vunpack_ex (val, NULL, 0, fmt, ap);
-    va_end (ap);
-    if (rc < 0) {
+    if (!streq (sig, "v")) {
         errno = EPROTO;
         return -1;
     }
+    va_start (ap, type);
+    rc = sdexec_variant_vread (val, type, &ap);
+    va_end (ap);
     return rc;
 }
 
-int sdexec_property_dict_unpack (json_t *dict,
-                                 const char *name,
-                                 const char *fmt,
-                                 ...)
-
+int sdexec_property_dict_read (json_t *dict,
+                               const char *name,
+                               const char *type,
+                               ...)
 {
-    const char *type; // ignored
     json_t *val;
     va_list ap;
     int rc;
 
-    if (!dict || !name || !fmt) {
+    if (!dict || !name || !type) {
         errno = EINVAL;
         return -1;
     }
-    if (json_unpack (dict, "{s:[so]}", name, &type, &val) < 0) {
+    if (!(val = json_object_get (dict, name))) {
         errno = EPROTO;
         return -1;
     }
-    va_start (ap, fmt);
-    rc = json_vunpack_ex (val, NULL, 0, fmt, ap);
+    va_start (ap, type);
+    rc = sdexec_variant_vread (val, type, &ap);
     va_end (ap);
-    if (rc < 0) {
-        errno = EPROTO;
-        return -1;
-    }
-    return 0;
+    return rc;
 }
 
 json_t *sdexec_property_get_all_dict (flux_future_t *f)
-
 {
     json_t *dict;
 
-    if (flux_rpc_get_unpack (f,
-                             "{s:[o]}",
-                             "params", &dict) < 0)
+    if (sdexec_reply_read (f, "a{sv}", &dict) < 0)
         return NULL;
     return dict;
 }
@@ -194,9 +195,7 @@ json_t *sdexec_property_changed_dict (flux_future_t *f)
     json_t *dict;
     json_t *inval;
 
-    if (flux_rpc_get_unpack (f,
-                             "{s:[s o o]}",
-                             "params", &iface, &dict, &inval) < 0)
+    if (sdexec_reply_read (f, "sa{sv}as", &iface, &dict, &inval) < 0)
         return NULL;
     return dict;
 }
