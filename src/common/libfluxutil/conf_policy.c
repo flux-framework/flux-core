@@ -174,6 +174,11 @@ inval:
     return -1;
 }
 
+/* Characters that may not appear in a property constraint (RFC 20). '^' is
+ * absent since RFC 31 uses it to negate a property.
+ */
+static const char *banned_property_chars = " \t!&'\"`|()";
+
 static bool is_string_array (json_t *o, const char *banned)
 {
     size_t index;
@@ -365,14 +370,16 @@ static int validate_queues_config (const flux_conf_t *conf,
             json_t *policy = NULL;
             json_t *requires = NULL;
             json_t *parent = NULL;
+            json_t *hosts = NULL;
 
             if (json_unpack_ex (entry,
                                 &jerror,
                                 0,
-                                "{s?o s?o s?o !}",
+                                "{s?o s?o s?o s?o !}",
                                 "policy", &policy,
                                 "requires", &requires,
-                                "parent", &parent) < 0) {
+                                "parent", &parent,
+                                "hosts", &hosts) < 0) {
                 errprintf (error,
                            "error parsing [queues.%s] config table: %s",
                            name,
@@ -421,13 +428,78 @@ static int validate_queues_config (const flux_conf_t *conf,
                                name);
                     goto inval;
                 }
-                const char *banned_property_chars = " \t!&'\"`'|()";
                 if (!is_string_array (requires, banned_property_chars)) {
                     errprintf (error,
                                "error parsing [queues.%s] config table:"
                                " 'requires' must be an array of property"
                                " strings (RFC 20)",
                                name);
+                    goto inval;
+                }
+            }
+            if (hosts) {
+                if (!json_is_string (hosts)) {
+                    errprintf (error,
+                               "error parsing [queues.%s] config table:"
+                               " 'hosts' must be a string",
+                               name);
+                    goto inval;
+                }
+                if (requires) {
+                    errprintf (error,
+                               "error parsing [queues.%s] config table:"
+                               " 'hosts' and 'requires' are mutually"
+                               " exclusive",
+                               name);
+                    goto inval;
+                }
+                if (parent) {
+                    errprintf (error,
+                               "error parsing [queues.%s] config table:"
+                               " a virtual queue must not set 'hosts'",
+                               name);
+                    goto inval;
+                }
+                if (streq (json_string_value (hosts), "")) {
+                    errprintf (error,
+                               "error parsing [queues.%s] config table:"
+                               " 'hosts' must not be empty",
+                               name);
+                    goto inval;
+                }
+                /* The membership property derived from 'hosts' is "+NAME",
+                 * so the queue name must itself be a valid property name,
+                 * and short enough to derive the property without
+                 * truncation. Otherwise the resource module would fail
+                 * fatally when applying the property to R, or two long
+                 * names would truncate to one property and merge their
+                 * queues. Reject here instead, where the error can name
+                 * the cause.
+                 */
+                /* A property applied to a resource additionally may not
+                 * contain '^', which librlist's rlist_add_property()
+                 * rejects. Unlike a constraint, it cannot be negated.
+                 */
+                if (strpbrk (name, banned_property_chars)
+                    || strchr (name, '^')) {
+                    errprintf (error,
+                               "error parsing [queues.%s] config table:"
+                               " queue name is not a valid property string"
+                               " (RFC 20), required to derive membership"
+                               " from 'hosts'",
+                               name);
+                    goto inval;
+                }
+                /* Unlike the errors above, the name is not interpolated
+                 * here: it is too long to fit in flux_error_t with the
+                 * message, and would push the reason out of the buffer.
+                 */
+                if (strlen (name) > QUEUE_NAME_MAX) {
+                    errprintf (error,
+                               "error parsing [queues] config table: a queue"
+                               " name must be %d characters or less to"
+                               " derive membership from 'hosts'",
+                               QUEUE_NAME_MAX);
                     goto inval;
                 }
             }

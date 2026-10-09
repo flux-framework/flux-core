@@ -13,6 +13,15 @@
 
 #include <flux/core.h>
 
+/* Size of the buffer the membership property "+NAME" of a queue that
+ * declares 'hosts' is derived into, and the resulting maximum length of
+ * such a queue's name (leaving room for the '+' and the terminating NUL).
+ * conf_policy_validate() enforces the name length so the derivation cannot
+ * truncate, which would otherwise merge two queues into one property.
+ */
+#define QUEUE_PROPERTY_MAX 128
+#define QUEUE_NAME_MAX (QUEUE_PROPERTY_MAX - 2)
+
 /* Validate [policy] and [queue] configuration tables defined in RFC 33.
  * Return 0 on success, -1 on failure with errno set and 'error' filled in.
  */
