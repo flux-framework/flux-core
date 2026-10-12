@@ -145,10 +145,6 @@ class TreeResourceRequest(ResourceRequest):
     @classmethod
     def from_jobspec(cls, jobspec):
         """Parse a jobspec and return a :class:`TreeResourceRequest`."""
-        resources = jobspec.get("resources", [])
-        if not resources:
-            raise ValueError("jobspec has no resources")
-
         state = {
             "nnodes": None,
             "nslots": None,
@@ -167,13 +163,14 @@ class TreeResourceRequest(ResourceRequest):
                     f"{MAX_RESOURCE_DEPTH}"
                 )
             for vertex in res_list:
-                rtype = vertex.get("type", "")
-                count = ResourceCount(vertex.get("count", 1))
+                rtype = vertex["type"]
+                count = ResourceCount(vertex["count"])
                 children = vertex.get("with", [])
                 if rtype == "node":
                     if nodefactor < 0:
                         raise ValueError("Non-integer count not allowed above node")
-                    state["nnodes"] = count
+                    # scale by non-node counts above node level
+                    state["nnodes"] = count.scale(nodefactor)
                     state["nodefactor"] = nodefactor
                     if state["nslots"] is not None:
                         state["slot_above_node"] = True
@@ -202,14 +199,17 @@ class TreeResourceRequest(ResourceRequest):
                     if children:
                         walk(children, new_nf, depth + 1)
 
-        walk(resources, 1)
+        walk(jobspec["resources"], 1)
 
-        system = jobspec.get("attributes", {}).get("system")
+        system = jobspec.get("attributes", {}).get("system", {})
         if jobspec.get("version") == 1:
-            if system is None:
+            if not system:
                 raise ValueError("getting duration: Object item not found: system")
             if system.get("duration") is None:
                 raise ValueError("getting duration: Object item not found: duration")
+        duration = system.get("duration", 0.0)
+        # Use `or` to also coerce present but empty "constraints" to None
+        constraint = system.get("constraints") or None
 
         if state["nslots"] is None:
             raise ValueError("Unable to determine slot count")
@@ -220,48 +220,45 @@ class TreeResourceRequest(ResourceRequest):
         ):
             raise ValueError("Unable to determine slot size")
 
-        nf = state["nodefactor"]
-        sc = state["nslots"]
+        if (
+            state["nnodes"] is not None
+            and state["slot_above_node"]
+            and state["nodefactor"] > 1
+            and state["nslots"].first % state["nodefactor"] == 0
+        ):
+            # slot is an ancestor of node: the slot count was folded into
+            # the nodefactor, so divide it back out to recover the per-node
+            # slot count (and only integer counts allowed above node).
+            state["nslots"] = ResourceCount(
+                state["nslots"].first // state["nodefactor"]
+            )
+        # Otherwise it's either a normal node-above-slot layout, or a
+        # slot-above-node layout whose slot count does not divide evenly into
+        # the nodefactor (only reachable with an intermediate multiplier
+        # vertex between slot and node).  The unfold is ambiguous in
+        # that case, so pass the slot count through unmodified rather
+        # than guess; nslots then reflects the literal jobspec counts.
 
-        if state["nnodes"] is not None:
-            node_count = state["nnodes"].scale(nf)
-            if state["slot_above_node"] and nf > 1 and sc.first % nf == 0:
-                # slot is an ancestor of node: the slot count was folded into
-                # the nodefactor, so divide it back out to recover the per-node
-                # slot count (and only integer counts allowed above node).
-                slot_count = ResourceCount(sc.first // nf)
-            else:
-                # Either a normal node-above-slot layout, or a slot-above-node
-                # layout whose slot count does not divide evenly into the
-                # nodefactor (only reachable with an intermediate multiplier
-                # vertex between slot and node).  The unfold is ambiguous in
-                # that case, so pass the slot count through unmodified rather
-                # than guess; nslots then reflects the literal jobspec counts.
-                slot_count = sc
-        else:
-            node_count = None
-            slot_count = sc
-
-        exclusive = state["exclusive"]
-        container_level = state["container_level"]
         # Exclusive slot-only fold: each slot gets one exclusive node.
         # Skip for container-exclusive: slots pack across nodes by container.
-        if exclusive and node_count is None and container_level is None:
-            node_count = slot_count
-            slot_count = ResourceCount(1)
-        attrs = system or {}
-        duration = attrs.get("duration") or 0.0
-        constraint = attrs.get("constraints") or None
+        if (
+            state["exclusive"]
+            and state["nnodes"] is None
+            and state["container_level"] is None
+        ):
+            state["nnodes"] = state["nslots"]
+            state["nslots"] = ResourceCount(1)
+
         return cls(
-            node_count,
-            slot_count,
+            state["nnodes"],
+            state["nslots"],
             state["slot_size"] if state["slot_size"] is not None else 0,
             state["gpu_per_slot"],
             float(duration),
             constraint,
-            exclusive,
+            state["exclusive"],
             jobspec,
-            container_level=container_level,
+            container_level=state["container_level"],
         )
 
 

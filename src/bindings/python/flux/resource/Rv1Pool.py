@@ -167,10 +167,6 @@ class ResourceRequest:
             ValueError: If the jobspec cannot be parsed.
             KeyError: If required fields are missing.
         """
-        resources = jobspec.get("resources", [])
-        if not resources:
-            raise ValueError("jobspec has no resources")
-
         # State accumulated during the recursive walk (last-write-wins,
         # matching libjjc behavior).
         state = {
@@ -179,7 +175,6 @@ class ResourceRequest:
             "slot_size": None,  # None until a core vertex is found
             "gpu_per_slot": 0,
             "exclusive": False,
-            "nodefactor": 1,  # product of non-node counts above node level
         }
 
         def walk(res_list, nodefactor, depth=0):
@@ -189,20 +184,19 @@ class ResourceRequest:
                     f"{MAX_RESOURCE_DEPTH}"
                 )
             for vertex in res_list:
-                rtype = vertex.get("type", "")
-                count = ResourceCount(vertex.get("count", 1))
+                rtype = vertex["type"]
+                count = ResourceCount(vertex["count"])
                 children = vertex.get("with", [])
                 if rtype == "node":
-                    state["nnodes"] = count
-                    state["nodefactor"] = nodefactor
+                    # scale by non-node counts above node level
+                    state["nnodes"] = count.scale(nodefactor)
                     if vertex.get("exclusive", False):
                         state["exclusive"] = True
                     if children:
                         walk(children, nodefactor, depth + 1)
                 else:
-                    # Non-node: accumulate nodefactor (use min for ranges),
+                    # Non-node: accumulate nodefactor (use first for ranges),
                     # then record known types and recurse.
-                    new_nf = nodefactor * count.first
                     if rtype == "slot":
                         state["nslots"] = count
                         if vertex.get("exclusive", False):
@@ -213,52 +207,42 @@ class ResourceRequest:
                         state["gpu_per_slot"] = count.first
                     # else: unknown type — ignore, continue recursing
                     if children:
-                        walk(children, new_nf, depth + 1)
+                        walk(children, nodefactor * count.first, depth + 1)
 
-        walk(resources, 1)
+        walk(jobspec["resources"], 1)
 
         # RFC 25: in jobspec V1, attributes.system and duration are required.
         # Check this before validating the resource structure so that the error
         # message matches what the C jj/jjc parsers produce for V1 jobspecs.
-        system = jobspec.get("attributes", {}).get("system")
+        system = jobspec.get("attributes", {}).get("system", {})
         if jobspec.get("version") == 1:
-            if system is None:
+            if not system:
                 raise ValueError("getting duration: Object item not found: system")
             if system.get("duration") is None:
                 raise ValueError("getting duration: Object item not found: duration")
+        duration = system.get("duration", 0.0)
+        # Use `or` to also coerce present but empty "constraints" to None
+        constraint = system.get("constraints") or None
 
         if state["nslots"] is None:
             raise ValueError("Unable to determine slot count")
         if state["slot_size"] is None:
             raise ValueError("Unable to determine slot size")
 
-        nf = state["nodefactor"]
-        sc = state["nslots"]  # ResourceCount for the slot vertex
-
-        if state["nnodes"] is not None:
-            node_count = state["nnodes"].scale(nf)
-            slot_count = sc  # per-node slot ResourceCount
-        else:
-            node_count = None
-            slot_count = sc
-
-        exclusive = state["exclusive"]
         # Exclusive allocation is per-node; if no node vertex was specified
         # (slot-only jobspec), each slot occupies one exclusive node.
-        if exclusive and node_count is None:
-            node_count = slot_count  # slot count reinterpreted as node count
-            slot_count = ResourceCount(1, 1)  # 1 slot per exclusive node
-        attrs = system or {}
-        duration = attrs.get("duration") or 0.0
-        constraint = attrs.get("constraints") or None
+        if state["exclusive"] and state["nnodes"] is None:
+            state["nnodes"] = state["nslots"]  # slot count reinterpreted as node count
+            state["nslots"] = ResourceCount(1)  # 1 slot per exclusive node
+
         return cls(
-            node_count,
-            slot_count,
+            state["nnodes"],
+            state["nslots"],
             state["slot_size"],
             state["gpu_per_slot"],
             float(duration),
             constraint,
-            exclusive,
+            state["exclusive"],
             jobspec,
         )
 
