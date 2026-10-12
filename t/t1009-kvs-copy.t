@@ -1,5 +1,6 @@
 #!/bin/sh
 #
+# ci=asan
 
 test_description='Test flux-kvs copy
 Test flux-kvs copy and flux-kvs move.

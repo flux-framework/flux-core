@@ -1,4 +1,6 @@
 #!/bin/sh
+#
+# ci=asan
 
 test_description='Test FLUX_HWLOC_XMLFILE with cpu-affinity=dry-run'
 

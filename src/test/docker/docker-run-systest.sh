@@ -209,7 +209,7 @@ checks_group "$msg" \
     -e CPPCHECK=$CPPCHECK \
     -e DISTCHECK=$DISTCHECK \
     -e RECHECK=$RECHECK \
-    -e UNIT_TEST_ONLY=$UNIT_TEST_ONLY \
+    -e ASAN_TEST_ONLY=$ASAN_TEST_ONLY \
     -e chain_lint=$chain_lint \
     -e JOBS=$JOBS \
     -e USER=$USER \

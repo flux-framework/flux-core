@@ -1,5 +1,6 @@
 #!/bin/sh
 #
+# ci=asan
 
 test_description='Test broker exec functionality, used by later tests
 
@@ -146,6 +147,7 @@ test_expect_success 'flux exec exits with code 126 for non executable' '
 	grep "Permission denied" exec.stderr2
 '
 
+# N.B. skip under ASAN, as it may capture segfault signal and report differently
 test_expect_success NO_ASAN 'flux exec passes non-zero exit status' '
 	test_expect_code 2 flux exec -n sh -c "exit 2" &&
 	test_expect_code 3 flux exec -n sh -c "exit 3" &&
@@ -158,6 +160,7 @@ test_expect_success 'flux exec fails with --with-imp if no IMP configured' '
 	grep "exec\.imp path not found in config" exec-no-imp.out
 '
 
+# N.B. skip under ASAN, as it may capture segfault signal and report differently
 test_expect_success NO_ASAN 'flux exec outputs tasks with errors' '
 	! flux exec -n sh -c "exit 2" > 2.out 2>&1 &&
         grep "\[0-3\]: Exit 2" 2.out &&
