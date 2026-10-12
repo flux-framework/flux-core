@@ -322,6 +322,35 @@ void test_is_integer (void)
     resourcecount_destroy (count);
 }
 
+const char *overflow_inputs[] = {
+    "4294967293+:3",
+    "3-4000000000:21:^",
+    "2147483649-4294967290:3:*",
+    NULL,
+};
+
+void test_overflow (void)
+{
+    for (unsigned int i = 0; overflow_inputs[i] != NULL; i++) {
+        struct resourcecount *count;
+
+        errno = 0;
+        count = resourcecount_decode (overflow_inputs[i]);
+        unsigned int result = resourcecount_next (count, resourcecount_first (count));
+        bool match = result == RESOURCECOUNT_INVALID_VALUE;
+        ok (count && match,
+            "resourcecount_next catches overflow in '%s'",
+            overflow_inputs[i]);
+        if (!count) {
+            diag ("resourcecount_decode '%s' failed with error %s",
+                  overflow_inputs[i], strerror(errno));
+        } else if (!match) {
+            diag ("instead got resourcecount_next() = %u", result);
+        }
+        resourcecount_destroy (count);
+    }
+}
+
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
@@ -329,6 +358,7 @@ int main (int argc, char *argv[])
     test_codec ();
     test_iteration ();
     test_is_integer ();
+    test_overflow();
 
     done_testing ();
 }
