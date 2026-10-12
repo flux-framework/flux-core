@@ -15,13 +15,13 @@ import copy
 import json
 import unittest
 
-import subflux  # noqa: F401,E402 - configures PYTHONPATH for flux imports
-from flux.idset import IDset  # noqa: E402
-from flux.resource import InfeasibleRequest, InsufficientResources  # noqa: E402
-from flux.resource.Rv1Pool import ResourceRequest  # noqa: E402
-from flux.resource.TreePool import TreePool  # noqa: E402
+import subflux  # noqa: F401 - configures PYTHONPATH for flux imports
+from flux.idset import IDset
+from flux.resource import InfeasibleRequest, InsufficientResources
+from flux.resource.Rv1Pool import ResourceRequest
+from flux.resource.TreePool import TreePool
 from flux.resourcecount import ResourceCount
-from pycotap import TAPTestRunner  # noqa: E402
+from pycotap import TAPTestRunner
 
 
 def rr(
