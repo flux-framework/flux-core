@@ -374,6 +374,7 @@ TESTSCRIPTS = \
 	python/t0048-frobnicator-vqueue.py \
 	python/t0049-queue-conf.py \
 	python/t0050-perilog.py \
+	python/t0051-resourcecount.py \
 	python/t0100-modprobe.py \
 	python/t1000-service-add-remove.py \
 	python/t6010-fake-resources.py
