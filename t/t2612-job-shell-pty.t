@@ -131,10 +131,12 @@ test_expect_success 'pty: no hang when invalid command is run under pty' '
 # Note: test below uses printf(1) to send [Ctrl-SPACE (NUL), newline, Ctrl-D]
 # over the pty connection and expects ^@ (the standard representation of NUL)
 # to appear in output.
+#
+# N.B. set NO_ASAN, results in cat: memory exhausted error
 nul_ctrl_d() {
 	python3 -c 'print("\x00\n\x04", end=None)'
 }
-test_expect_success 'pty: NUL (Ctrl-SPACE) character not dropped' '
+test_expect_success NO_ASAN 'pty: NUL (Ctrl-SPACE) character not dropped' '
 	nul_ctrl_d | flux run -vvv -o pty.interactive -o pty.capture cat -v &&
 	flux job eventlog -HL -p output $(flux job last) &&
 	flux job eventlog -HL -p output $(flux job last) | grep \\^@
