@@ -31,30 +31,35 @@ struct queue {
 };
 
 struct queues {
-    json_t *flux_config;
+    int count;                  /* number of configured (named) queues */
     struct list_head queues_list;
     struct queue *current;
 };
 
-static struct queue *queue_create (struct queues *queues, const char *name)
+/* Create a queue from its conf entry, or the synthetic "all" queue (no name,
+ * no constraint) if 'entry' is NULL.
+ */
+static struct queue *queue_create (json_t *entry)
 {
-    json_t *requires = NULL;
     struct queue *q = calloc (1, sizeof (*q));
     if (!q)
         fatal (0, "could not allocate queue entry");
 
-    /* name == NULL means "all" queues */
-    if (name) {
+    if (entry) {
+        const char *name;
+        json_t *requires = NULL;
+
+        /* 'requires' is the effective membership: an RFC 33 virtual queue
+         * already carries its parent's.  A queue with none covers all
+         * resources.
+         */
+        if (json_unpack (entry,
+                         "{s:s s?o}",
+                         "name", &name,
+                         "requires", &requires) < 0)
+            fatal (0, "error parsing queue configuration");
         if (!(q->name = strdup (name)))
             fatal (0, "could not duplicate queue name entry");
-
-        /* not required to be configured */
-        (void) json_unpack (queues->flux_config,
-                            "{s:{s:{s:o}}}",
-                            "queues",
-                            name,
-                            "requires",
-                            &requires);
         if (requires) {
             if (!(q->constraint = json_pack ("{s:O}",
                                              "properties",
@@ -84,7 +89,6 @@ void queues_destroy (struct queues *queues)
     if (queues) {
         int saved_errno = errno;
         struct queue *q;
-        json_decref (queues->flux_config);
         while ((q = list_pop (&queues->queues_list,
                               struct queue,
                               list_node)))
@@ -94,66 +98,50 @@ void queues_destroy (struct queues *queues)
     }
 }
 
-static void queues_list_setup (struct queues *queues)
+/* Build the queue list from 'conf', the job-manager.queue-list "conf"
+ * object, or just the "all" queue if 'conf' is NULL.  Nothing from 'conf'
+ * is retained: each queue keeps only the constraint built here.
+ */
+static void queues_list_setup (struct queues *queues, json_t *conf)
 {
     struct queue *q;
-    json_t *o;
-    const char *name;
-    json_t *value;
+    json_t *entries;
+    size_t index;
+    json_t *entry;
 
     list_head_init (&queues->queues_list);
 
     /* first, we add a queue for "all" queues with NULL queue name. */
-    q = queue_create (queues, NULL);
+    q = queue_create (NULL);
     list_add_tail (&queues->queues_list, &q->list_node);
 
-    /* return if no queues configured */
-    if (json_unpack (queues->flux_config,
-                     "{s:o}",
-                     "queues", &o) < 0)
+    if (json_unpack (conf, "{s:o}", "queues", &entries) < 0)
         return;
 
-    json_object_foreach (o, name, value) {
-        q = queue_create (queues, name);
+    json_array_foreach (entries, index, entry) {
+        q = queue_create (entry);
         list_add_tail (&queues->queues_list, &q->list_node);
+        queues->count++;
     }
 }
 
-struct queues *queues_create (json_t *flux_config)
+struct queues *queues_create (json_t *conf)
 {
     struct queues *queues;
 
     if (!(queues = calloc (1, sizeof (*queues))))
         return NULL;
-    queues->flux_config = json_incref (flux_config);
 
-    queues_list_setup (queues);
+    queues_list_setup (queues, conf);
 
     /* must work, minimally the "all" queue is configured */
     queues->current = list_top (&queues->queues_list, struct queue, list_node);
     return queues;
 }
 
-static bool is_valid_queue (struct queues *queues, const char *name)
-{
-    json_t *tmp;
-
-    if (json_unpack (queues->flux_config,
-                     "{s:{s:o}}",
-                     "queues", name, &tmp) < 0)
-        return false;
-    return true;
-}
-
 bool queues_configured (struct queues *queues)
 {
-    json_t *tmp;
-
-    if (json_unpack (queues->flux_config,
-                     "{s:o}",
-                     "queues", &tmp) < 0)
-        return false;
-    return true;
+    return queues->count > 0;
 }
 
 void queues_set_queue (struct queues *queues, const char *name)
@@ -162,17 +150,14 @@ void queues_set_queue (struct queues *queues, const char *name)
 
     assert (name);
 
-    /* first verify queue legit */
-    if (!is_valid_queue (queues, name))
-        fatal (0, "queue %s not configured", name);
-
     list_for_each(&queues->queues_list, q, list_node) {
         /* q->name == NULL is "all" queues, don't compare */
         if (q->name && streq (q->name, name)) {
             queues->current = q;
-            break;
+            return;
         }
     }
+    fatal (0, "queue %s not configured", name);
 }
 
 void queues_next (struct queues *queues)

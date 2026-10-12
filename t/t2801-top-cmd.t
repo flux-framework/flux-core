@@ -359,6 +359,36 @@ test_expect_success 'flux-top shows expected data in debug queue after cancels' 
 	grep "0 running" debugqC.out &&
 	grep "1 failed" debugqC.out
 '
+# A virtual queue (RFC 33) has no requires of its own: its resource slice
+# is its parent's, which the job-manager resolves.  Reading the raw config
+# instead would leave the vqueue unconstrained and show all 4 nodes.
+test_expect_success 'flux-top resolves a virtual queue to its parent' '
+	flux config load <<-EOT &&
+	[queues.batch]
+	requires = [ "batch" ]
+	[queues.debug]
+	requires = [ "debug" ]
+	[queues.expedite]
+	parent = "batch"
+	EOT
+	flux queue start --all &&
+	$runpty flux top --queue=expedite --test-exit \
+	    --test-exit-dump=vq.out >/dev/null &&
+	grep "nodes 0/2" vq.out &&
+	grep "cores 0/2" vq.out
+'
+# Restore the two-queue config: the left/right cycling tests below depend
+# on the set of configured queues.
+test_expect_success "restore queue config" '
+	flux config load <<-EOT &&
+	[queues.batch]
+	requires = [ "batch" ]
+	[queues.debug]
+	requires = [ "debug" ]
+	EOT
+	flux queue start --all
+'
+
 # for interactive test below, job submission order here is important.
 # first two jobs are to batch queue, last is to debug queue.  This
 # leads to the debug queue job normally being listed first when jobs

@@ -200,7 +200,6 @@ void top_destroy (struct top *top)
         summary_pane_destroy (top->summary_pane);
         keys_destroy (top->keys);
         queues_destroy (top->queues);
-        json_decref (top->flux_config);
         if (top->testf)
             fclose (top->testf);
         flux_close (top->h);
@@ -228,17 +227,26 @@ static char * build_title (struct top *top, const char *title)
     return strdup (title);
 }
 
-static void get_config (struct top *top)
+/* Build the queue list from the job-manager, the authority for queue
+ * configuration.
+ *
+ * 'conf' is optional: a job-manager older than v0.89.0 does not send it.
+ * In that case offer only the "all" queue, rather than re-deriving
+ * membership here from the raw config.
+ */
+static struct queues *queues_create_from_job_manager (flux_t *h)
 {
     flux_future_t *f;
-    json_t *o;
+    json_t *conf = NULL;
+    struct queues *queues;
 
-    if (!(f = flux_rpc (top->h, "config.get", NULL, FLUX_NODEID_ANY, 0))
-        || flux_rpc_get_unpack (f, "o", &o) < 0)
-        fatal (errno, "Error fetching flux config");
+    if (!(f = flux_rpc (h, "job-manager.queue-list", NULL, 0, 0))
+        || flux_rpc_get_unpack (f, "{s?o}", "conf", &conf) < 0)
+        fatal (errno, "Error fetching queue configuration");
 
-    top->flux_config = json_incref (o);
+    queues = queues_create (conf); // retains nothing from 'conf'
     flux_future_destroy (f);
+    return queues;
 }
 
 struct top *top_create (const char *uri,
@@ -255,9 +263,7 @@ struct top *top_create (const char *uri,
     if (!(top->title = build_title (top, title)))
         goto fail;
 
-    get_config (top);
-
-    if (!(top->queues = queues_create (top->flux_config)))
+    if (!(top->queues = queues_create_from_job_manager (top->h)))
         goto fail;
 
     /* setup / configure queue before calls to joblist_pane_create() and

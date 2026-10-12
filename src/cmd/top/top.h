@@ -30,7 +30,6 @@ enum {
 struct top {
     flux_t *h;
     char *title;
-    json_t *flux_config;
     struct queues *queues;
     flux_jobid_t id;
 
@@ -91,7 +90,7 @@ void ucache_destroy (struct ucache *ucache);
 const char *ucache_lookup (struct ucache *ucache, uid_t userid);
 
 void queues_destroy (struct queues *queues);
-struct queues *queues_create (json_t *flux_config);
+struct queues *queues_create (json_t *conf);
 bool queues_configured (struct queues *queues);
 void queues_set_queue (struct queues *queues, const char *name);
 void queues_next (struct queues *queues);
