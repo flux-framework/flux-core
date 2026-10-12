@@ -12,6 +12,7 @@
 #include "config.h"
 #endif
 #include <errno.h>
+#include <string.h>
 #include <stdbool.h>
 
 #include "src/common/libtap/tap.h"
@@ -22,6 +23,11 @@ struct inout {
     const char *in;
     int flags;
     const char *out;
+};
+
+struct inout_uint {
+    const char *in;
+    unsigned int out;
 };
 
 struct inout test_codec_inputs[] = {
@@ -327,6 +333,47 @@ void test_iteration (void)
         "resourcecount_next (NULL, ...) == RESOURCECOUNT_INVALID_VALUE works");
 }
 
+struct inout_uint test_last_inputs[] = {
+    { "1", 1 },
+    { "17", 17 },
+    { "5,7,13", 13 },
+    { "1-8", 8 },
+    { "1-10:3", 10 },
+    { "1-9:3", 7 },
+    { "1-4294967292:2", 4294967291 },
+    { "2-16:2:*", 16 },
+    { "2-16:3:*", 6 },
+    { "2-100:2:^", 16 },
+    { "3-100:2:^", 81 },
+    { "2-100:4000000000:^", 2 },
+    { "2+", RESOURCECOUNT_MAX },
+    { NULL, 0 },
+};
+
+void test_last (void)
+{
+    struct inout_uint *ip;
+
+    for (ip = &test_last_inputs[0]; ip->in != NULL; ip++) {
+        struct resourcecount *count;
+
+        errno = 0;
+        count = resourcecount_decode (ip->in);
+        bool match = resourcecount_last (count) == ip->out;
+        ok (count && match, "resourcecount_last '%s' -> %u works", ip->in, ip->out);
+        if (!count) {
+            diag ("resourcecount_decode '%s' failed with error %s",
+                  ip->in, strerror(errno));
+        } else if (!match) {
+            diag ("instead got resourcecount_last() = %u", resourcecount_last (count));
+        }
+        resourcecount_destroy (count);
+    }
+
+    ok (resourcecount_last (NULL) == RESOURCECOUNT_INVALID_VALUE,
+        "resourcecount_last (NULL) == RESOURCECOUNT_INVALID_VALUE works");
+}
+
 void test_boolean_accessors (void)
 {
     struct resourcecount *count;
@@ -400,6 +447,7 @@ int main (int argc, char *argv[])
 
     test_codec ();
     test_iteration ();
+    test_last();
     test_boolean_accessors ();
     test_overflow();
 
