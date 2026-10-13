@@ -224,10 +224,10 @@ test_expect_success 'kvs: setroot pause / unpause works (owner)' '
       	${FLUX_BUILD_DIR}/t/kvs/setrootevents --unpause --namespace=$NAMESPACETMP-USER
 '
 
-test_expect_success 'kvs: setroot pause / unpause works (user)' '
+test_expect_success 'kvs: setroot pause / unpause fails (namespace owner)' '
         set_userid 9999 &&
-      	${FLUX_BUILD_DIR}/t/kvs/setrootevents --pause --namespace=$NAMESPACETMP-USER &&
-      	${FLUX_BUILD_DIR}/t/kvs/setrootevents --unpause --namespace=$NAMESPACETMP-USER &&
+      	! ${FLUX_BUILD_DIR}/t/kvs/setrootevents --pause --namespace=$NAMESPACETMP-USER &&
+      	! ${FLUX_BUILD_DIR}/t/kvs/setrootevents --unpause --namespace=$NAMESPACETMP-USER &&
         unset_userid
 '
 
