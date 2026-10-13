@@ -108,7 +108,6 @@ test_expect_success UTF8_LOCALE 'flux kvs dir can display a UTF-8 key' '
         (LC_ALL=${UTF8_LOCALE} flux start sh -c "flux kvs put ƒuzzybunny=42 \
 	 && flux kvs dir | grep bunny")
 '
-test_done
 
 #
 # Basic put, get, unlink tests w/ multiple key inputs
