@@ -2891,6 +2891,17 @@ test_expect_success 'list-id request with invalid input fails with EINVAL(22) (a
 	jq -j -c -n  "{id:${id}, attrs:[\"foo\"]}" \
 	  | $RPC job-list.list-id 22 "foo is not a valid attribute"
 '
+test_expect_success 'job-state-pause request from guest fails with EPERM(1)' '
+	FLUX_HANDLE_ROLEMASK=0x2 \
+	    $RPC job-list.job-state-pause 1 \
+	    "Request requires owner credentials" </dev/null
+'
+test_expect_success 'job-state-unpause request from guest fails with EPERM(1)' '
+	FLUX_HANDLE_ROLEMASK=0x2 \
+	    $RPC job-list.job-state-unpause 1 \
+	    "Request requires owner credentials" </dev/null
+'
+
 # Restart job-list from the KVS.  job-list used to pull in job eventlogs
 # directly from the KVS at startup, but now it gets them via the job manager
 # journal.  Therefore we need to restart the job-manager too, which requires
