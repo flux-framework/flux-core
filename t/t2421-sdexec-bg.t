@@ -35,6 +35,17 @@ false=$(which false)
 sh=$(which sh)
 sleep=$(which sleep)
 
+# Unit names are "<label>:<rank>-<instance>.service" here, since the two
+# brokers of this test instance share a node (and a systemd user instance).
+# The instance part is jobid-path with the leading separator dropped and
+# the rest turned into hyphens, as unit_name_suffix() renders it.
+iname=$(flux getattr jobid-path | sed -e "s|^/||" -e "s|/|-|g")
+
+# Usage: unit_loadstate name
+unit_loadstate() {
+	systemctl --user show -p LoadState --value "$1" 2>/dev/null
+}
+
 test_expect_success 'enable debug logging' '
 	cat >systemd.toml <<-EOF &&
 	[systemd]
@@ -229,6 +240,36 @@ test_expect_success 'non-waitable background output is logged to broker log' '
 	flux dmesg -C &&
 	$sdexec -r 0 --bg $sh -c "echo detached-output" &&
 	grep_dmesg_retry detached-output
+'
+# Module unload kills and reaps units that nobody can reclaim: a
+# foreground unit, whose client is streaming its output, and a
+# non-waitable background unit, which no wait request can name.  A
+# waitable unit is left for a later wait, so systemd still has it (and
+# its exit status) after the module is gone.
+test_expect_success 'module unload kills a foreground unit' '
+	$sdexec -r 0 --label=unload-fg $sleep 300 >unload-fg.out 2>&1 &
+	test_wait_until "systemctl --user show -p SubState --value \
+	    unload-fg:0-${iname}.service | grep -q running" &&
+	flux exec -r 0 flux module remove sdexec &&
+	test "$(unit_loadstate unload-fg:0-${iname}.service)" = "not-found" &&
+	flux exec -r 0 flux module load sdexec
+'
+test_expect_success 'module unload kills a non-waitable background unit' '
+	$sdexec -r 0 --bg --label=unload-bg $sleep 300 &&
+	test_wait_until "systemctl --user show -p SubState --value \
+	    unload-bg:0-${iname}.service | grep -q running" &&
+	flux exec -r 0 flux module remove sdexec &&
+	test "$(unit_loadstate unload-bg:0-${iname}.service)" = "not-found" &&
+	flux exec -r 0 flux module load sdexec
+'
+test_expect_success 'module unload leaves a waitable unit' '
+	$sdexec -r 0 --bg --waitable --label=unload-w $sleep 300 &&
+	test_wait_until "systemctl --user show -p SubState --value \
+	    unload-w:0-${iname}.service | grep -q running" &&
+	flux exec -r 0 flux module remove sdexec &&
+	test "$(unit_loadstate unload-w:0-${iname}.service)" = "loaded" &&
+	systemctl --user stop unload-w:0-${iname}.service &&
+	flux exec -r 0 flux module load sdexec
 '
 test_expect_success 'remove sdexec,sdbus modules' '
 	flux exec flux module remove sdexec &&
