@@ -160,6 +160,26 @@ static void test_configure_empty_is_anon (void)
         "queues_have_named still false after empty configure");
     json_decref (empty);
 
+    /* A 'hosts' that is not a string is rejected. The config-derived
+     * tables it is packed alongside must not be leaked on that path: the
+     * unpack stores them before reaching the key that fails.
+     */
+    json_t *badhosts = json_pack ("{s:{s:[s] s:{s:i} s:i}}",
+                                  "batch",
+                                    "requires", "foo",
+                                    "policy", "x", 1,
+                                    "hosts", 1);
+    json_t *entry = json_object_get (badhosts, "batch");
+    json_t *req = json_object_get (entry, "requires");
+    json_t *pol = json_object_get (entry, "policy");
+    size_t reqref = req->refcount;
+    size_t polref = pol->refcount;
+    ok (queues_configure (qs, badhosts, &error) < 0 && errno == EINVAL,
+        "queues_configure with non-string hosts fails with EINVAL");
+    ok (req->refcount == reqref && pol->refcount == polref,
+        "queues_configure with non-string hosts does not leak");
+    json_decref (badhosts);
+
     queues_destroy (qs);
 }
 
