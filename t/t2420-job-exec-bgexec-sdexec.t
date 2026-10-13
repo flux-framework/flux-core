@@ -88,7 +88,7 @@ test_expect_success 'sdexec transient unit is named after the job (not a uuid)' 
 	fid=$(flux job id --to=f58plain $id) &&
 	systemctl --user list-units --all --type=service >units.out &&
 	test_debug "grep -E \"shell-${fid}\" units.out" &&
-	grep -E "(imp-)?shell-${fid}-[0-9]+:${iname}\.service" units.out
+	grep -E "(imp-)?shell-${fid}:[0-9]+-${iname}\.service" units.out
 '
 # ---------------------------------------------------------------------------
 # reattach across a module reload
