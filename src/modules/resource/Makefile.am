@@ -48,7 +48,8 @@ libresource_la_SOURCES = \
 
 TESTS = \
 	test_rutil.t \
-	test_drainset.t
+	test_drainset.t \
+	test_queue_membership.t
 
 test_ldadd = \
 	$(builddir)/libresource.la \
@@ -82,3 +83,8 @@ test_drainset_t_SOURCES = test/drainset.c
 test_drainset_t_CPPFLAGS = $(test_cppflags)
 test_drainset_t_LDADD = $(test_ldadd)
 test_drainset_t_LDFLAGS = $(test_ldflags)
+
+test_queue_membership_t_SOURCES = test/queue_membership.c
+test_queue_membership_t_CPPFLAGS = $(test_cppflags)
+test_queue_membership_t_LDADD = $(test_ldadd)
+test_queue_membership_t_LDFLAGS = $(test_ldflags)
