@@ -42,8 +42,8 @@ Unit Naming
 A transient unit is named ``<label>:<instance>.service``, where *label* is
 the subprocess label supplied by the client and *instance* is the broker's
 ``jobid-path`` attribute rendered as a name: the leading separator is
-dropped, further separators become colons, and job IDs take the plain f58
-form, e.g. ``/sys/ƒJOBID`` becomes ``sys:fJOBID``.  A label never contains
+dropped, further separators become hyphens, and job IDs take the plain
+f58 form, e.g. ``/sys/ƒJOBID`` becomes ``sys-fJOBID``.  A label never contains
 a colon, so the first colon in a unit name separates the label from the
 rendered jobid-path, and a unit name maps back to its instance and job
 mechanically.  Clients that do not set a label get a name derived from a
