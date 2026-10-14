@@ -33,6 +33,8 @@ libresource_la_SOURCES = \
 	acquire.h \
 	inventory.c \
 	inventory.h \
+	queue_membership.c \
+	queue_membership.h \
 	rutil.c \
 	rutil.h \
 	status.c \
