@@ -198,4 +198,54 @@ test_expect_success 'cleanup: cancel held job' '
 	flux cancel $jobid &&
 	flux job wait-event $jobid clean
 '
+
+# A queue that declares 'hosts' (RFC 33) has its membership derived as the
+# property "+NAME", so the update path sees a property the configuration
+# never names.  Reload resources with distinct hostnames so 'hosts' can
+# select a subset of ranks.
+test_expect_success 'config hosts queues and resources' '
+	flux R encode -r 0-3 -H test[0-3] \
+	   | tr -d "\n" \
+	   | flux kvs put -r resource.R=- &&
+	flux config load <<-EOT &&
+	[queues.hbatch]
+	hosts = "test[0-2]"
+
+	[queues.hdebug]
+	hosts = "test3"
+
+	[queues.other]
+
+	[policy.jobspec.defaults.system]
+	queue = "hbatch"
+	EOT
+	flux module remove sched-simple &&
+	flux module reload resource &&
+	flux module load sched-simple &&
+	flux queue start --all
+'
+test_expect_success 'queue update between hosts queues replaces membership' '
+	jobid=$(flux submit -t 1m --urgency=hold -q hbatch hostname) &&
+	flux job info $jobid jobspec \
+	  | jq -e ".attributes.system.constraints.properties == [\"+hbatch\"]" &&
+	flux update --wait $jobid queue=hdebug &&
+	test_debug "flux job info $jobid jobspec | jq .attributes.system.constraints" &&
+	flux job info $jobid jobspec \
+	  | jq -e ".attributes.system.constraints.properties == [\"+hdebug\"]"
+'
+test_expect_success 'queue update out of a hosts queue drops membership' '
+	flux update --wait $jobid queue=other &&
+	test_debug "flux job info $jobid jobspec | jq .attributes.system.constraints" &&
+	flux job info $jobid jobspec \
+	  | jq -e ".attributes.system.constraints == {}"
+'
+test_expect_success 'queue update into a hosts queue adds membership' '
+	flux update --wait $jobid queue=hdebug &&
+	flux job info $jobid jobspec \
+	  | jq -e ".attributes.system.constraints.properties == [\"+hdebug\"]"
+'
+test_expect_success 'cleanup: cancel held job' '
+	flux cancel $jobid &&
+	flux job wait-event $jobid clean
+'
 test_done

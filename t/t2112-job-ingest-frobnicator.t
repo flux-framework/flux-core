@@ -166,6 +166,32 @@ test_expect_success 'constraints plugin works without requires' '
 	> constraint-norequires.out &&
 	jq -e "has(\"data\")" <constraint-norequires.out
 '
+# A queue that declares 'hosts' (RFC 33) expresses its membership as the
+# derived property "+NAME" instead of 'requires'.  The plugin takes the
+# effective membership from the job-manager, so it needs no 'hosts' logic
+# of its own, but the result differs and is worth pinning.
+test_expect_success 'constraints plugin sets queue constraint for hosts queue' '
+	cat >conf.d/conf.toml <<-EOT &&
+	[queues.debug]
+	hosts = "all"
+	EOT
+	flux config reload &&
+	flux run --env=-* --dry-run --queue=debug hostname \
+	   | flux job-frobnicator --jobspec-only --plugins=constraints \
+	   > constraint-hosts.out &&
+	jq -e ".data.attributes.system.constraints.properties \
+	    == [ \"+debug\" ]" < constraint-hosts.out
+'
+test_expect_success 'constraints plugin adds queue constraint for hosts queue' '
+	flux run --env=-* --dry-run --requires=foo \
+	  --queue=debug hostname \
+	   | flux job-frobnicator --jobspec-only --plugins=constraints \
+	   > constraint-hosts-add.out &&
+	jq -e ".data.attributes.system.constraints.properties|any(.==\"+debug\")"\
+	   < constraint-hosts-add.out &&
+	jq -e ".data.attributes.system.constraints.properties|any(.==\"foo\")"\
+	   < constraint-hosts-add.out
+'
 test_expect_success 'frobnicator defaults are defaults,constraints' '
 	cat <<-EOF >conf.d/conf.toml &&
 	[policy]
