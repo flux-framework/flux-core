@@ -44,7 +44,7 @@ test_expect_success 'sched-simple: instance-local property omitted from job R' '
 	test_must_fail jq -e ".execution.properties[\"+batch\"]" <batch_R.json
 '
 test_expect_success 'sched-simple: instance-local property present in instance R' '
-	flux kvs get resource.R | jq -e ".execution.properties[\"+batch\"]"
+	flux resource R | jq -e ".execution.properties[\"+batch\"]"
 '
 test_expect_success 'sched-simple: allocated R contains R.scheduling' '
 	flux run -n1 hostname &&

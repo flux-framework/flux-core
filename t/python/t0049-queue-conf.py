@@ -60,6 +60,38 @@ class TestQueueConfFromConfig(unittest.TestCase):
         self.assertEqual(by_name["expedite"]["parent"], "batch")
         self.assertEqual(by_name["expedite"]["requires"], ["batch"])
 
+    def test_hosts_queue_derives_membership_property(self):
+        # A queue defined by 'hosts' (RFC 33) has membership property
+        # "+NAME", independent of the hostlist value.
+        conf = queue_conf_from_config({"queues": {"batch": {"hosts": "node[0-3]"}}})
+        self.assertEqual(conf["queues"], [{"name": "batch", "requires": ["+batch"]}])
+
+    def test_hosts_all_derives_membership_property(self):
+        # hosts = "all" is no different: the membership is still "+NAME".
+        conf = queue_conf_from_config({"queues": {"batch": {"hosts": "all"}}})
+        self.assertEqual(conf["queues"], [{"name": "batch", "requires": ["+batch"]}])
+
+    def test_requires_takes_precedence_over_hosts(self):
+        # The two keys are mutually exclusive in config, but if both are
+        # present the explicit 'requires' wins.
+        config = {"queues": {"batch": {"requires": ["foo"], "hosts": "node0"}}}
+        by_name = {q["name"]: q for q in queue_conf_from_config(config)["queues"]}
+        self.assertEqual(by_name["batch"]["requires"], ["foo"])
+
+    def test_vqueue_inherits_parent_membership_property(self):
+        # A vqueue whose parent defines membership by 'hosts' carries the
+        # parent's membership property, so its jobs schedule as part of the
+        # parent.
+        config = {
+            "queues": {
+                "batch": {"hosts": "node[0-3]"},
+                "expedite": {"parent": "batch"},
+            }
+        }
+        by_name = {q["name"]: q for q in queue_conf_from_config(config)["queues"]}
+        self.assertEqual(by_name["expedite"]["requires"], ["+batch"])
+        self.assertEqual(by_name["expedite"]["requires"], by_name["batch"]["requires"])
+
     def test_vqueue_parent_without_requires_omits_key(self):
         config = {
             "queues": {
