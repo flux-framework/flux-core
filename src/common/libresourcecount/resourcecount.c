@@ -162,8 +162,14 @@ struct resourcecount *resourcecount_decode (const char *s)
     struct resourcecount *count = NULL;
     char *cpy = NULL;
     char *ep;
-    int len = strlen (s);
+    int len;
     json_t *json_input;
+
+    if (!s) {
+        errno = EINVAL;
+        return NULL;
+    }
+    len = strlen (s);
 
     // if it starts with a brace, decode as JSON
     if (*s == '{') {
