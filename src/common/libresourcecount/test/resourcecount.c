@@ -235,6 +235,11 @@ void test_codec (void)
         }
         resourcecount_destroy (count);
     }
+
+    ok (resourcecount_decode (NULL) == NULL,
+        "resourcecount_decode (NULL) == NULL works");
+    ok (resourcecount_encode (NULL, 0) == NULL,
+        "resourcecount_encode (NULL, ...) == NULL works");
 }
 
 struct inout test_iteration_inputs[] = {
@@ -300,6 +305,13 @@ void test_iteration (void)
         resourcecount_destroy (count);
         json_decref (json_in);
     }
+
+    ok (resourcecount_create (NULL, NULL) == NULL,
+        "resourcecount_create (NULL, NULL) == NULL works");
+    ok (resourcecount_first (NULL) == RESOURCECOUNT_INVALID_VALUE,
+        "resourcecount_first (NULL) == RESOURCECOUNT_INVALID_VALUE works");
+    ok (resourcecount_next (NULL, 2) == RESOURCECOUNT_INVALID_VALUE,
+        "resourcecount_next (NULL, ...) == RESOURCECOUNT_INVALID_VALUE works");
 }
 
 void test_is_integer (void)
@@ -320,6 +332,9 @@ void test_is_integer (void)
     ok (count && resourcecount_is_integer (count) == false,
         "resourcecount_is_integer '1-9:2:*'->false works");
     resourcecount_destroy (count);
+
+    ok (resourcecount_is_integer (NULL) == false,
+        "resourcecount_is_integer (NULL) == false works");
 }
 
 const char *overflow_inputs[] = {
