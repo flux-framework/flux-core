@@ -19,6 +19,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <stdarg.h>
+#include <stdlib.h>
 #include <locale.h>
 #include <jansson.h>
 #include <flux/core.h>
@@ -262,23 +263,47 @@ static int reconnect (flux_t *h, void *arg)
     return 0;
 }
 
+static int parse_userid (const char *s, uid_t *up)
+{
+    char *endptr;
+    unsigned long id;
+
+    errno = 0;
+    id = strtoul (s, &endptr, 10);
+    if (errno != 0 || *endptr != '\0' || endptr == s)
+        return -1;
+    *up = (uid_t) id;
+    return 0;
+}
+
+/*  Return the userid of the owner of the enclosing instance.
+ *
+ *  When the shell is launched by the IMP, the instance may be running as
+ *  a different user, in which case it cannot be trusted to report this.
+ *  The IMP sets FLUX_IMP_EXEC_USERID from the userid under which it was
+ *  invoked, while privileged, so prefer that when it is present.
+ *  See RFC 15.
+ */
 static uid_t get_instance_owner (flux_t *h)
 {
     const char *s;
-    char *endptr;
-    int id;
+    uid_t id;
 
+    if ((s = getenv ("FLUX_IMP_EXEC_USERID"))) {
+        if (parse_userid (s, &id) == 0)
+            return id;
+        shell_log_error ("error parsing FLUX_IMP_EXEC_USERID=%s", s);
+        return (uid_t) 0;
+    }
     if (!(s = flux_attr_get (h, "security.owner"))) {
         shell_log_errno ("error fetching security.owner attribute");
         return (uid_t) 0;
     }
-    errno = 0;
-    id = strtoul (s, &endptr, 10);
-    if (errno != 0 || *endptr != '\0') {
+    if (parse_userid (s, &id) < 0) {
         shell_log_error ("error parsing security.owner=%s", s);
         return (uid_t) 0;
     }
-    return (uid_t) id;
+    return id;
 }
 
 static void shell_connect_flux (flux_shell_t *shell)
