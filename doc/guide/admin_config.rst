@@ -470,18 +470,22 @@ Configuration
 
        [run.prolog]
        allowed-users = [ "flux" ]
-       allowed-environment = [ "FLUX_*" ]
        path = "/usr/libexec/flux/cmd/flux-run-prolog"
 
        [run.epilog]
        allowed-users = [ "flux" ]
-       allowed-environment = [ "FLUX_*" ]
        path = "/usr/libexec/flux/cmd/flux-run-epilog"
 
        [run.housekeeping]
        allowed-users = [ "flux" ]
-       allowed-environment = [ "FLUX_*" ]
        path = "/usr/libexec/flux/cmd/flux-run-housekeeping"
+
+    .. note::
+       With flux-security 0.15.0 and earlier, sites may need
+       ``allowed-environment = [ "FLUX_JOB_RANKS" ]``.  flux-security
+       exports this variable by default in 0.16.0 and later, so
+       ``allowed-environment`` is only necessary for other site-specific
+       variables that need to be passed.
 
 
  2. Configure the Flux system instance to run prolog, epilog, and housekeeping:
@@ -820,12 +824,10 @@ Ensure the IMP allows the prolog and housekeeping wrappers:
   # /etc/flux/imp/conf.d/imp.toml
   [run.prolog]
   allowed-users = [ "flux" ]
-  allowed-environment = [ "FLUX_*" ]
   path = "/usr/libexec/flux/cmd/flux-run-prolog"
 
   [run.housekeeping]
   allowed-users = [ "flux" ]
-  allowed-environment = [ "FLUX_*" ]
   path = "/usr/libexec/flux/cmd/flux-run-housekeeping"
 
 Behavior
