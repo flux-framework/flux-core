@@ -11,7 +11,7 @@ test_expect_success HAVE_IMP 'configure a flux-imp run command' '
 	cat <<-EOF >imp-run-test.toml &&
 	[run.test]
 	allowed-users = ["flux"]
-	allowed-environment = ["FLUX_*", "TEST_ARG"]
+	allowed-environment = ["TEST_ARG"]
 	path = "$confdir/run-test.sh"
 	EOF
 	sudo cp imp-run-test.toml $confdir &&
