@@ -33,16 +33,6 @@ enum resourcecount_flags {
                            // range with defaults omitted ("1-5:1:+" -> "1-5")
 };
 
-struct resourcecount {
-    unsigned int integer;
-    unsigned int min;
-    unsigned int max;
-    unsigned int operand;
-    char operator;
-    bool isrange;
-    struct idset *idset;
-};
-
 /* Create a resourcecount from a json object.
  * Returns resourcecount on success, or NULL on failure with error->text set.
  */
@@ -77,6 +67,10 @@ unsigned int resourcecount_first (const struct resourcecount *count);
  */
 unsigned int resourcecount_next (const struct resourcecount *count, unsigned int value);
 
+/* Returns true if count is a simple integer, i.e. count->integer > 0.
+ * Returns false otherwise, or if count is NULL.
+ */
+bool resourcecount_is_integer (const struct resourcecount *count);
 
 #endif /* !FLUX_RESOURCECOUNT_H */
 
