@@ -23,6 +23,16 @@
 
 #include "resourcecount.h"
 
+struct resourcecount {
+    unsigned int integer;
+    unsigned int min;
+    unsigned int max;
+    unsigned int operand;
+    char operator;
+    bool isrange;
+    struct idset *idset;
+};
+
 void set_error (json_error_t *error, const char *fmt, ...)
 {
     va_list ap;
@@ -344,6 +354,11 @@ unsigned int resourcecount_next (const struct resourcecount *count, unsigned int
         }
     }
     return next;
+}
+
+bool resourcecount_is_integer (const struct resourcecount *count)
+{
+    return (count && count->integer > 0);
 }
 
 /*

@@ -60,7 +60,9 @@ static int jjc_read_vertex (json_t *o, int level, struct jjc_counts *jj, int nod
             jj->exclusive = true;
     } else {
         // Set negative as flag to indicate non-integer count found
-        nodefactor = count->integer ? nodefactor * resourcecount_first (count) : -1;
+        nodefactor = resourcecount_is_integer (count)
+                         ? nodefactor * resourcecount_first (count)
+                         : -1;
     }
     if (streq (type, "slot"))
         jj->nslots = count;
