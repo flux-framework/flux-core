@@ -1131,14 +1131,16 @@ static struct sdproc *sdproc_create (struct sdexec_ctx *ctx,
      * falling back to a truncated uuid when there is no label.
      *
      * The instance name is appended, so a unit created by this instance is
-     * "<label>-<instance>.service".  Since the systemd user instance is
+     * "<label>:<instance>.service".  Since the systemd user instance is
      * shared by every Flux instance running as this user, the suffix keeps
-     * names from colliding and gives a startup sweep a glob ("*-<instance>
-     * .service") that matches this instance's units and no others.
+     * names from colliding and gives a glob (":<instance>.service") that
+     * matches this instance's units and no others.
      *
-     * The broker rank is appended too when this node hosts more than one
+     * The broker rank is included when this node hosts more than one
      * broker, since those brokers share a systemd user instance and their
-     * labels do not (a label need only be unique within one sdexec).
+     * labels do not (a label need only be unique within one sdexec).  It
+     * goes after the colon, with the instance name, so that the first
+     * colon always ends the label.
      */
     if (get_dict (proc->cmd, "opts", "SDEXEC_NAME", &name) < 0) {
         uuid_t uuid;
@@ -1153,7 +1155,7 @@ static struct sdproc *sdproc_create (struct sdexec_ctx *ctx,
         }
         if (ctx->append_rank) {
             rc = asprintf (&tmp,
-                           "%s-%lu:%s.service",
+                           "%s:%lu-%s.service",
                            label,
                            (unsigned long)ctx->rank,
                            ctx->instance_name);
