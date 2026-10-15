@@ -333,21 +333,22 @@ unsigned int resourcecount_next (const struct resourcecount *count, unsigned int
 
     if (count) {
         if (count->isrange) {
-            switch (count->operator) {
-                case '+':
+            if (count->operator == '+') {
+                if (count->max > value && count->max - value >= count->operand) {
                     next = value + count->operand;
-                    break;
-                case '*':
-                    next = value * count->operand;
-                    break;
-                case '^':
-                    next = value;
-                    for (unsigned int i = 1; i < count->operand; ++i) {
-                        next *= value;
+                }
+            } else if (count->operator == '*') {
+                next = count->max / count->operand < value ? RESOURCECOUNT_INVALID_VALUE
+                                                           : value * count->operand;
+            } else if (count->operator == '^') {
+                next = value;
+                for (unsigned int i = 1; i < count->operand; ++i) {
+                    if (next > count->max / value) {
+                        next = RESOURCECOUNT_INVALID_VALUE;
+                        break;
                     }
-            }
-            if (next > count->max) {
-                next = RESOURCECOUNT_INVALID_VALUE;
+                    next *= value;
+                }
             }
         } else if (count->idset) {
             next = idset_next (count->idset, value);
