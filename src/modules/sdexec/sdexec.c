@@ -73,6 +73,7 @@ struct sdexec_ctx {
     flux_msg_handler_t **handlers;
     zlistx_t *procs; // list of struct sdproc, owned by the module
     struct flux_msglist *kills;
+    bool tearing_down;  // module unload in progress (see teardown_units())
 };
 
 enum stop_timer_state {
@@ -128,6 +129,9 @@ struct sdproc {
 };
 
 static const int default_stop_timeout_sec = -1; // disabled by default
+
+// unload teardown deadline, stragglers are logged and left behind
+static const double teardown_timeout_sec = 30.;
 
 static bool sdexec_debug;
 
@@ -1453,6 +1457,11 @@ static void exec_cb (flux_t *h,
                              "flags", &flags,
                              "local_flags", &local_flags) < 0)
         goto error;
+    if (ctx->tearing_down) {
+        errstr = "module is unloading";
+        errno = ENOSYS;
+        goto error;
+    }
     /* Per RFC 42, a non-streaming exec request runs the process in the
      * background: a single "started" response is sent, then the process is
      * detached and the client may disconnect without terminating it.
@@ -1930,6 +1939,115 @@ static void disconnect_cb (flux_t *h,
     }
 }
 
+/* Module unload: kill and reap every non-waitable unit so that, after a
+ * clean unload, only waitable units (and their retained statuses) remain
+ * on the bus.  This mirrors the rexec subprocess server, which kills all
+ * of its processes at shutdown; sdexec diverges only for waitable units,
+ * whose exit status a client has asked to collect and systemd retains
+ * with the unit.
+ *
+ * Killing is asynchronous: SIGKILL each unit, then run the reactor so
+ * each per-unit watch can observe the death and the state machine can
+ * reap the unit (StopUnit or ResetFailedUnit) and drop the proc.  The
+ * drain is bounded by a deadline: stragglers are logged and left behind.
+ *
+ * Entering the reactor here is race-free because every listed proc holds
+ * an sdbus property-change subscription: either a unit responds to the
+ * SIGKILL and the resulting signal wakes the check watcher, or nothing
+ * happens and the deadline expires, which is the right outcome for a unit
+ * that would not die.
+ *
+ * N.B. this requires sdbus, which carries the kill and reap requests, to
+ * still be loaded.  modprobe.toml orders sdexec after sdbus, so unload
+ * takes sdexec down first.  Were that to change, every request here
+ * would fail and the units would be left for the deadline.
+ */
+static int teardown_count (struct sdexec_ctx *ctx)
+{
+    struct sdproc *proc;
+    int count = 0;
+
+    proc = zlistx_first (ctx->procs);
+    while (proc) {
+        if (!sdproc_is_waitable (proc))
+            count++;
+        proc = zlistx_next (ctx->procs);
+    }
+    return count;
+}
+
+static void teardown_check_cb (flux_reactor_t *r,
+                               flux_watcher_t *w,
+                               int revents,
+                               void *arg)
+{
+    struct sdexec_ctx *ctx = arg;
+
+    if (teardown_count (ctx) == 0)
+        flux_reactor_stop (r);
+}
+
+static void teardown_timeout_cb (flux_reactor_t *r,
+                                 flux_watcher_t *w,
+                                 int revents,
+                                 void *arg)
+{
+    struct sdexec_ctx *ctx = arg;
+
+    flux_log (ctx->h,
+              LOG_ERR,
+              "unload: %d unit(s) still not reaped, leaving them behind",
+              teardown_count (ctx));
+    flux_reactor_stop (r);
+}
+
+static void teardown_units (struct sdexec_ctx *ctx)
+{
+    flux_t *h = ctx->h;
+    flux_reactor_t *r = flux_get_reactor (h);
+    flux_watcher_t *timer = NULL;
+    flux_watcher_t *check = NULL;
+    struct sdproc *proc;
+    int count = 0;
+
+    ctx->tearing_down = true;
+    proc = zlistx_first (ctx->procs);
+    while (proc) {
+        if (!sdproc_is_waitable (proc)) {
+            flux_future_t *f;
+            f = sdexec_kill_unit (h,
+                                  ctx->rank,
+                                  sdexec_unit_name (proc->unit),
+                                  "all",
+                                  SIGKILL);
+            flux_future_destroy (f); // fire and forget
+            count++;
+        }
+        proc = zlistx_next (ctx->procs);
+    }
+    if (count == 0)
+        return;
+    flux_log (h, LOG_INFO, "unload: killing %d non-waitable unit(s)", count);
+    if (!(timer = flux_timer_watcher_create (r,
+                                             teardown_timeout_sec,
+                                             0,
+                                             teardown_timeout_cb,
+                                             ctx))
+        || !(check = flux_check_watcher_create (r, teardown_check_cb, ctx))) {
+        flux_log_error (h, "unload: error creating teardown watchers");
+        goto done;
+    }
+    flux_watcher_start (timer);
+    flux_watcher_start (check);
+    if (flux_reactor_run (r, 0) < 0)
+        flux_log_error (h, "unload: teardown reactor exited abnormally");
+done:
+    flux_watcher_stop (timer);
+    flux_watcher_stop (check);
+    flux_watcher_destroy (timer);
+    flux_watcher_destroy (check);
+}
+
 /* N.B. systemd.enable is checked in rc1 and ignored here since
  * it should be OK to load the module manually for testing.
  */
@@ -2241,6 +2359,7 @@ int mod_main (flux_t *h, int argc, char **argv)
         flux_log_error (h, "reactor exited abnormally");
         goto error;
     }
+    teardown_units (ctx);
     rc = 0;
 error:
     sdexec_ctx_destroy (ctx);
