@@ -421,10 +421,11 @@ not configured.
 Script Environment
 ~~~~~~~~~~~~~~~~~~
 
-Scripts may use :envvar:`FLUX_JOB_ID` and :envvar:`FLUX_JOB_USERID` to
-take job or user specific actions.  Flux commands can be run from the
-scripts with instance owner credentials if the system is configured for
-root access as suggested in :ref:`config-flux`.
+Scripts may use :envvar:`FLUX_JOB_ID`, :envvar:`FLUX_JOB_USERID`, and
+:envvar:`FLUX_JOB_RANKS` to take job or user specific actions.  Flux
+commands can be run from the scripts with instance owner credentials if
+the system is configured for root access as suggested in
+:ref:`config-flux`.
 
 The IMP sets :envvar:`PATH` to a safe ``/usr/sbin:/usr/bin:/sbin:/bin``.
 
