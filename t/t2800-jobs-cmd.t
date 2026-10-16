@@ -283,6 +283,28 @@ test_expect_success 'flux-jobs --since works with fsd offset' '
 	test $count -eq $nall
 '
 
+# ISO 8601 basic format date (YYYYMMDD, no separators)
+test_expect_success 'flux-jobs --since works with ISO 8601 basic date' '
+	nall=$(job_list_state_count all) &&
+	count=$(flux jobs -n --since=20000101 | wc -l) &&
+	test $count -eq $nall
+'
+
+# All inactive jobs in this test became inactive today
+test_expect_success 'flux-jobs --since works with ISO 8601 basic date of today' '
+	ninactive=$(job_list_state_count inactive) &&
+	today=$(date +%Y%m%d) &&
+	test_debug "echo today=${today}" &&
+	count=$(flux jobs -n --filter=inactive --since=${today} | wc -l) &&
+	test $count -eq $ninactive
+'
+
+# A future date is rejected, proving the input was parsed as a date and
+# not as a seconds-since-epoch timestamp (which would be in the past)
+test_expect_success 'flux-jobs --since ISO 8601 basic date in future fails' '
+	test_must_fail flux jobs --since=29991231
+'
+
 # -a ignored if --filter specified
 test_expect_success 'flux-jobs -a and --filter=pending' '
 	count=`flux jobs -n -a --filter=pending 2> filter_a.err | wc -l` &&
