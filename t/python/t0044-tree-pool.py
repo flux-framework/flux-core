@@ -15,15 +15,13 @@ import copy
 import json
 import unittest
 
-import subflux  # noqa: F401,E402 - configures PYTHONPATH for flux imports
-from flux.idset import IDset  # noqa: E402
-from flux.resource import InfeasibleRequest, InsufficientResources  # noqa: E402
-from flux.resource.ResourceCount import ResourceCount  # noqa: E402
-from flux.resource.Rv1Pool import ResourceRequest  # noqa: E402
-from flux.resource.TreePool import TreePool  # noqa: E402
-from pycotap import TAPTestRunner  # noqa: E402
-
-_UNSET = object()
+import subflux  # noqa: F401 - configures PYTHONPATH for flux imports
+from flux.idset import IDset
+from flux.resource import InfeasibleRequest, InsufficientResources
+from flux.resource.Rv1Pool import ResourceRequest
+from flux.resource.TreePool import TreePool
+from flux.resourcecount import ResourceCount
+from pycotap import TAPTestRunner
 
 
 def rr(
@@ -32,21 +30,21 @@ def rr(
     slot_size=1,
     gpu_per_slot=0,
     exclusive=False,
-    nnodes_max=_UNSET,
-    nslots_max=_UNSET,
+    nnodes_max={},
+    nslots_max={},
 ):
     """Build a ResourceRequest from flat parameters."""
-    if nnodes_max is _UNSET:
-        nnodes_max = nnodes
-    if nslots_max is _UNSET:
-        nslots_max = nslots
     if nnodes > 0:
-        spn = nslots // nnodes
-        node_count = ResourceCount(nnodes, nnodes_max)
-        slot_count = ResourceCount(spn, spn)
+        node_spec = str(nnodes) + ("-" + str(nnodes_max) if nnodes_max else "")
+        node_spec += "+" if nnodes_max is None else ""
+        node_count = ResourceCount(node_spec)
+        slot_count = ResourceCount(nslots // nnodes)  # slots per node (fixed)
     else:
         node_count = None
-        slot_count = ResourceCount(nslots, nslots_max)
+        slot_spec = str(nslots) + ("-" + str(nslots_max) if nslots_max else "")
+        slot_spec += "+" if nslots_max is None else ""
+        slot_count = ResourceCount(slot_spec)
+
     return ResourceRequest(
         node_count, slot_count, slot_size, gpu_per_slot, 0.0, None, exclusive, None
     )

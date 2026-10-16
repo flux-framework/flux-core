@@ -1,0 +1,459 @@
+/************************************************************\
+ * Copyright 2025 Lawrence Livermore National Security, LLC
+ * (c.f. AUTHORS, NOTICE.LLNS, COPYING)
+ *
+ * This file is part of the Flux resource manager framework.
+ * For details, see https://github.com/flux-framework.
+ *
+ * SPDX-License-Identifier: LGPL-3.0
+\************************************************************/
+
+#if HAVE_CONFIG_H
+#include "config.h"
+#endif
+#include <errno.h>
+#include <string.h>
+#include <stdbool.h>
+
+#include "src/common/libtap/tap.h"
+#include "src/common/libresourcecount/resourcecount.h"
+#include "ccan/str/str.h"
+
+struct inout {
+    const char *in;
+    int flags;
+    const char *out;
+};
+
+struct inout_uint {
+    const char *in;
+    unsigned int out;
+};
+
+struct inout test_codec_inputs[] = {
+    { "2",              0,          "2" },
+    { "7-9",            0,          "7,8,9" },
+    { "1,7-9",          0,          "1,7,8,9" },
+    { "1,7-9,16",       0,          "1,7,8,9,16" },
+    { "1,7-9,14,16",    0,          "1,7,8,9,14,16" },
+    { "1-3,7-9,14,16",  0,          "1,2,3,7,8,9,14,16" },
+    { "2,3,4,5",        0,          "2,3,4,5" },
+    { "1048576",        0,          "1048576"},
+
+    { "[2]",            0,          "2" },
+    { "[7-9]",          0,          "7,8,9" },
+    { "[2,3,4,5]",      0,          "2,3,4,5" },
+
+    { "2",              RESOURCECOUNT_FLAG_SHORT,  "2" },
+    { "7-9",            RESOURCECOUNT_FLAG_SHORT,  "7-9" },
+    { "1,7-9",          RESOURCECOUNT_FLAG_SHORT,  "1,7-9" },
+    { "1,7-9,16",       RESOURCECOUNT_FLAG_SHORT,  "1,7-9,16" },
+    { "1,7-9,14,16",    RESOURCECOUNT_FLAG_SHORT,  "1,7-9,14,16" },
+    { "1-3,7-9,14,16",  RESOURCECOUNT_FLAG_SHORT,  "1-3,7-9,14,16" },
+    { "2,3,4,5",        RESOURCECOUNT_FLAG_SHORT,  "2-5" },
+
+    { "2",
+      RESOURCECOUNT_FLAG_SHORT|RESOURCECOUNT_FLAG_BRACKETS,
+      "2" },
+    { "7-9",
+      RESOURCECOUNT_FLAG_SHORT|RESOURCECOUNT_FLAG_BRACKETS,
+      "[7-9]" },
+    { "1,7-9",
+      RESOURCECOUNT_FLAG_SHORT|RESOURCECOUNT_FLAG_BRACKETS,
+      "[1,7-9]" },
+    { "1,7-9,16",
+      RESOURCECOUNT_FLAG_SHORT|RESOURCECOUNT_FLAG_BRACKETS,
+      "[1,7-9,16]" },
+    { "1,7-9,14,16",
+      RESOURCECOUNT_FLAG_SHORT|RESOURCECOUNT_FLAG_BRACKETS,
+      "[1,7-9,14,16]" },
+    { "1-3,7-9,14,16",
+      RESOURCECOUNT_FLAG_SHORT|RESOURCECOUNT_FLAG_BRACKETS,
+      "[1-3,7-9,14,16]"},
+    { "2,3,4,5",
+      RESOURCECOUNT_FLAG_SHORT|RESOURCECOUNT_FLAG_BRACKETS,
+      "[2-5]" },
+
+    /* ranges */
+    { "3-3",            0,                                    "3" },
+    { "2+",             0,                                    "2+:1:+" },
+    { "2-5:3",          0,                                    "2-5:3:+"},
+    { "2-5:1:+",        0,                                    "2-5:1:+"},
+    { "2-8:2:*",        0,                                    "2-8:2:*" },
+    { "25-133:17:+",    0,                                    "25-133:17:+"},
+    { "[3-3]",          0,                                    "3" },
+    { "[2+]",           0,                                    "2+:1:+" },
+    { "[2-5:3]",        0,                                    "2-5:3:+"},
+    { "[2-5:1:+]",      0,                                    "2-5:1:+"},
+    { "[2-8:2:*]",      0,                                    "2-8:2:*" },
+    { "[25-133:17:+]",  0,                                    "25-133:17:+"},
+    { "3-3",            RESOURCECOUNT_FLAG_SHORT,                     "3" },
+    { "2+",             RESOURCECOUNT_FLAG_SHORT,                     "2+" },
+    { "2-5:3",          RESOURCECOUNT_FLAG_SHORT,                     "2-5:3" },
+    { "2-5:1:+",        RESOURCECOUNT_FLAG_SHORT,                     "2-5" },
+    { "2-8:2:*",        RESOURCECOUNT_FLAG_SHORT,                     "2-8:2:*" },
+    { "25-133:17:+",    RESOURCECOUNT_FLAG_SHORT,                     "25-133:17"},
+    { "3-3",
+      RESOURCECOUNT_FLAG_SHORT|RESOURCECOUNT_FLAG_BRACKETS,
+      "3" },
+    { "2+",
+      RESOURCECOUNT_FLAG_SHORT|RESOURCECOUNT_FLAG_BRACKETS,
+      "[2+]" },
+    { "2-5:3",
+      RESOURCECOUNT_FLAG_SHORT|RESOURCECOUNT_FLAG_BRACKETS,
+      "[2-5:3]" },
+    { "2-5:1:+",
+      RESOURCECOUNT_FLAG_SHORT|RESOURCECOUNT_FLAG_BRACKETS,
+      "[2-5]" },
+    { "2-8:2:*",
+      RESOURCECOUNT_FLAG_SHORT|RESOURCECOUNT_FLAG_BRACKETS,
+      "[2-8:2:*]" },
+    { "25-133:17:+",
+      RESOURCECOUNT_FLAG_SHORT|RESOURCECOUNT_FLAG_BRACKETS,
+      "[25-133:17]"},
+
+    /* ranges as JSON strings */
+    { "{\"min\": 3, \"max\": 3}",                                      0, "3" },
+    { "{\"min\": 2}",                                                  0, "2+:1:+" },
+    { "{\"min\": 2, \"max\": 5, \"operand\": 3}",                      0, "2-5:3:+" },
+    { "{\"min\": 2, \"max\": 5, \"operand\": 1, \"operator\": \"+\"}", 0, "2-5:1:+" },
+    { "{\"min\": 2, \"max\": 8, \"operand\": 2, \"operator\": \"*\"}", 0, "2-8:2:*" },
+    { "{\"min\": 25, \"max\": 133, \"operand\": 17, \"operator\": \"+\"}",
+      0,
+      "25-133:17:+" },
+    { "{\"min\": 3, \"max\": 3}",
+      RESOURCECOUNT_FLAG_SHORT,
+      "3" },
+    { "{\"min\": 2}",
+      RESOURCECOUNT_FLAG_SHORT,
+      "2+" },
+    { "{\"min\": 2, \"max\": 5, \"operand\": 3}",
+      RESOURCECOUNT_FLAG_SHORT,
+      "2-5:3" },
+    { "{\"min\": 2, \"max\": 5, \"operand\": 1, \"operator\": \"+\"}",
+      RESOURCECOUNT_FLAG_SHORT,
+      "2-5" },
+    { "{\"min\": 2, \"max\": 8, \"operand\": 2, \"operator\": \"*\"}",
+      RESOURCECOUNT_FLAG_SHORT,
+      "2-8:2:*" },
+    { "{\"min\": 25, \"max\": 133, \"operand\": 17, \"operator\": \"+\"}",
+      RESOURCECOUNT_FLAG_SHORT,
+      "25-133:17" },
+    { "{\"min\": 3, \"max\": 3}",
+      RESOURCECOUNT_FLAG_SHORT|RESOURCECOUNT_FLAG_BRACKETS,
+      "3" },
+    { "{\"min\": 2}",
+      RESOURCECOUNT_FLAG_SHORT|RESOURCECOUNT_FLAG_BRACKETS,
+      "[2+]" },
+    { "{\"min\": 2, \"max\": 5, \"operand\": 3}",
+      RESOURCECOUNT_FLAG_SHORT|RESOURCECOUNT_FLAG_BRACKETS,
+      "[2-5:3]" },
+    { "{\"min\": 2, \"max\": 5, \"operand\": 1, \"operator\": \"+\"}",
+      RESOURCECOUNT_FLAG_SHORT|RESOURCECOUNT_FLAG_BRACKETS,
+      "[2-5]" },
+    { "{\"min\": 2, \"max\": 8, \"operand\": 2, \"operator\": \"*\"}",
+      RESOURCECOUNT_FLAG_SHORT|RESOURCECOUNT_FLAG_BRACKETS,
+      "[2-8:2:*]" },
+    { "{\"min\": 25, \"max\": 133, \"operand\": 17, \"operator\": \"+\"}",
+      RESOURCECOUNT_FLAG_SHORT|RESOURCECOUNT_FLAG_BRACKETS,
+      "[25-133:17]" },
+
+    /* expected failures */
+    { "2-8:1:+",        0xffff,     NULL },
+    { "",               0,          NULL },
+    { "[]",             0,          NULL },
+    { "[0]",            0,          NULL },
+    { "{}",             0,          NULL },
+    { "3-2:1:+",        0,          NULL },
+    { "2-8:01",         0,          NULL },
+    { "2-8:1;+",        0,          NULL },
+    { "2-8:1:*",        0,          NULL },
+    { "2-8:1:^",        0,          NULL },
+    { "2-8:1:/",        0,          NULL },
+    { "2-8:1:++",       0,          NULL },
+    { "4.2",            0,          NULL },
+    { "x",              0,          NULL },
+    { "1-2x",           0,          NULL },
+    { "01,2",           0,          NULL },
+    { "00",             0,          NULL },
+    { "3,2",            0,          NULL },
+    { "3-0",            0,          NULL },
+    { "2,2,2,2",        0,          NULL },
+    { "[0",             0,          NULL },
+    { "0]",             0,          NULL },
+    { "[[0]]",          0,          NULL },
+    { "[[0,2]",         0,          NULL },
+    { "[0,2]]",         0,          NULL },
+    { "0,[2",           0,          NULL },
+    { "0]2",            0,          NULL },
+    { "0-",             0,          NULL },
+    { "[0-]",           0,          NULL },
+    { "-5",             0,          NULL },
+    { "[-5]",           0,          NULL },
+    { "4294967294",     0,          NULL },
+    { "5294967294",     0,          NULL },
+    { "1-4294967294",   0,          NULL },
+    { "1-4294967294:1", 0,          NULL },
+    { "1-5294967294:1", 0,          NULL },
+    { "4-6:4294967294", 0,          NULL },
+    { "4-6:5294967294", 0,          NULL },
+    { "{\"man\": 4}",   0,          NULL },
+    { "{\"min\": 1, \"max\": 4294967294}", 0, NULL },
+    { "{\"min\": 1, \"max\": 5294967294}", 0, NULL },
+    { "{\"min\": 4294967294, \"max\": 4294967295}", 0, NULL },
+    { "{\"min\": 5294967294, \"max\": 5294967295}", 0, NULL },
+    { "{\"min\": 4, \"max\": 6, \"operand\": 4294967294}", 0, NULL },
+    { "{\"min\": 4, \"max\": 6, \"operand\": 5294967294}", 0, NULL },
+    { "{\"min\": 4, \"max\": 6, \"operand\": 0, \"operator\": \"+\"}",   0, NULL },
+    { "{\"min\": 4, \"max\": 6, \"operand\": -1, \"operator\": \"+\"}",  0, NULL },
+    { "{\"min\": -2, \"max\": 6, \"operand\": 1, \"operator\": \"+\"}",  0, NULL },
+    { "{\"min\": 3, \"max\": 1, \"operand\": 2, \"operator\": \"+\"}",   0, NULL },
+    { "{\"min\": 2, \"max\": 16, \"operand\": 1, \"operator\": \"*\"}",  0, NULL },
+    { "{\"min\": 2, \"max\": 16, \"operand\": 1, \"operator\": \"^\"}",  0, NULL },
+    { "{\"min\": 1, \"max\": 16, \"operand\": 2, \"operator\": \"^\"}",  0, NULL },
+    { "{\"min\": 2, \"max\": 16, \"operand\": 1, \"operator\": \"/\"}",  0, NULL },
+    { "{[\"min\": 4, \"max\": 6, \"operand\": 1, \"operator\": \"+\"]}", 0, NULL },
+
+    { NULL, 0, NULL },
+};
+
+void test_codec (void)
+{
+    struct inout *ip;
+
+    for (ip = &test_codec_inputs[0]; ip->in != NULL; ip++) {
+        struct resourcecount *count;
+
+        errno = 0;
+        count = resourcecount_decode (ip->in);
+        if (ip->out == NULL) { // expected fail
+            if (count != NULL) {
+                char *s = resourcecount_encode (count, ip->flags);
+                ok (s == NULL && errno == EINVAL,
+                    "resourcecount_encode flags=0x%x '%s' fails with EINVAL",
+                    ip->flags, ip->in);
+                free (s);
+            } else {
+                ok (count == NULL && errno == EINVAL,
+                    "resourcecount_decode '%s' fails with EINVAL",
+                    ip->in);
+            }
+        }
+        else {
+            ok (count != NULL, "resourcecount_decode '%s' works", ip->in);
+            if (count != NULL) {
+                char *s = resourcecount_encode (count, ip->flags);
+                bool match = (s && streq (s, ip->out));
+                ok (match == true,
+                    "resourcecount_encode flags=0x%x '%s'->'%s' works",
+                    ip->flags, ip->in, ip->out);
+                if (!match)
+                    diag ("%s", s ? s : "NULL");
+                free (s);
+            }
+        }
+        resourcecount_destroy (count);
+    }
+
+    ok (resourcecount_decode (NULL) == NULL,
+        "resourcecount_decode (NULL) == NULL works");
+    ok (resourcecount_encode (NULL, 0) == NULL,
+        "resourcecount_encode (NULL, ...) == NULL works");
+}
+
+struct inout test_iteration_inputs[] = {
+    /* wrap the JSON in an array to also allow integer and string types */
+    { "[1]", 0, "1" },
+    { "[\"13\"]", 0, "13" },
+    { "[\"5,7,13\"]", 0, "5,7,13" },
+    { "[{\"min\": 4, \"max\": 6}]", 0, "4,5,6" },
+    { "[{\"min\": 4, \"max\": 6, \"operand\": 1, \"operator\": \"+\"}]", 0, "4,5,6" },
+    { "[{\"min\": 1, \"max\": 3, \"operand\": 2}]", 0, "1,3" },
+    { "[{\"min\": 1, \"max\": 3, \"operand\": 2, \"operator\": \"+\"}]", 0, "1,3" },
+    { "[{\"min\": 2, \"max\": 16, \"operand\": 2, \"operator\": \"*\"}]", 0, "2,4,8,16" },
+    { "[{\"min\": 2, \"max\": 16, \"operand\": 2, \"operator\": \"^\"}]", 0, "2,4,16" },
+
+    /* expected failures */
+    { "[-1]", 0, NULL },
+    { "[\"13-\"]", 0, NULL },
+
+    { NULL, 0, NULL },
+};
+
+void test_iteration (void)
+{
+    struct inout *ip;
+    char s[256];
+
+    for (ip = &test_iteration_inputs[0]; ip->in != NULL; ip++) {
+        json_error_t error;
+        json_t *json_in;
+        struct resourcecount *count;
+
+        if (!(json_in = json_loads (ip->in, 0, &error))) {
+            diag ("json_loads '%s' fails with error '%s'", ip->in, error.text);
+            continue;
+        }
+        /* extract first element of array to get actual JSON of interest */
+        count = resourcecount_create (json_array_get (json_in, 0), &error);
+        if (ip->out == NULL) { // expected fail
+            ok (count == NULL,
+                "resourcecount_create '%s' fails with error '%s'",
+                ip->in, error.text);
+        }
+        else {
+            ok (count != NULL, "resourcecount_create '%s' works", ip->in);
+            if (!count)
+                diag ("error '%s'", error.text);
+            if (count != NULL) {
+                int i = 0;
+                int value = resourcecount_first (count);
+                while (value != RESOURCECOUNT_INVALID_VALUE) {
+                    i += sprintf (s+i, "%u,", value);
+                    value = resourcecount_next (count, value);
+                }
+                s[i-1] = '\0';
+                bool match = streq (s, ip->out);
+                ok (match == true,
+                    "resourcecount iteration '%s'->'%s' works",
+                    ip->in, ip->out);
+                if (!match)
+                    diag ("%s", s);
+            }
+        }
+        resourcecount_destroy (count);
+        json_decref (json_in);
+    }
+
+    ok (resourcecount_create (NULL, NULL) == NULL,
+        "resourcecount_create (NULL, NULL) == NULL works");
+    ok (resourcecount_first (NULL) == RESOURCECOUNT_INVALID_VALUE,
+        "resourcecount_first (NULL) == RESOURCECOUNT_INVALID_VALUE works");
+    ok (resourcecount_next (NULL, 2) == RESOURCECOUNT_INVALID_VALUE,
+        "resourcecount_next (NULL, ...) == RESOURCECOUNT_INVALID_VALUE works");
+}
+
+struct inout_uint test_last_inputs[] = {
+    { "1", 1 },
+    { "17", 17 },
+    { "5,7,13", 13 },
+    { "1-8", 8 },
+    { "1-10:3", 10 },
+    { "1-9:3", 7 },
+    { "1-4294967292:2", 4294967291 },
+    { "2-16:2:*", 16 },
+    { "2-16:3:*", 6 },
+    { "2-100:2:^", 16 },
+    { "3-100:2:^", 81 },
+    { "2-100:4000000000:^", 2 },
+    { "2+", RESOURCECOUNT_MAX },
+    { NULL, 0 },
+};
+
+void test_last (void)
+{
+    struct inout_uint *ip;
+
+    for (ip = &test_last_inputs[0]; ip->in != NULL; ip++) {
+        struct resourcecount *count;
+
+        errno = 0;
+        count = resourcecount_decode (ip->in);
+        bool match = resourcecount_last (count) == ip->out;
+        ok (count && match, "resourcecount_last '%s' -> %u works", ip->in, ip->out);
+        if (!count) {
+            diag ("resourcecount_decode '%s' failed with error %s",
+                  ip->in, strerror(errno));
+        } else if (!match) {
+            diag ("instead got resourcecount_last() = %u", resourcecount_last (count));
+        }
+        resourcecount_destroy (count);
+    }
+
+    ok (resourcecount_last (NULL) == RESOURCECOUNT_INVALID_VALUE,
+        "resourcecount_last (NULL) == RESOURCECOUNT_INVALID_VALUE works");
+}
+
+void test_boolean_accessors (void)
+{
+    struct resourcecount *count;
+
+    count = resourcecount_decode ("7");
+    ok (count && resourcecount_is_integer (count) == true,
+        "resourcecount_is_integer '7'->true works");
+    ok (count && resourcecount_is_unbounded (count) == false,
+        "resourcecount_is_unbounded '7'->false works");
+    resourcecount_destroy (count);
+
+    count = resourcecount_decode ("4,9,16");
+    ok (count && resourcecount_is_integer (count) == false,
+        "resourcecount_is_integer '4,9,16'->false works");
+    ok (count && resourcecount_is_unbounded (count) == false,
+        "resourcecount_is_unbounded '4,9,16'->false works");
+    resourcecount_destroy (count);
+
+    count = resourcecount_decode ("1-9:2:*");
+    ok (count && resourcecount_is_integer (count) == false,
+        "resourcecount_is_integer '1-9:2:*'->false works");
+    ok (count && resourcecount_is_unbounded (count) == false,
+        "resourcecount_is_unbounded '1-9:2:*'->false works");
+    resourcecount_destroy (count);
+
+    count = resourcecount_decode ("1+:2:*");
+    ok (count && resourcecount_is_integer (count) == false,
+        "resourcecount_is_integer '1+:2:*'->false works");
+    ok (count && resourcecount_is_unbounded (count) == true,
+        "resourcecount_is_unbounded '1+:2:*'->true works");
+    resourcecount_destroy (count);
+
+    ok (resourcecount_is_integer (NULL) == false,
+        "resourcecount_is_integer (NULL) == false works");
+    ok (resourcecount_is_unbounded (NULL) == false,
+        "resourcecount_is_unbounded (NULL) == false works");
+}
+
+const char *overflow_inputs[] = {
+    "4294967293+:3",
+    "3-4000000000:21:^",
+    "2147483649-4294967290:3:*",
+    NULL,
+};
+
+void test_overflow (void)
+{
+    for (unsigned int i = 0; overflow_inputs[i] != NULL; i++) {
+        struct resourcecount *count;
+
+        errno = 0;
+        count = resourcecount_decode (overflow_inputs[i]);
+        unsigned int result = resourcecount_next (count, resourcecount_first (count));
+        bool match = result == RESOURCECOUNT_INVALID_VALUE;
+        ok (count && match,
+            "resourcecount_next catches overflow in '%s'",
+            overflow_inputs[i]);
+        if (!count) {
+            diag ("resourcecount_decode '%s' failed with error %s",
+                  overflow_inputs[i], strerror(errno));
+        } else if (!match) {
+            diag ("instead got resourcecount_next() = %u", result);
+        }
+        resourcecount_destroy (count);
+    }
+}
+
+int main (int argc, char *argv[])
+{
+    plan (NO_PLAN);
+
+    test_codec ();
+    test_iteration ();
+    test_last();
+    test_boolean_accessors ();
+    test_overflow();
+
+    done_testing ();
+}
+
+/*
+ * vi:tabstop=4 shiftwidth=4 expandtab
+ */
