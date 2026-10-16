@@ -187,7 +187,6 @@ struct resourcecount *resourcecount_decode (const char *s)
         || !(cpy = strdup (s))) {
         goto error;
     }
-    count->idset = NULL;
     ep = cpy;
     if (len >= 2 && s[0] == '[' && s[len - 1] == ']') {
         cpy[len - 1] = '\0';
@@ -213,6 +212,7 @@ struct resourcecount *resourcecount_decode (const char *s)
     }
     // decoding as an idset failed or was invalid, so try as an RFC14 range
     idset_destroy (count->idset);
+    count->idset = NULL;
     count->isrange = true;
     count->operator = '+';
     count->operand = 1;
