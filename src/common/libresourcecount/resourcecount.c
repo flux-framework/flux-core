@@ -30,6 +30,7 @@ struct resourcecount {
     unsigned int operand;
     char operator;
     bool isrange;
+    bool isunbounded;
     struct idset *idset;
 };
 
@@ -49,6 +50,7 @@ struct resourcecount *resourcecount_create (json_t *json_count,
 {
     struct resourcecount *count;
     const char *operator = NULL;
+    json_int_t integer_value;
     json_int_t min;
     json_int_t max = RESOURCECOUNT_MAX;
     json_int_t operand = 1;
@@ -68,18 +70,22 @@ struct resourcecount *resourcecount_create (json_t *json_count,
     }
     count->idset = NULL;
     if (json_is_integer (json_count)) {
-        // have to check positivity first before assigning to unsigned int
-        if (json_integer_value (json_count) < 1) {
-            set_error (error, "resourcecount_create: integer count must be >= 1");
+        // have to check positivity and upper bound before assigning to unsigned int
+        integer_value = json_integer_value (json_count);
+        if (integer_value < 1 || integer_value > RESOURCECOUNT_MAX) {
+            set_error (error,
+                       "resourcecount_create: integer count must be >= 1 and <= %u",
+                       RESOURCECOUNT_MAX);
             goto error;
         }
-        count->integer = json_integer_value (json_count);
+        count->integer = integer_value;
         return count;
     }
     if (json_object_size (json_count) == 0) {
         set_error (error, "resourcecount_create: Malformed jobspec resource count");
         goto error;
     }
+    count->isunbounded = json_object_get (json_count, "max") == NULL;
     if (json_unpack_ex(json_count, error, 0,
                        "{s:I, s?I, s?I, s?s}",
                        "min", &min,
@@ -88,9 +94,17 @@ struct resourcecount *resourcecount_create (json_t *json_count,
                        "operator", &operator) < 0) {
         goto error;
     }
-    // have to check positivity first before assigning to unsigned ints
+    // have to check positivity and upper bounds before assigning to unsigned ints
     if (min < 1 || max < 1 || operand < 1) {
         set_error (error, "resourcecount_create: min, max, and operand must be >= 1");
+        goto error;
+    }
+    if (min > RESOURCECOUNT_MAX
+        || max > RESOURCECOUNT_MAX
+        || operand > RESOURCECOUNT_MAX) {
+        set_error (error,
+                   "resourcecount_create: min, max, and operand must be <= %u",
+                   RESOURCECOUNT_MAX);
         goto error;
     }
     count->min = min;
@@ -148,8 +162,8 @@ static int strtoui_check (const char *s, char **endptr, unsigned int *result)
 
     errno = 0;
     in = strtoll (s, endptr, 10);
-    // error, leading zero, non-digit, or negative input
-    if (errno != 0 || *s == '0' || !isdigit (*s) || in < 1) {
+    // error, leading zero, non-digit, non-positive, or too large input
+    if (errno != 0 || *s == '0' || !isdigit (*s) || in < 1 || in > RESOURCECOUNT_MAX) {
         errno = errno ? errno : EINVAL;
         return -1;
     }
@@ -224,6 +238,7 @@ struct resourcecount *resourcecount_decode (const char *s)
         }
     } else if (*ep == '+') {
         count->max = RESOURCECOUNT_MAX;
+        count->isunbounded = true;
         ++ep;
     } else {
         goto error_inval;
@@ -300,7 +315,7 @@ char *resourcecount_encode (const struct resourcecount *count, int flags)
     if (flags & RESOURCECOUNT_FLAG_BRACKETS) {
         i += sprintf (str, "[");
     }
-    if (count->max == RESOURCECOUNT_MAX) {
+    if (count->isunbounded) {
         i += sprintf (str+i, "%u+", count->min);
     } else {
         i += sprintf (str+i, "%u-%u", count->min, count->max);
@@ -366,6 +381,11 @@ unsigned int resourcecount_next (const struct resourcecount *count, unsigned int
 bool resourcecount_is_integer (const struct resourcecount *count)
 {
     return (count && count->integer > 0);
+}
+
+bool resourcecount_is_unbounded (const struct resourcecount *count)
+{
+    return (count && count->isunbounded);
 }
 
 /*

@@ -184,7 +184,20 @@ struct inout test_codec_inputs[] = {
     { "[0-]",           0,          NULL },
     { "-5",             0,          NULL },
     { "[-5]",           0,          NULL },
+    { "4294967294",     0,          NULL },
+    { "5294967294",     0,          NULL },
+    { "1-4294967294",   0,          NULL },
+    { "1-4294967294:1", 0,          NULL },
+    { "1-5294967294:1", 0,          NULL },
+    { "4-6:4294967294", 0,          NULL },
+    { "4-6:5294967294", 0,          NULL },
     { "{\"man\": 4}",   0,          NULL },
+    { "{\"min\": 1, \"max\": 4294967294}", 0, NULL },
+    { "{\"min\": 1, \"max\": 5294967294}", 0, NULL },
+    { "{\"min\": 4294967294, \"max\": 4294967295}", 0, NULL },
+    { "{\"min\": 5294967294, \"max\": 5294967295}", 0, NULL },
+    { "{\"min\": 4, \"max\": 6, \"operand\": 4294967294}", 0, NULL },
+    { "{\"min\": 4, \"max\": 6, \"operand\": 5294967294}", 0, NULL },
     { "{\"min\": 4, \"max\": 6, \"operand\": 0, \"operator\": \"+\"}",   0, NULL },
     { "{\"min\": 4, \"max\": 6, \"operand\": -1, \"operator\": \"+\"}",  0, NULL },
     { "{\"min\": -2, \"max\": 6, \"operand\": 1, \"operator\": \"+\"}",  0, NULL },
@@ -314,27 +327,42 @@ void test_iteration (void)
         "resourcecount_next (NULL, ...) == RESOURCECOUNT_INVALID_VALUE works");
 }
 
-void test_is_integer (void)
+void test_boolean_accessors (void)
 {
     struct resourcecount *count;
 
     count = resourcecount_decode ("7");
     ok (count && resourcecount_is_integer (count) == true,
         "resourcecount_is_integer '7'->true works");
+    ok (count && resourcecount_is_unbounded (count) == false,
+        "resourcecount_is_unbounded '7'->false works");
     resourcecount_destroy (count);
 
     count = resourcecount_decode ("4,9,16");
     ok (count && resourcecount_is_integer (count) == false,
         "resourcecount_is_integer '4,9,16'->false works");
+    ok (count && resourcecount_is_unbounded (count) == false,
+        "resourcecount_is_unbounded '4,9,16'->false works");
     resourcecount_destroy (count);
 
     count = resourcecount_decode ("1-9:2:*");
     ok (count && resourcecount_is_integer (count) == false,
         "resourcecount_is_integer '1-9:2:*'->false works");
+    ok (count && resourcecount_is_unbounded (count) == false,
+        "resourcecount_is_unbounded '1-9:2:*'->false works");
+    resourcecount_destroy (count);
+
+    count = resourcecount_decode ("1+:2:*");
+    ok (count && resourcecount_is_integer (count) == false,
+        "resourcecount_is_integer '1+:2:*'->false works");
+    ok (count && resourcecount_is_unbounded (count) == true,
+        "resourcecount_is_unbounded '1+:2:*'->true works");
     resourcecount_destroy (count);
 
     ok (resourcecount_is_integer (NULL) == false,
         "resourcecount_is_integer (NULL) == false works");
+    ok (resourcecount_is_unbounded (NULL) == false,
+        "resourcecount_is_unbounded (NULL) == false works");
 }
 
 const char *overflow_inputs[] = {
@@ -372,7 +400,7 @@ int main (int argc, char *argv[])
 
     test_codec ();
     test_iteration ();
-    test_is_integer ();
+    test_boolean_accessors ();
     test_overflow();
 
     done_testing ();
