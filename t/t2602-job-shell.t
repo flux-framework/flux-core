@@ -385,4 +385,48 @@ test_expect_success 'job-shell: rexec-shutdown-timeout catches bad values' '
 	test_must_fail flux run -o rexec-shutdown-timeout=1 true &&
 	test_must_fail flux run -o rexec-shutdown-timeout=1.1f true
 '
+#  The shell takes the owner of the enclosing instance from
+#  FLUX_IMP_EXEC_USERID when the IMP sets it, since an instance running
+#  as another user cannot be trusted to report it.  Set the variable in
+#  the environment of a test instance to stand in for the IMP.
+test_expect_success 'job-shell: create instance_owner userrc' '
+	cat <<-EOF >owner.lua
+	plugin.register {
+	  name = "ownertest",
+	  handlers = {
+	    {
+	      topic = "shell.init",
+	      fn = function ()
+	        shell.log ("instance_owner=" .. shell.info.instance_owner)
+	      end
+	    }
+	  }
+	}
+	EOF
+'
+test_expect_success 'job-shell: instance_owner is security.owner by default' '
+	flux start flux run -o userrc=owner.lua true >owner.out 2>&1 &&
+	test_debug "cat owner.out" &&
+	grep "instance_owner=$(id -u)" owner.out
+'
+test_expect_success 'job-shell: FLUX_IMP_EXEC_USERID overrides security.owner' '
+	FLUX_IMP_EXEC_USERID=4242 \
+	    flux start flux run -o userrc=owner.lua true >owner-imp.out 2>&1 &&
+	test_debug "cat owner-imp.out" &&
+	grep "instance_owner=4242" owner-imp.out
+'
+test_expect_success 'job-shell: malformed FLUX_IMP_EXEC_USERID is an error' '
+	FLUX_IMP_EXEC_USERID=bogus \
+	    flux start flux run -o userrc=owner.lua true >owner-bad.out 2>&1 &&
+	test_debug "cat owner-bad.out" &&
+	grep "error parsing FLUX_IMP_EXEC_USERID=bogus" owner-bad.out &&
+	grep "instance_owner=0" owner-bad.out
+'
+test_expect_success 'job-shell: empty FLUX_IMP_EXEC_USERID is an error' '
+	FLUX_IMP_EXEC_USERID= \
+	    flux start flux run -o userrc=owner.lua true >owner-empty.out 2>&1 &&
+	test_debug "cat owner-empty.out" &&
+	grep "error parsing FLUX_IMP_EXEC_USERID=" owner-empty.out &&
+	grep "instance_owner=0" owner-empty.out
+'
 test_done

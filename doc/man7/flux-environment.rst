@@ -607,6 +607,19 @@ MISCELLANEOUS
    helper program when this variable is set to its path.  It is set by the
    job-exec system in the IMP environment at job launch.
 
+.. envvar:: FLUX_IMP_EXEC_USERID
+
+   Set by the IMP in the job shell environment to the userid under which
+   the IMP was invoked, that is, the owner of the enclosing instance.  The
+   IMP determines this value while privileged, so unlike the
+   ``security.owner`` broker attribute it cannot be influenced by an
+   instance running as another user.  See :rfc:`15`.
+
+   This variable is internal to the job shell, which uses it to set the
+   :var:`instance_owner` member of the shell info object.  Shell plugins
+   should use :man3:`flux_shell_info_unpack` rather than reading this
+   variable directly.
+
 .. envvar:: FLUX_EXEC_CONSTRAINED_RESOURCES
 
    Set to ``1`` by the job execution system in the job shell environment
