@@ -16,13 +16,12 @@
 #ifndef FLUX_RESOURCECOUNT_H
 #define FLUX_RESOURCECOUNT_H
 
-#include <limits.h>
 #include <stdbool.h>
 #include <jansson.h>
 #include <flux/idset.h>
 
-#define RESOURCECOUNT_MAX              UINT_MAX
 #define RESOURCECOUNT_INVALID_VALUE    IDSET_INVALID_ID
+#define RESOURCECOUNT_MAX              (IDSET_INVALID_ID - 1)
 
 enum resourcecount_flags {
     RESOURCECOUNT_FLAG_BRACKETS =
@@ -71,6 +70,11 @@ unsigned int resourcecount_next (const struct resourcecount *count, unsigned int
  * Returns false otherwise, or if count is NULL.
  */
 bool resourcecount_is_integer (const struct resourcecount *count);
+
+/* Returns true if count is an unbounded range.
+ * Returns false otherwise, or if count is NULL.
+ */
+bool resourcecount_is_unbounded (const struct resourcecount *count);
 
 #endif /* !FLUX_RESOURCECOUNT_H */
 
