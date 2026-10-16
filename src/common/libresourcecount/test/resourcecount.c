@@ -302,12 +302,33 @@ void test_iteration (void)
     }
 }
 
+void test_is_integer (void)
+{
+    struct resourcecount *count;
+
+    count = resourcecount_decode ("7");
+    ok (count && resourcecount_is_integer (count) == true,
+        "resourcecount_is_integer '7'->true works");
+    resourcecount_destroy (count);
+
+    count = resourcecount_decode ("4,9,16");
+    ok (count && resourcecount_is_integer (count) == false,
+        "resourcecount_is_integer '4,9,16'->false works");
+    resourcecount_destroy (count);
+
+    count = resourcecount_decode ("1-9:2:*");
+    ok (count && resourcecount_is_integer (count) == false,
+        "resourcecount_is_integer '1-9:2:*'->false works");
+    resourcecount_destroy (count);
+}
+
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
 
     test_codec ();
     test_iteration ();
+    test_is_integer ();
 
     done_testing ();
 }
