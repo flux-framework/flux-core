@@ -454,6 +454,9 @@ def parse_datetime(string, now=None):
     is assumed to be a duration to add or subtract to `now` in Flux Standard
     Duration.
 
+    If string is exactly eight digits, it is treated as an ISO 8601 basic
+    format calendar date (YYYYMMDD), which has no hyphen separators.
+
     Otherwise, the parsedatetime package will be used to parse the input
     string.
 
@@ -482,6 +485,14 @@ def parse_datetime(string, now=None):
     if string.startswith("-"):
         timestamp = now.timestamp() - parse_fsd(string[1:])
         return datetime.fromtimestamp(timestamp).astimezone()
+
+    # ISO 8601 basic format calendar date (YYYYMMDD) is not understood
+    # by parsedatetime, so handle it here.
+    if len(string) == 8 and string.isdecimal():
+        try:
+            return datetime.strptime(string, "%Y%m%d").astimezone()
+        except ValueError:
+            raise ValueError(f'Invalid datetime: "{string}"') from None
 
     cal = Calendar()
     cal.ptc.StartHour = 0

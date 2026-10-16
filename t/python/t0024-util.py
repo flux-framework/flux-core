@@ -85,6 +85,30 @@ class TestParseDatetime(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.parse("6/45/2021")
 
+    def test_iso8601_basic_date(self):
+        # ISO 8601 basic format calendar date (no hyphens)
+        self.assertEqual(self.parse("20210610"), ts(2021, 6, 10))
+        self.assertEqual(self.parse("20200229"), ts(2020, 2, 29))
+        self.assertEqual(self.parse("20211231"), ts(2021, 12, 31))
+
+    def test_iso8601_basic_date_invalid(self):
+        with self.assertRaises(ValueError):
+            self.parse("20211301")  # month 13
+        with self.assertRaises(ValueError):
+            self.parse("20210632")  # day 32
+        with self.assertRaises(ValueError):
+            self.parse("20210229")  # not a leap year
+        with self.assertRaises(ValueError):
+            self.parse("20210600")  # day 0
+        with self.assertRaises(ValueError):
+            self.parse("2021061")  # 7 digits
+        with self.assertRaises(ValueError):
+            self.parse("202106100")  # 9 digits
+        with self.assertRaises(ValueError):
+            self.parse("20210610.5")  # floating point
+        with self.assertRaises(ValueError):
+            self.parse("2021061.0")  # floating point
+
     def test_nlp(self):
         self.assertEqual(self.parse("in 10 min"), self.ts + 600)
         self.assertEqual(self.parse("tomorrow"), ts(2021, 6, 11))
