@@ -86,12 +86,12 @@ struct resourcecount *resourcecount_create (json_t *json_count,
         goto error;
     }
     count->isunbounded = json_object_get (json_count, "max") == NULL;
-    if (json_unpack_ex(json_count, error, 0,
-                       "{s:I, s?I, s?I, s?s}",
-                       "min", &min,
-                       "max", &max,
-                       "operand", &operand,
-                       "operator", &operator) < 0) {
+    if (json_unpack_ex (json_count, error, 0,
+                        "{s:I, s?I, s?I, s?s}",
+                        "min", &min,
+                        "max", &max,
+                        "operand", &operand,
+                        "operator", &operator) < 0) {
         goto error;
     }
     // have to check positivity and upper bounds before assigning to unsigned ints
@@ -113,26 +113,26 @@ struct resourcecount *resourcecount_create (json_t *json_count,
     count->operator = operator ? operator[0] : '+';
     // check validity of operator/operand combination
     switch (count->operator) {
-    case '^':
-        if (count->min < 2) {
+        case '^':
+            if (count->min < 2) {
+                set_error (error,
+                           "resourcecount_create: min must be >= 2 for '^' operator");
+                goto error;
+            }
+        case '*':
+            if (count->operand < 2) {
+                set_error (error,
+                           "resourcecount_create: operand must be >= 2 "
+                           "for '*' or '^' operators");
+                goto error;
+            }
+        case '+':
+            break;
+        default:
             set_error (error,
-                       "resourcecount_create: min must be >= 2 for '^' operator");
+                       "resourcecount_create: unknown operator '%c'",
+                       count->operator);
             goto error;
-        }
-    case '*':
-        if (count->operand < 2) {
-            set_error (error,
-                       "resourcecount_create: operand must be >= 2 "
-                       "for '*' or '^' operators");
-            goto error;
-        }
-    case '+':
-        break;
-    default:
-        set_error (error,
-                   "resourcecount_create: unknown operator '%c'",
-                   count->operator);
-        goto error;
     }
     if (count->max < count->min) {
         set_error (error, "resourcecount_create: max must be >= min");
@@ -210,24 +210,25 @@ struct resourcecount *resourcecount_decode (const char *s)
         // mismatched or nested brackets
         goto error_inval;
     }
-    if (strtoui_check (ep, &ep, &count->min) < 0) {
+    // first try as a simple integer
+    if (strtoui_check (ep, &ep, &count->integer) < 0) {
         goto error;
     } else if (*ep == '\0') {
-        count->integer = count->min;
-        count->min = 0;
         goto success;
     }
-    // assume it wasn't just a simple integer and carry on
+    // assume it wasn't just a simple integer and carry on; first try as ideset
     if ((count->idset = idset_decode (s))
          && !idset_empty (count->idset)
          && idset_first (count->idset) != 0) {
-        count->min = 0;
+        count->integer = 0;
         goto success;
     }
     // decoding as an idset failed or was invalid, so try as an RFC14 range
     idset_destroy (count->idset);
     count->idset = NULL;
     count->isrange = true;
+    count->min = count->integer;
+    count->integer = 0;
     count->operator = '+';
     count->operand = 1;
     if (*ep == '-') {
@@ -303,8 +304,8 @@ char *resourcecount_encode (const struct resourcecount *count, int flags)
         return str;
     }
     // otherwise encode as RFC14 range
-    sz = snprintf(NULL, 0, "[%u-%u:%u:+]",
-                  RESOURCECOUNT_MAX, RESOURCECOUNT_MAX, RESOURCECOUNT_MAX);
+    sz = snprintf (NULL, 0, "[%u-%u:%u:+]",
+                   RESOURCECOUNT_MAX, RESOURCECOUNT_MAX, RESOURCECOUNT_MAX);
     if (!(str = calloc (sz+1, sizeof (*str)))) {
         return NULL;
     }
