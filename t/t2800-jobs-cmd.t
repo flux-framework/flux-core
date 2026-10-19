@@ -262,6 +262,11 @@ test_expect_success 'flux-jobs --since option must specify a time in the past' '
 	test_must_fail flux jobs --since=+1m
 '
 
+test_expect_success 'flux-jobs --since fails on invalid value' '
+	test_must_fail flux jobs --since=-1g 2>since_bad.err &&
+	grep "invalid value" since_bad.err
+'
+
 # Print the t_inactive timestamp for the 3rd most recently inactive job
 # Then ensure this timestamp limits output to 2 jobs
 test_expect_success 'flux-jobs --since works with timestamp' '
