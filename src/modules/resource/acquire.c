@@ -113,6 +113,7 @@ static int acquire_request_init (struct acquire_request *ar,
 {
     struct resource_ctx *ctx = acquire->ctx;
     const struct idset *exclude = exclude_get (ctx->exclude);
+    const char *method;
     json_error_t e;
     struct rlist *rl;
     struct idset *drain = NULL;
@@ -121,6 +122,17 @@ static int acquire_request_init (struct acquire_request *ar,
         errno = EINVAL;
         return -1;
     }
+
+    /* For any resource-define method except "configuration", set
+     * acquire->shrink_down_ranks to true. This indicates that broker
+     * ranks which go offline are not able to ever be restored, so the
+     * instance should shrink in size instead of marking nodes
+     * temporarily down.
+     */
+    if ((method = inventory_get_method (ctx->inventory))
+        && !streq (method, "configuration"))
+        acquire->shrink_down_ranks = true;
+
     if (exclude && idset_count (exclude) > 0) {
         (void)rlist_remove_ranks (rl, (struct idset *)exclude);
         if (!(ar->resources = rlist_to_R (rl))) {
@@ -396,15 +408,6 @@ static void reslog_cb (struct reslog *reslog,
     const char *errmsg = NULL;
     json_t *resobj;
     const flux_msg_t *msg;
-    const char *method;
-
-    /* Enable "shrink" of ranks that transition from online->offline
-     * if resource-define method is anything but "configuration".
-     */
-    if (streq (name, "resource-define")
-        && json_unpack (context, "{s:s}", "method", &method) == 0
-        && !streq (method, "configuration"))
-        acquire->shrink_down_ranks = true;
 
     if (acquire->mute)
         return;
