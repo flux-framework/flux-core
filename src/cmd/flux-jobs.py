@@ -144,7 +144,12 @@ def fetch_jobs_flux(args, fields, flux_handle=None):
 
         try:
             since = flux.util.parse_datetime(args.since).timestamp()
-        except ValueError:
+        except ValueError as exc:
+            # Exactly eight digits is an ISO 8601 basic format date
+            # (YYYYMMDD), not a raw timestamp, so do not fall back to float()
+            if len(args.since) == 8 and args.since.isdecimal():
+                LOGGER.error("--since: %s", exc)
+                sys.exit(1)
             try:
                 since = float(args.since)
             except ValueError:
