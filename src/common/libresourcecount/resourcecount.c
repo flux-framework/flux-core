@@ -144,8 +144,10 @@ error:
 void resourcecount_destroy (struct resourcecount *count)
 {
     if (count) {
+        int saved_errno = errno;
         idset_destroy (count->idset);
         free (count);
+        errno = saved_errno;
     }
 }
 
