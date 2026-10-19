@@ -15,12 +15,9 @@ import unittest
 
 import subflux  # noqa: F401 - for PYTHONPATH
 from flux.resource import InfeasibleRequest, InsufficientResources
-from flux.resource.ResourceCount import ResourceCount
 from flux.resource.Rv1Pool import ResourceRequest, Rv1Pool
+from flux.resourcecount import ResourceCount
 from pycotap import TAPTestRunner
-
-# Sentinel for "not provided" — distinguishes omitted from None (unbounded).
-_UNSET = object()
 
 
 def rr(
@@ -31,8 +28,8 @@ def rr(
     duration=0.0,
     constraint=None,
     exclusive=False,
-    nnodes_max=_UNSET,
-    nslots_max=_UNSET,
+    nnodes_max={},
+    nslots_max={},
 ):
     """Convenience wrapper to build a ResourceRequest for tests.
 
@@ -41,18 +38,16 @@ def rr(
     Pass ``nnodes_max=None`` for an unbounded node range; omit it for a
     fixed count equal to *nnodes*.  Same semantics for ``nslots_max``.
     """
-    if nnodes_max is _UNSET:
-        nnodes_max = nnodes
-    if nslots_max is _UNSET:
-        nslots_max = nslots
-
     if nnodes > 0:
-        spn = nslots // nnodes  # slots per node (fixed)
-        node_count = ResourceCount(nnodes, nnodes_max)
-        slot_count = ResourceCount(spn, spn)
+        node_spec = str(nnodes) + ("-" + str(nnodes_max) if nnodes_max else "")
+        node_spec += "+" if nnodes_max is None else ""
+        node_count = ResourceCount(node_spec)
+        slot_count = ResourceCount(nslots // nnodes)  # slots per node (fixed)
     else:
         node_count = None
-        slot_count = ResourceCount(nslots, nslots_max)
+        slot_spec = str(nslots) + ("-" + str(nslots_max) if nslots_max else "")
+        slot_spec += "+" if nslots_max is None else ""
+        slot_count = ResourceCount(slot_spec)
 
     return ResourceRequest(
         node_count,
@@ -808,13 +803,18 @@ class TestRv1PoolCheckFeasibility(unittest.TestCase):
 
     def test_stepped_slot_count_raises(self):
         """Stepped slot count is rejected immediately."""
-        from flux.idset import IDset
-
         req = ResourceRequest(
-            None, ResourceCount(2, 8, IDset("2,4,8")), 1, 0, 60.0, None, False, None
+            None, ResourceCount("2-8:2:*"), 1, 0, 60.0, None, False, None
         )
         with self.assertRaises(InfeasibleRequest):
             self.pool.check_feasibility(req)
+
+    def test_contiguous_idset_slot_count_accepted(self):
+        """A contiguous idset count is equivalent to a simple range."""
+        req = ResourceRequest(
+            None, ResourceCount("1,2,3"), 1, 0, 60.0, None, False, None
+        )
+        self.pool.check_feasibility(req)
 
     def test_constraint_as_json_string(self):
         """Constraint passed as a JSON string is parsed correctly."""
@@ -826,7 +826,7 @@ class TestRv1PoolCheckFeasibility(unittest.TestCase):
         # the json.loads() path in _check_feasibility.
         req = ResourceRequest(
             None,
-            ResourceCount(10, 10),
+            ResourceCount(10),
             1,
             0,
             60.0,

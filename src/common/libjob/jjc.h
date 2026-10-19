@@ -17,17 +17,17 @@
 
 #include <jansson.h>
 #include <stdbool.h>
-#include "count.h"
+#include <flux/resourcecount.h>
 
 #ifndef JJC_ERROR_TEXT_LENGTH
 #define JJC_ERROR_TEXT_LENGTH 256
 #endif
 
 struct jjc_counts {
-    struct count *nnodes;    /* total number of nodes requested */
-    struct count *nslots;    /* total number of slots requested */
-    struct count *slot_size; /* number of cores per slot        */
-    struct count *slot_gpus; /* number of gpus per slot         */
+    struct resourcecount *nnodes;    /* total number of nodes requested */
+    struct resourcecount *nslots;    /* total number of slots requested */
+    struct resourcecount *slot_size; /* number of cores per slot        */
+    struct resourcecount *slot_gpus; /* number of gpus per slot         */
 
     int nodefactor; /* multiplier if resources above node */
 

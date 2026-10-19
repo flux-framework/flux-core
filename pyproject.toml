@@ -33,6 +33,7 @@ ignore_missing_imports = true
   module = [
     "_flux._core",
     "_flux._security",
+    "_flux._resourcecount",
     "_flux._hostlist",
     "_flux._idset",
     "_flux.cffi",

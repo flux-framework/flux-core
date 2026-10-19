@@ -363,7 +363,6 @@ TESTSCRIPTS = \
 	python/t0038-brokermod.py \
 	python/t0039-rv1pool.py \
 	python/t0040-proctitle.py \
-	python/t0041-resource-count.py \
 	python/t0042-job-manager-alloc-cache.py \
 	python/t0043-sdexec-map.py \
 	python/t0043-scheduler-pool.py \
@@ -374,6 +373,7 @@ TESTSCRIPTS = \
 	python/t0048-frobnicator-vqueue.py \
 	python/t0049-queue-conf.py \
 	python/t0050-perilog.py \
+	python/t0051-resourcecount.py \
 	python/t0100-modprobe.py \
 	python/t1000-service-add-remove.py \
 	python/t6010-fake-resources.py

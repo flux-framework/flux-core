@@ -29,6 +29,7 @@ PREPROC_FLAGS = \
 
 fluxpyso_LTLIBRARIES = \
 	_core.la \
+	_resourcecount.la \
 	_hostlist.la \
 	_idset.la \
 	_rhwloc_map.la \
@@ -39,12 +40,14 @@ fluxpyso_PYTHON = \
 
 nodist_fluxbindinginclude_HEADERS = \
 	_core_preproc.h \
+	_resourcecount_preproc.h \
 	_hostlist_preproc.h \
 	_idset_preproc.h
 
 EXTRA_DIST = \
 	_core_build.py \
 	_security_build.py \
+	_resourcecount_build.py \
 	_hostlist_build.py \
 	_idset_build.py \
 	_rhwloc_map_build.py \
@@ -98,6 +101,19 @@ _idset_preproc.h: _idset_clean.h
 	$(AM_V_GEN)$(CC) $(PREPROC_FLAGS) $< \
 	  | sed -e '/^# [0-9]*.*/d' > $@
 
+_resourcecount.c: $(srcdir)/_resourcecount_build.py _resourcecount_preproc.h
+	$(AM_V_GEN)$(PYTHON) $^ $(STDERR_DEVNULL)
+
+_resourcecount_clean.h: Makefile
+	$(AM_V_GEN)$(PYTHON) $(srcdir)/make_clean_header.py \
+	  --path $(top_srcdir)/src/common/libresourcecount \
+	  --output $@ \
+	  resourcecount.h
+
+_resourcecount_preproc.h: _resourcecount_clean.h
+	$(AM_V_GEN)$(CC) $(PREPROC_FLAGS) $< \
+	  | sed -e '/^# [0-9]*.*/d' > $@
+
 
 dist__core_la_SOURCES = callbacks.h
 nodist__core_la_SOURCES = _core.c
@@ -108,6 +124,11 @@ _hostlist_la_LIBADD = $(common_libs)
 
 nodist__idset_la_SOURCES = _idset.c
 _idset_la_LIBADD = $(common_libs)
+
+nodist__resourcecount_la_SOURCES = _resourcecount.c
+_resourcecount_la_LIBADD = \
+	$(common_libs) \
+	$(JANSSON_LIBS)
 
 _rhwloc_map.c: $(srcdir)/_rhwloc_map_build.py
 	$(AM_V_GEN)$(PYTHON) $< $(STDERR_DEVNULL)

@@ -42,7 +42,7 @@ test_expect_success 'jjc-reader: bad count throws error' '
 		jq ".resources[0].with[0].count = -1" >input.$test_count &&
 	test_expect_code 1 $jjc<input.$test_count >out.$test_count 2>&1 &&
 	cat >expected.$test_count <<-EOF &&
-	jjc-reader: level 1: create_count: integer count must be >= 1
+	jjc-reader: level 1: resourcecount_create: integer count must be in [1, 4294967293]
 	EOF
 	test_cmp expected.$test_count out.$test_count
 '
@@ -69,7 +69,7 @@ test_expect_success 'jjc-reader: wrong count type throws error' '
 		jq ".resources[0].with[0].count = 1.5" >input.$test_count &&
 	test_expect_code 1 $jjc<input.$test_count >out.$test_count 2>&1 &&
 	cat >expected.$test_count <<-EOF &&
-	jjc-reader: level 1: create_count: Malformed jobspec resource count
+	jjc-reader: level 1: resourcecount_create: Malformed jobspec resource count
 	EOF
 	test_cmp expected.$test_count out.$test_count
 '
