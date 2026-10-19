@@ -145,7 +145,11 @@ def fetch_jobs_flux(args, fields, flux_handle=None):
         try:
             since = flux.util.parse_datetime(args.since).timestamp()
         except ValueError:
-            since = float(args.since)
+            try:
+                since = float(args.since)
+            except ValueError:
+                LOGGER.error("--since: invalid value '%s'", args.since)
+                sys.exit(1)
 
         # Ensure args.since is in the past
         if since > flux.util.parse_datetime("now").timestamp():
