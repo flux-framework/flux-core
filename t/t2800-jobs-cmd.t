@@ -310,6 +310,14 @@ test_expect_success 'flux-jobs --since ISO 8601 basic date in future fails' '
 	test_must_fail flux jobs --since=29991231
 '
 
+# An invalid 8 digit date must not fall back to a raw timestamp
+test_expect_success 'flux-jobs --since invalid ISO 8601 basic date fails' '
+	test_must_fail flux jobs --since=20211301 2>since_invalid.err &&
+	grep "Invalid datetime" since_invalid.err &&
+	test_must_fail flux jobs --since=20210229 2>since_invalid2.err &&
+	grep "Invalid datetime" since_invalid2.err
+'
+
 # -a ignored if --filter specified
 test_expect_success 'flux-jobs -a and --filter=pending' '
 	count=`flux jobs -n -a --filter=pending 2> filter_a.err | wc -l` &&
