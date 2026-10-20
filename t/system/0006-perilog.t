@@ -13,7 +13,6 @@ test_expect_success HAVE_IMP 'configure a system prolog' '
 	cat <<-EOF >imp-prolog.toml &&
 	[run.prolog]
 	allowed-users = ["flux"]
-	allowed-environment = ["FLUX_*"]
 	path = "$fluxcmddir/flux-run-prolog"
 	EOF
 	sudo cp imp-prolog.toml $confdir &&
