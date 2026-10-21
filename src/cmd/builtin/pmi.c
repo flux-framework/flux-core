@@ -65,10 +65,14 @@ static int internal_cmd_barrier (optparse_t *p, int argc, char *argv[])
     int n = optparse_option_index (p);
     int count = optparse_get_int (p, "test-count", 1);
     int test_abort = optparse_get_int (p, "test-abort", -1);
+    const char *group = optparse_get_str (p, "group", NULL);
+    const char *tag = optparse_get_str (p, "tag", NULL);
     struct timespec t;
     const char *label;
     flux_error_t error;
     struct upmi_info info;
+    bool member = true;
+    bool leader;
 
     if (n != argc) {
         optparse_print_usage (p);
@@ -79,6 +83,23 @@ static int internal_cmd_barrier (optparse_t *p, int argc, char *argv[])
             label = "0";
     if (upmi_initialize (upmi, &info, &error) < 0)
         log_msg_exit ("%s", error.text);
+
+    /* With --group=IDSET, only member ranks enter the group barrier;
+     * the others return immediately (after any preliminary barrier).
+     */
+    if (group
+        && !streq (group, "world")
+        && !streq (group, "node")
+        && !streq (group, "self")) {
+        struct idset *ids;
+        if (!(ids = idset_decode (group)))
+            log_msg_exit ("--group: invalid idset '%s'", group);
+        member = idset_test (ids, info.rank);
+        leader = (idset_first (ids) == info.rank);
+        idset_destroy (ids);
+    }
+    else
+        leader = (info.rank == 0);
 
     // don't let task launch stragglers skew timing
     if (optparse_hasopt (p, "test-timing")) {
@@ -97,14 +118,21 @@ static int internal_cmd_barrier (optparse_t *p, int argc, char *argv[])
         }
     }
 
-    while (count-- > 0) {
+    while (member && count-- > 0) {
         monotime (&t);
 
-        if (upmi_barrier (upmi, &error) < 0)
+        if (group) {
+            if (upmi_barrier_group (upmi, group, tag, &error) < 0)
+                log_msg_exit ("barrier_group: %s", error.text);
+        }
+        else if (upmi_barrier (upmi, &error) < 0)
             log_msg_exit ("barrier: %s", error.text);
 
-        if (info.rank == 0) {
-            printf ("%s: completed pmi barrier on %d tasks", label, info.size);
+        if (leader) {
+            if (group)
+                printf ("%s: completed pmi group barrier (%s)", label, group);
+            else
+                printf ("%s: completed pmi barrier on %d tasks", label, info.size);
             if (optparse_hasopt (p, "test-timing"))
                 printf (" in %0.3fs.", monotime_since (t) / 1000);
             printf ("\n");
@@ -262,12 +290,36 @@ static int cmd_pmi (optparse_t *p, int argc, char *argv[])
 }
 
 static struct optparse_option barrier_opts[] = {
-    { .name = "test-count",      .has_arg = 1, .arginfo = "N",
-       .usage = "For testing, execute N barrier operations (default 1)", },
-    { .name = "test-abort",      .has_arg = 1, .arginfo = "RANK",
-       .usage = "For testing, RANK calls abort instead of barrier", },
-    { .name = "test-timing",     .has_arg = 0,
-       .usage = "For testing, synchronize then measure barrier time", },
+    {
+        .name = "group",
+        .has_arg = 1,
+        .arginfo = "GROUP",
+        .usage = "Execute a PMI-1.2 group barrier over GROUP"
+                 " (world, node, self, or an IDSET of ranks)",
+    },
+    {
+        .name = "tag",
+        .has_arg = 1,
+        .arginfo = "STRING",
+        .usage = "Set the group barrier string tag",
+    },
+    {
+        .name = "test-count",
+        .has_arg = 1,
+        .arginfo = "N",
+        .usage = "For testing, execute N barrier operations (default 1)",
+    },
+    {
+        .name = "test-abort",
+        .has_arg = 1,
+        .arginfo = "RANK",
+        .usage = "For testing, RANK calls abort instead of barrier",
+    },
+    {
+        .name = "test-timing",
+        .has_arg = 0,
+        .usage = "For testing, synchronize then measure barrier time",
+    },
     OPTPARSE_TABLE_END,
 };
 static struct optparse_option get_opts[] = {

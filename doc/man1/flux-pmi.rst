@@ -6,7 +6,7 @@ flux-pmi(1)
 SYNOPSIS
 ========
 
-| [**launcher**] **flux-pmi** [*-v*] [*--method=URI*] barrier [*--count=N*]
+| [**launcher**] **flux-pmi** [*-v*] [*--method=URI*] barrier [*--count=N*] [*--group=GROUP*]
 | [**launcher**] **flux-pmi** [*-v*] [*--method=URI*] exchange [*--count=N*]
 | [**launcher**] **flux-pmi** [*-v*] [*--method=URI*] get [*--ranks=IDSET*]
 
@@ -88,11 +88,25 @@ barrier
 :program:`flux pmi barrier` executes a PMI barrier and prints a message
 on rank 0 upon completion.
 
+.. option:: --group={world|node|self|IDSET}
+
+  Execute a PMI-1.2 group barrier instead of a regular barrier.  *world*
+  spans all ranks, *node* spans the ranks co-located on this node, *self*
+  completes locally, and an RFC 22 *IDSET* names an explicit set of ranks.
+  With an explicit set, ranks that are not members skip the barrier.  The
+  completion message is printed by the lowest member rank.  This fails if
+  the PMI method or server does not support PMI-1.2 group barriers.
+
+.. option:: --tag=STRING
+
+  Set the string tag that distinguishes concurrent group barriers.
+  Only meaningful with :option:`--group`.
+
 .. option:: --test-timing
 
   First execute a preliminary barrier to ensure all ranks enter the test
   barrier at the same time, then execute a test barrier and print the elapsed
-  time for the test barrier on rank 0 stdout.
+  time for the test barrier on the lowest member rank.
 
 .. option:: --test-count=N
 
