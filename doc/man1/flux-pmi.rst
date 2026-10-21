@@ -7,7 +7,7 @@ SYNOPSIS
 ========
 
 | [**launcher**] **flux-pmi** [*-v*] [*--method=URI*] barrier [*--count=N*] [*--group=GROUP*]
-| [**launcher**] **flux-pmi** [*-v*] [*--method=URI*] exchange [*--count=N*]
+| [**launcher**] **flux-pmi** [*-v*] [*--method=URI*] exchange [*--count=N*] [*--group=GROUP*]
 | [**launcher**] **flux-pmi** [*-v*] [*--method=URI*] get [*--ranks=IDSET*]
 
 
@@ -134,6 +134,20 @@ exchange
 .. option:: --count=N
 
   Execute N exchange (step 2-5) operations (default 1).
+
+.. option:: --group={world|self|IDSET}
+
+  Restrict the exchange to a PMI-1.2 group, using a group barrier in
+  step 3 and getting keys only from the group members in step 4.
+  Non-member ranks skip steps 2-4 but still execute the barriers in
+  steps 1 and 5.  The completion message is printed by the lowest member
+  rank.  The *node* group is not supported here, since the client cannot
+  enumerate the node's members to verify their keys.
+
+.. option:: --tag=STRING
+
+  Set the group barrier string tag.  Only meaningful with
+  :option:`--group`.
 
 get
 ---

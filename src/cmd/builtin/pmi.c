@@ -146,14 +146,32 @@ static int internal_cmd_barrier (optparse_t *p, int argc, char *argv[])
     return 0;
 }
 
+/* Group barrier if --group was specified, else a regular barrier.
+ */
+static void exchange_sync (const char *group, const char *tag)
+{
+    flux_error_t error;
+
+    if (group) {
+        if (upmi_barrier_group (upmi, group, tag, &error) < 0)
+            log_msg_exit ("barrier_group: %s", error.text);
+    }
+    else if (upmi_barrier (upmi, &error) < 0)
+        log_msg_exit ("barrier: %s", error.text);
+}
+
 static int internal_cmd_exchange (optparse_t *p, int argc, char *argv[])
 {
     int n = optparse_option_index (p);
     int count = optparse_get_int (p, "count", 1);
+    const char *group = optparse_get_str (p, "group", NULL);
+    const char *tag = optparse_get_str (p, "tag", NULL);
+    struct idset *members;
     struct timespec t;
     const char *label;
     flux_error_t error;
     struct upmi_info info;
+    int leader;
 
     if (n != argc) {
         optparse_print_usage (p);
@@ -165,6 +183,28 @@ static int internal_cmd_exchange (optparse_t *p, int argc, char *argv[])
     if (upmi_initialize (upmi, &info, &error) < 0)
         log_msg_exit ("%s", error.text);
 
+    /* Only group members exchange.  Non-members still join the
+     * preliminary and final whole-job barriers.  The "node" group is
+     * rejected since the client cannot enumerate its members.
+     */
+    if (group && streq (group, "node"))
+        log_msg_exit ("--group=node is not supported by exchange");
+    if (group && streq (group, "self")) {
+        if (!(members = idset_create (0, IDSET_FLAG_AUTOGROW))
+            || idset_set (members, info.rank) < 0)
+            log_err_exit ("idset_create");
+    }
+    else if (group && !streq (group, "world")) {
+        if (!(members = idset_decode (group)))
+            log_msg_exit ("--group: invalid idset '%s'", group);
+    }
+    else {
+        if (!(members = idset_create (0, IDSET_FLAG_AUTOGROW))
+            || idset_range_set (members, 0, info.size - 1) < 0)
+            log_err_exit ("idset_create");
+    }
+    leader = idset_first (members);
+
     // don't let task launch stragglers skew timing
     if (upmi_barrier (upmi, &error) < 0)
         log_msg_exit ("barrier: %s", error.text);
@@ -172,8 +212,12 @@ static int internal_cmd_exchange (optparse_t *p, int argc, char *argv[])
     while (count-- > 0) {
         char key[64];
         char val[64];
+        unsigned int rank;
 
         monotime (&t);
+
+        if (!idset_test (members, info.rank))
+            goto skip;
 
         /* Put data from this rank
          */
@@ -189,15 +233,15 @@ static int internal_cmd_exchange (optparse_t *p, int argc, char *argv[])
 
         /* Synchronize
          */
-        if (upmi_barrier (upmi, &error) < 0)
-            log_msg_exit ("barrier: %s", error.text);
+        exchange_sync (group, tag);
 
-        /* Get data from all ranks (and verify).
+        /* Get data from all member ranks (and verify).
          */
-        for (int rank = 0; rank < info.size; rank++) {
+        rank = idset_first (members);
+        while (rank != IDSET_INVALID_ID) {
             char *cp;
 
-            snprintf (key, sizeof (key), "key.%d", rank);
+            snprintf (key, sizeof (key), "key.%u", rank);
             snprintf (val,
                       sizeof (val),
                       "%s-%d-%d",
@@ -209,20 +253,22 @@ static int internal_cmd_exchange (optparse_t *p, int argc, char *argv[])
             if (!streq (val, cp))
                 log_msg_exit ("get %s: returned unexpected value", key);
             free (cp);
+            rank = idset_next (members, rank);
         }
-
+skip:
         // timing must reflect completion of gets by all ranks
         if (upmi_barrier (upmi, &error) < 0)
             log_msg_exit ("barrier: %s", error.text);
 
-        if (info.rank == 0) {
-            printf ("%s: completed pmi exchange on %d tasks in %0.3fs.\n",
+        if (info.rank == leader) {
+            printf ("%s: completed pmi exchange on %zu tasks in %0.3fs.\n",
                     label,
-                    info.size,
+                    idset_count (members),
                     monotime_since (t) / 1000);
             fflush (stdout);
         }
     }
+    idset_destroy (members);
 
     if (upmi_finalize (upmi, &error) < 0)
         log_msg_exit ("finalize: %s", error.text);
@@ -328,8 +374,25 @@ static struct optparse_option get_opts[] = {
     OPTPARSE_TABLE_END,
 };
 static struct optparse_option exchange_opts[] = {
-    { .name = "count",      .has_arg = 1, .arginfo = "N",
-       .usage = "Execute N exchange operations (default 1)", },
+    {
+        .name = "count",
+        .has_arg = 1,
+        .arginfo = "N",
+        .usage = "Execute N exchange operations (default 1)",
+    },
+    {
+        .name = "group",
+        .has_arg = 1,
+        .arginfo = "GROUP",
+        .usage = "Exchange among a PMI-1.2 group using a group barrier"
+                 " (world, self, or an IDSET of ranks)",
+    },
+    {
+        .name = "tag",
+        .has_arg = 1,
+        .arginfo = "STRING",
+        .usage = "Set the group barrier string tag",
+    },
     OPTPARSE_TABLE_END,
 };
 static struct optparse_option general_opts[] = {
