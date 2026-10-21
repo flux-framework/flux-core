@@ -123,12 +123,20 @@ static void s_buf_cb (flux_reactor_t *r,
             BAIL_OUT ("cbuf_read_line failed: %s", strerror (errno));
         int rc = pmi_simple_server_request (ctx->pmi, cli->buf, cli, cli->rank);
         if (rc < 0)
-            goto error;
+            goto proto;
         if (rc == 1) {
             flux_watcher_stop (w); // normal exit
             break;
         }
     }
+    return;
+proto:
+    /* Protocol error: drop this client so it sees EOF, like a real server.
+     */
+    diag ("rank %d: protocol error, closing connection", cli->rank);
+    flux_watcher_stop (w);
+    close (cli->sfd);
+    cli->sfd = -1;
     return;
 error:
     flux_reactor_stop_error (r);
