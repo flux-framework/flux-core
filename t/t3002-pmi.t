@@ -13,6 +13,8 @@ kvstest=${FLUX_BUILD_DIR}/src/common/libpmi/test_kvstest
 kvstest2=${FLUX_BUILD_DIR}/src/common/libpmi/test_kvstest2
 pmi_info=${FLUX_BUILD_DIR}/src/common/libpmi/test_pmi_info
 pmi2_info=${FLUX_BUILD_DIR}/src/common/libpmi/test_pmi2_info
+grouptest=${FLUX_BUILD_DIR}/src/common/libpmi/test_grouptest
+threadtest=${FLUX_BUILD_DIR}/src/common/libpmi/test_threadtest
 
 test_expect_success 'flux run sets PMI_FD' '
 	flux run printenv PMI_FD
@@ -226,6 +228,198 @@ test_expect_success 'PMI-1.2 group barrier with a long rank list works' '
 	chmod +x longgroup.sh &&
 	flux run -t 2m -N1 --tasks-per-node=400 ./longgroup.sh >longgroup.out &&
 	test $(grep -c "cmd=barrier_out tag=7 rc=0" longgroup.out) -eq 400
+'
+# Against a 1.1 server, group barriers fail early in the client without
+# touching the wire, the PMI_GROUP_SELF probe fails too, and everything
+# else still works.
+test_expect_success 'flux-pmi barrier --group=world fails on a 1.1 server' '
+	test_must_fail flux run -n2 -N2 -o pmi-simple.version=1.1 \
+	    flux pmi barrier --group=world 2>grp11.err &&
+	grep "does not support PMI-1.2" grp11.err
+'
+test_expect_success 'PMI_Barrier_group self probe fails on a 1.1 server' '
+	test_must_fail flux run -n2 -N2 -o pmi-simple.version=1.1 \
+	    flux pmi --method=libpmi barrier --group=self 2>self11.err &&
+	grep "operation failed" self11.err
+'
+test_expect_success 'kvstest works on a 1.1 server' '
+	flux run -n8 -N4 -o pmi-simple.version=1.1 ${kvstest}
+'
+test_expect_success 'legacy barrier via libpmi works on a 1.1 server' '
+	flux run -n8 -N4 -o pmi-simple.version=1.1 ${threadtest} 1 3
+'
+# PMI-1.2 group barriers.  Use 4 shells x 2 tasks so groups can span a
+# subset of shells; non-member ranks idle while members barrier.
+test_expect_success 'flux-pmi barrier --group=world works' '
+	flux run -n8 -N4 flux pmi barrier --group=world --tag=hello
+'
+test_expect_success 'flux-pmi barrier --group=node works' '
+	flux run -n8 -N4 flux pmi barrier --group=node
+'
+# A node barrier spans only the shell's own ranks: ranks on shell 0 enter
+# one while the other shells' ranks never enter any barrier.
+test_expect_success 'flux-pmi barrier --group=node spans one shell' '
+	cat >nodescope.sh <<-EOT &&
+	#!/bin/sh
+	if test \$FLUX_TASK_RANK -lt 2; then
+	    flux pmi barrier --group=node
+	else
+	    sleep 1
+	fi
+	EOT
+	chmod +x nodescope.sh &&
+	run_timeout 30 flux run -n8 -N4 ./nodescope.sh >nodescope.out &&
+	grep "group barrier (node)" nodescope.out
+'
+test_expect_success 'flux-pmi barrier --group=self works' '
+	flux run -n8 -N4 flux pmi barrier --group=self
+'
+test_expect_success 'flux-pmi barrier --group spanning 2 of 4 shells works' '
+	flux run -n8 -N4 flux pmi barrier --group=0,1,4,5 >sub1.out &&
+	grep "group barrier (0,1,4,5)" sub1.out
+'
+test_expect_success 'flux-pmi barrier --group excluding rank 0 works' '
+	flux run -n8 -N4 flux pmi barrier --group=2,3,6,7 >sub2.out &&
+	grep "group barrier (2,3,6,7)" sub2.out
+'
+test_expect_success 'flux-pmi barrier --group with one rank per shell works' '
+	flux run -n8 -N4 flux pmi barrier --group=1,3,5,7 --test-count=4
+'
+test_expect_success 'flux-pmi barrier --group=IDSET with a single rank works' '
+	flux run -n8 -N4 flux pmi barrier --group=5
+'
+test_expect_success 'flux-pmi barrier --group echoes the hashed string tag' '
+	flux run -n8 -N4 -o verbose=2 \
+	    flux pmi barrier --group=6,7 --tag=hello 2>tag.err &&
+	grep "cmd=barrier_in group=6,7:1335831723" tag.err &&
+	grep "cmd=barrier_out tag=1335831723" tag.err
+'
+test_expect_success 'flux-pmi barrier --group with no tag uses tag 0' '
+	flux run -n8 -N4 -o verbose=2 \
+	    flux pmi barrier --group=6,7 2>tag0.err &&
+	grep "cmd=barrier_in group=6,7:0" tag0.err
+'
+test_expect_success 'flux-pmi barrier --group works via dlopened libpmi.so' '
+	flux run -n8 -N4 flux pmi --method=libpmi barrier --group=2,3,6,7
+'
+test_expect_success 'flux-pmi barrier --group fails via libpmi2' '
+	test_must_fail flux run -n2 -N2 \
+	    flux pmi --method=libpmi2 barrier --group=world 2>pmi2.err &&
+	grep "not implemented" pmi2.err
+'
+# Two disjoint groups each barrier concurrently in the same job.
+test_expect_success 'two concurrent disjoint group barriers complete' '
+	cat >twogroups.sh <<-EOT &&
+	#!/bin/sh
+	rank=\$FLUX_TASK_RANK
+	if test \$((rank % 2)) -eq 0; then
+	    flux pmi barrier --group=0,2,4,6 --tag=even --test-count=3
+	else
+	    flux pmi barrier --group=1,3,5,7 --tag=odd --test-count=3
+	fi
+	EOT
+	chmod +x twogroups.sh &&
+	flux run -n8 -N4 ./twogroups.sh >twogroups.out &&
+	test $(grep -c "group barrier (0,2,4,6)" twogroups.out) -eq 3 &&
+	test $(grep -c "group barrier (1,3,5,7)" twogroups.out) -eq 3
+'
+# A member beyond the job size cannot be mapped to a shell, so the shell
+# fails the barrier and the members get PMI_FAIL.
+test_expect_success 'flux-pmi barrier --group with an out-of-range rank fails' '
+	test_must_fail flux run -n4 -N2 \
+	    flux pmi barrier --group=0,99 2>range.err &&
+	grep "cannot map members to shells" range.err &&
+	grep "operation failed" range.err
+'
+# An abort while other ranks are blocked in a group barrier still tears
+# the job down with the abort exit status.  The aborting rank is a group
+# member that never enters, so the others cannot complete the barrier.
+test_expect_success 'PMI abort while ranks wait in a group barrier works' '
+	cat >groupabort.sh <<-EOT &&
+	#!/bin/sh
+	if test \$FLUX_TASK_RANK -eq 1; then
+	    exec flux pmi barrier --test-abort=1
+	fi
+	exec flux pmi barrier --group=0-3
+	EOT
+	chmod +x groupabort.sh &&
+	test_expect_code 143 flux run -n4 -N2 ./groupabort.sh 2>groupabort.err &&
+	grep -i abort groupabort.err
+'
+# KVS visibility: a group barrier makes member puts visible to members
+test_expect_success 'flux-pmi exchange --group=world works' '
+	flux run -n8 -N4 flux pmi exchange --group=world
+'
+test_expect_success 'flux-pmi exchange --group spanning 2 of 4 shells works' '
+	flux run -n8 -N4 flux pmi exchange --group=2,3,6,7 >ex1.out &&
+	grep "exchange on 4 tasks" ex1.out
+'
+test_expect_success 'flux-pmi exchange --group=self works' '
+	flux run -n8 -N4 flux pmi exchange --group=self --count=2
+'
+test_expect_success 'flux-pmi exchange --group=node is rejected' '
+	test_must_fail flux run -n2 -N1 flux pmi exchange --group=node
+'
+# grouptest checks KVS visibility through libpmi: group members see each
+# other's puts after a group barrier, and a later whole-job barrier still
+# delivers every rank's puts (including the subset's) to every rank.
+test_expect_success 'grouptest: group on 2 of 4 shells' '
+	flux run -n8 -N4 ${grouptest} 0-3
+'
+test_expect_success 'grouptest: group on half of each shell' '
+	flux run -n8 -N4 ${grouptest} 1,3,5,7
+'
+test_expect_success 'grouptest: group excluding rank 0' '
+	flux run -n8 -N4 ${grouptest} 2,3,6,7
+'
+test_expect_success 'grouptest: single rank group' '
+	flux run -n8 -N4 ${grouptest} 5
+'
+test_expect_success 'grouptest: group of all ranks' '
+	flux run -n8 -N4 ${grouptest} 0-7
+'
+test_expect_success 'grouptest: node group on 4 shells' '
+	flux run -n8 -N4 ${grouptest} node
+'
+test_expect_success 'grouptest: node group on 1 shell' '
+	flux run -n4 -N1 ${grouptest} node
+'
+# MPICH may list a group in descending rank order (flux-core issue #7888).
+test_expect_success 'grouptest: descending rank list on 2 of 4 shells' '
+	flux run -n8 -N4 ${grouptest} -r 0-3
+'
+test_expect_success 'grouptest: descending rank list on half of each shell' '
+	flux run -n8 -N4 ${grouptest} -r 1,3,5,7
+'
+# Overlapping groups in sequence: each group spans two shells and shares
+# one with the next.  A subset exchange must not retire the keys it
+# exchanged, since the shared shell's keys are needed again by the next
+# group, and the final whole-job barrier still delivers every key.
+test_expect_success 'grouptest: overlapping groups in sequence' '
+	flux run -n8 -N4 ${grouptest} 0-3 2-5 4-7
+'
+test_expect_success 'grouptest: node group between explicit groups' '
+	flux run -n8 -N4 ${grouptest} 0-3 node 4-7
+'
+# threadtest runs barriers concurrently from several threads of each
+# rank over one PMI_FD, with a KVS exchange around each.  In world mode
+# the barriers are tagged and legacy whole-job barriers; in split mode
+# each thread barriers over a different explicit subset; in node mode
+# each thread barriers over the clique with its own tag.
+test_expect_success 'threadtest: 4 threads x 10 rounds on 4 shells' '
+	run_timeout 60 flux run -n8 -N4 ${threadtest} 4 10
+'
+test_expect_success 'threadtest: 8 threads x 5 rounds on 1 shell' '
+	run_timeout 60 flux run -n4 -N1 ${threadtest} 8 5
+'
+test_expect_success 'threadtest: split, 4 threads x 10 rounds on 4 shells' '
+	run_timeout 60 flux run -n8 -N4 ${threadtest} 4 10 split
+'
+test_expect_success 'threadtest: split, 6 threads x 5 rounds on 1 shell' '
+	run_timeout 60 flux run -n4 -N1 ${threadtest} 6 5 split
+'
+test_expect_success 'threadtest: node, 4 threads x 10 rounds on 4 shells' '
+	run_timeout 60 flux run -n8 -N4 ${threadtest} 4 10 node
 '
 test_expect_success 'flux-pmi get PMI_process_mapping works' '
 	flux run --label-io -n2 \
