@@ -117,6 +117,10 @@ int main (int argc, char *argv[])
     ok (result == PMI_ERR_INIT,
         "PMI_Barrier before init fails with PMI_ERR_INIT");
 
+    result = PMI_Barrier_group (PMI_GROUP_SELF, 0, NULL);
+    ok (result == PMI_ERR_INIT,
+        "PMI_Barrier_group before init fails with PMI_ERR_INIT");
+
     result = PMI_KVS_Get ("foo", "bar", buf, sizeof (buf));
     ok (result == PMI_ERR_INIT,
         "PMI_KVS_Get before init fails with PMI_ERR_INIT");
@@ -256,6 +260,29 @@ int main (int argc, char *argv[])
     result = PMI_Barrier ();
     ok (result == PMI_SUCCESS,
         "PMI_Barrier works");
+
+    /* PMI-1.2 group barriers (the test server advertises subversion 2)
+     */
+    result = PMI_Barrier_group (PMI_GROUP_SELF, 0, NULL);
+    ok (result == PMI_SUCCESS,
+        "PMI_Barrier_group PMI_GROUP_SELF works (support probe)");
+    result = PMI_Barrier_group (PMI_GROUP_WORLD, 0, NULL);
+    ok (result == PMI_SUCCESS, "PMI_Barrier_group PMI_GROUP_WORLD works");
+    result = PMI_Barrier_group (PMI_GROUP_WORLD, 0, "stringtag");
+    ok (result == PMI_SUCCESS,
+        "PMI_Barrier_group PMI_GROUP_WORLD with string tag works");
+    result = PMI_Barrier_group (PMI_GROUP_NODE, 0, "node");
+    ok (result == PMI_SUCCESS, "PMI_Barrier_group PMI_GROUP_NODE works");
+    int group[] = { 0 };
+    result = PMI_Barrier_group (group, 1, "explicit");
+    ok (result == PMI_SUCCESS, "PMI_Barrier_group explicit group works");
+    result = PMI_Barrier_group (group, 0, NULL);
+    ok (result == PMI_ERR_INVALID_ARG,
+        "PMI_Barrier_group explicit group count=0 fails with INVALID_ARG");
+    int badgroup[] = { -1 };
+    result = PMI_Barrier_group (badgroup, 1, NULL);
+    ok (result == PMI_ERR_INVALID_ARG,
+        "PMI_Barrier_group negative rank fails with INVALID_ARG");
 
     result = PMI_KVS_Get (NULL, "foo", val, vallen_max);
     ok (result == PMI_ERR_INVALID_ARG,

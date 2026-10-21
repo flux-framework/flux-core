@@ -15,6 +15,9 @@
 #include <sys/socket.h>
 #include <pthread.h>
 #include <assert.h>
+#include <unistd.h>
+#include <string.h>
+#include <stdbool.h>
 #include <flux/core.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
@@ -22,6 +25,8 @@
 #include "src/common/libpmi/pmi.h"
 #include "src/common/libutil/fdutils.h"
 #include "src/common/liblsd/cbuf.h"
+
+#include "ccan/str/str.h"
 
 #include "src/common/libtap/tap.h"
 
@@ -40,6 +45,8 @@ struct client {
     int sfd;
     int rank;
     cbuf_t cbuf;
+    char *last_barrier_in;  // group of this rank's latest barrier_in
+    int barrier_in_count;   // barrier_in lines seen from this rank
     char buf[TEST_LINE_MAX];
     struct pmi_server_context *ctx;
 };
@@ -55,6 +62,8 @@ struct pmi_server_context {
     char buf[SIMPLE_MAX_PROTO_LINE];
     int rig_barrier_entry_failure;
     int rig_barrier_exit_failure;
+    int rig_barrier_out_tag;    // tag an untagged barrier_out, like Hydra
+    pthread_mutex_t lock;       // protects last_barrier_in
 };
 
 static void destroy_string (void **valp)
@@ -94,9 +103,17 @@ static int s_kvs_get (void *arg, void *client,
 
 static int s_send_response (void *client, const char *buf)
 {
-    int *rfd = client;
+    struct client *cli = client;
+    struct pmi_server_context *ctx = cli->ctx;
 
-    return dprintf (*rfd, "%s", buf);
+    /* Hydra replies to an untagged barrier_in with a tagged barrier_out.
+     * Rewrite the reply to do the same when rigged to.
+     */
+    if (ctx->rig_barrier_out_tag && streq (buf, "cmd=barrier_out rc=0\n"))
+        return dprintf (cli->sfd,
+                        "cmd=barrier_out tag=%d rc=0\n",
+                        ctx->rig_barrier_out_tag);
+    return dprintf (cli->sfd, "%s", buf);
 }
 
 static void s_buf_cb (flux_reactor_t *r,
@@ -127,6 +144,17 @@ static void s_buf_cb (flux_reactor_t *r,
                                      1)) != 0) {
         if (nbytes < 0) // programming error
             BAIL_OUT ("cbuf_read_line failed: %s", strerror (errno));
+        if (strstarts (cli->buf, "cmd=barrier_in")) {
+            char *group = strchr (cli->buf, '=');
+            group = strchr (group + 1, '=');
+            pthread_mutex_lock (&ctx->lock);
+            free (cli->last_barrier_in);
+            cli->last_barrier_in = strdup (group ? group + 1 : "");
+            if (cli->last_barrier_in)
+                cli->last_barrier_in[strcspn (cli->last_barrier_in, "\n")] = 0;
+            cli->barrier_in_count++;
+            pthread_mutex_unlock (&ctx->lock);
+        }
         int rc = pmi_simple_server_request (ctx->pmi, cli->buf, cli, cli->rank);
         if (rc < 0)
             goto proto;
@@ -223,6 +251,8 @@ struct pmi_server_context *pmi_server_create (int *cfd, int size)
     ctx->size = size;
     if (!(ctx->cli = calloc (size, sizeof (ctx->cli[0]))))
         BAIL_OUT ("calloc bailed");
+    if (pthread_mutex_init (&ctx->lock, NULL) != 0)
+        BAIL_OUT ("pthread_mutex_init failed");
 
     if (!(ctx->kvs = zhashx_new ()))
         BAIL_OUT ("zhash_new failed");
@@ -283,8 +313,11 @@ void pmi_server_destroy (struct pmi_server_context *ctx)
         BAIL_OUT ("pthread_join failed");
     pmi_simple_server_destroy (ctx->pmi);
     zhashx_destroy (&ctx->kvs);
-    for (int i = 0; i < ctx->size; i++)
+    for (int i = 0; i < ctx->size; i++) {
         cbuf_destroy (ctx->cli[i].cbuf);
+        free (ctx->cli[i].last_barrier_in);
+    }
+    (void)pthread_mutex_destroy (&ctx->lock);
     free (ctx->cli);
     ctx->magic = ~MAGIC_VALUE;
     free (ctx);
@@ -298,6 +331,39 @@ void pmi_set_barrier_entry_failure (struct pmi_server_context *ctx, int val)
 void pmi_set_barrier_exit_failure (struct pmi_server_context *ctx, int val)
 {
     ctx->rig_barrier_exit_failure = val;
+}
+
+void pmi_set_barrier_out_tag (struct pmi_server_context *ctx, int tag)
+{
+    ctx->rig_barrier_out_tag = tag;
+}
+
+int pmi_server_barrier_in_count (struct pmi_server_context *ctx, int rank)
+{
+    int count;
+
+    pthread_mutex_lock (&ctx->lock);
+    count = ctx->cli[rank].barrier_in_count;
+    pthread_mutex_unlock (&ctx->lock);
+    return count;
+}
+
+void pmi_server_wait_barrier_in (struct pmi_server_context *ctx,
+                                 int rank,
+                                 const char *group,
+                                 int count)
+{
+    for (;;) {
+        bool seen;
+        pthread_mutex_lock (&ctx->lock);
+        seen = ctx->cli[rank].barrier_in_count > count
+               && ctx->cli[rank].last_barrier_in
+               && streq (ctx->cli[rank].last_barrier_in, group ? group : "");
+        pthread_mutex_unlock (&ctx->lock);
+        if (seen)
+            return;
+        usleep (1000);
+    }
 }
 
 /*
