@@ -122,6 +122,64 @@ int fake_init (FILE *fp, int version, int subversion)
     return 0;
 }
 
+/* Send a raw barrier_in, optionally carrying a PMI-1.2 group string. */
+static int send_barrier_in (FILE *fp, const char *group)
+{
+    int rc;
+
+    if (group)
+        rc = fprintf (fp, "cmd=barrier_in group=%s\n", group);
+    else
+        rc = fprintf (fp, "cmd=barrier_in\n");
+    if (rc < 0 || fflush (fp) < 0)
+        return -1;
+    return 0;
+}
+
+/* Read a barrier_out.  *tag is set to the echoed tag, or -1 if absent.
+ * Returns the barrier rc (0 on success).
+ */
+static int recv_barrier_out (FILE *fp, int *tag)
+{
+    char buf[SIMPLE_MAX_PROTO_LINE];
+    int rc;
+
+    if (!fgets (buf, sizeof (buf), fp))
+        return -1;
+    if (keyval_parse_isword (buf, "cmd", "barrier_out") < 0)
+        return -1;
+    if (tag && keyval_parse_int (buf, "tag", tag) < 0)
+        *tag = -1;
+    if (keyval_parse_int (buf, "rc", &rc) == 0 && rc != 0)
+        return rc;
+    return 0;
+}
+
+/* Drive one complete barrier (send + receive) on a single-member server. */
+static int fake_barrier (FILE *fp, const char *group, int *tag)
+{
+    if (send_barrier_in (fp, group) < 0)
+        return -1;
+    return recv_barrier_out (fp, tag);
+}
+
+/* Cleanly finalize a raw client connection so the server stops its watcher. */
+static int fake_finalize (FILE *fp)
+{
+    char buf[SIMPLE_MAX_PROTO_LINE];
+    int rc;
+
+    if (fprintf (fp, "cmd=finalize\n") < 0 || fflush (fp) < 0)
+        return -1;
+    if (!fgets (buf, sizeof (buf), fp))
+        return -1;
+    if (keyval_parse_isword (buf, "cmd", "finalize_ack") < 0)
+        return -1;
+    if (keyval_parse_int (buf, "rc", &rc) == 0 && rc != 0)
+        return rc;
+    return 0;
+}
+
 /* Scripted server that answers a single client init with a rigged protocol
  * version, then answers the get_maxes the client sends on a successful init.
  * Responses are delivered in lockstep with the client's requests so that no
@@ -327,6 +385,20 @@ int main (int argc, char *argv[])
     ok (rc == PMI_ERR_INVALID_KEY,
         "pmi_simple_client_kvs_get unknown key fails");
 
+    /* PMI-1.2 group barriers: the tag is echoed in barrier_out, and the
+     * legacy (no group) barrier emits no tag.  This single-member server
+     * completes each barrier as soon as its one local member enters.
+     */
+    int tag = 0;
+    ok (fake_barrier (cfp, "WORLD:5", &tag) == 0 && tag == 5,
+        "barrier group=WORLD:5 -> barrier_out tag=5");
+    ok (fake_barrier (cfp, "NODE:7", &tag) == 0 && tag == 7,
+        "barrier group=NODE:7 -> barrier_out tag=7");
+    ok (fake_barrier (cfp, "0:9", &tag) == 0 && tag == 9,
+        "barrier explicit group 0:9 -> barrier_out tag=9");
+    ok (fake_barrier (cfp, NULL, &tag) == 0 && tag == -1,
+        "legacy barrier -> barrier_out with no tag");
+
     /* barrier: entry failure
      */
     pmi_set_barrier_entry_failure (srv, 1);
@@ -372,6 +444,90 @@ int main (int argc, char *argv[])
     pmi_simple_client_destroy (cli);
 
     pmi_server_destroy (srv);
+
+    /* Concurrent group barriers: a 2-member server runs two WORLD barriers
+     * with distinct tags at the same time.  Each barrier completes only once
+     * both members enter; entries are interleaved so both are simultaneously
+     * in flight, exercising the per-group barrier table.
+     */
+    int cfd2[2];
+    struct pmi_server_context *srv2;
+    FILE *f0, *f1;
+    int tag0a = -1, tag0b = -1, tag1a = -1, tag1b = -1;
+
+    srv2 = pmi_server_create (cfd2, 2);
+    if (!(f0 = fdopen (cfd2[0], "r+")))
+        BAIL_OUT ("fdopen failed");
+    if (!(f1 = fdopen (cfd2[1], "r+")))
+        BAIL_OUT ("fdopen failed");
+    ok (send_barrier_in (f0, "WORLD:5") == 0
+        && send_barrier_in (f0, "WORLD:6") == 0
+        && send_barrier_in (f1, "WORLD:5") == 0
+        && send_barrier_in (f1, "WORLD:6") == 0,
+        "two concurrent WORLD barriers: all members entered");
+    ok (recv_barrier_out (f0, &tag0a) == 0
+        && recv_barrier_out (f0, &tag0b) == 0
+        && recv_barrier_out (f1, &tag1a) == 0
+        && recv_barrier_out (f1, &tag1b) == 0,
+        "two concurrent WORLD barriers: all members responded");
+    ok (tag0a == 5 && tag1a == 5 && tag0b == 6 && tag1b == 6,
+        "concurrent barriers completed independently with tags 5 and 6");
+
+    /* NODE expects every local rank, and is keyed apart from WORLD even
+     * with the same tag.  Rank 0 enters NODE:5 and rank 1 enters WORLD:5;
+     * neither completes.  Rank 1 then enters NODE:5, completing only it.
+     */
+    int ntag = -1;
+    ok (send_barrier_in (f0, "NODE:5") == 0
+        && send_barrier_in (f1, "WORLD:5") == 0
+        && send_barrier_in (f1, "NODE:5") == 0
+        && recv_barrier_out (f0, &ntag) == 0 && ntag == 5
+        && recv_barrier_out (f1, &ntag) == 0 && ntag == 5,
+        "NODE barrier completes when both local ranks enter it");
+    ok (send_barrier_in (f0, "WORLD:5") == 0
+        && recv_barrier_out (f0, &ntag) == 0 && ntag == 5
+        && recv_barrier_out (f1, &ntag) == 0 && ntag == 5,
+        "WORLD barrier with the same tag completed separately");
+
+    ok (fake_finalize (f0) == 0 && fake_finalize (f1) == 0,
+        "raw clients finalized");
+    fclose (f0);
+    fclose (f1);
+    pmi_server_destroy (srv2);
+
+    /* Invalid barrier_in requests are protocol errors: the test server
+     * closes the offending connection, so the client reads EOF instead of
+     * barrier_out.  Each case gets a fresh 2-member server since the
+     * first error on a connection ends it.
+     */
+    const char *badgroup[] = {
+        "WORLD",            // missing :tag
+        "WORLD:",           // empty tag
+        "WORLD:x",          // non-numeric tag
+        "0,1:5x",           // trailing garbage after tag
+        "zz:5",             // undecodable rank list
+        "1:5",              // rank 0 enters a group it is not in
+    };
+    for (int i = 0; i < sizeof (badgroup) / sizeof (badgroup[0]); i++) {
+        int cfd3[2];
+        struct pmi_server_context *srv3;
+        FILE *f;
+
+        srv3 = pmi_server_create (cfd3, 2);
+        if (!(f0 = fdopen (cfd3[0], "r+")))
+            BAIL_OUT ("fdopen failed");
+        if (!(f1 = fdopen (cfd3[1], "r+")))
+            BAIL_OUT ("fdopen failed");
+        f = f0;
+        ok (send_barrier_in (f, badgroup[i]) == 0
+            && recv_barrier_out (f, &ntag) < 0
+            && feof (f),
+            "barrier_in group=%s is a protocol error", badgroup[i]);
+        ok (fake_finalize (f1) == 0, "rank 1 unaffected and finalized");
+        fclose (f0);
+        fclose (f1);
+        pmi_server_destroy (srv3);
+    }
 
     done_testing ();
     return 0;
