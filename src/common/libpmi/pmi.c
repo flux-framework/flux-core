@@ -32,6 +32,7 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <sys/types.h>
+#include <string.h>
 
 #include "pmi.h"
 #include "pmi_strerror.h"
@@ -200,6 +201,61 @@ int PMI_KVS_Commit (const char *kvsname)
 int PMI_Barrier (void)
 {
     return pmi_simple_client_barrier (pmi_global_ctx);
+}
+
+/* Format 'count' ranks as a comma-separated list.  Caller frees.
+ */
+static char *ranklist_encode (const int *ranks, int count)
+{
+    size_t len = 0;
+    char *s;
+    char *p;
+
+    for (int i = 0; i < count; i++)
+        len += snprintf (NULL, 0, "%d,", ranks[i]);
+    if (!(s = calloc (1, len + 1)))
+        return NULL;
+    p = s;
+    for (int i = 0; i < count; i++)
+        p += sprintf (p, "%s%d", i > 0 ? "," : "", ranks[i]);
+    return s;
+}
+
+int PMI_Barrier_group (const int *group, int count, const char *stringtag)
+{
+    int tag = pmi_simple_client_barrier_tag (stringtag);
+    char *ranklist = NULL;
+    const char *groupstr;
+    int result;
+
+    if (!pmi_global_ctx || !pmi_global_ctx->initialized)
+        return PMI_ERR_INIT;
+    /* Fail early (rather than with a protocol error) against a process
+     * manager that did not negotiate subversion 2.  This makes
+     * PMI_Barrier_group (PMI_GROUP_SELF, ...) usable as a support probe.
+     */
+    if (pmi_global_ctx->version != 1 || pmi_global_ctx->subversion < 2)
+        return PMI_FAIL;
+    if (group == PMI_GROUP_SELF)
+        return PMI_SUCCESS; // no communication required
+    if (group == PMI_GROUP_WORLD)
+        groupstr = "WORLD";
+    else if (group == PMI_GROUP_NODE)
+        groupstr = "NODE";
+    else {
+        if (count <= 0)
+            return PMI_ERR_INVALID_ARG;
+        for (int i = 0; i < count; i++) {
+            if (group[i] < 0)
+                return PMI_ERR_INVALID_ARG;
+        }
+        if (!(ranklist = ranklist_encode (group, count)))
+            return PMI_ERR_NOMEM;
+        groupstr = ranklist;
+    }
+    result = pmi_simple_client_barrier_group (pmi_global_ctx, groupstr, tag);
+    free (ranklist);
+    return result;
 }
 
 int PMI_Publish_name (const char *service_name, const char *port)
