@@ -105,6 +105,14 @@ static int op_barrier (flux_plugin_t *p,
     return 0;
 }
 
+static int op_barrier_group (flux_plugin_t *p,
+                             const char *topic,
+                             flux_plugin_arg_t *args,
+                             void *data)
+{
+    return 0;
+}
+
 static int op_abort (flux_plugin_t *p,
                      const char *topic,
                      flux_plugin_arg_t *args,
@@ -179,13 +187,14 @@ static int op_preinit (flux_plugin_t *p,
 }
 
 static const struct flux_plugin_handler optab[] = {
-    { "upmi.put",           op_put,         NULL },
-    { "upmi.get",           op_get,         NULL },
-    { "upmi.barrier",       op_barrier,     NULL },
-    { "upmi.abort",         op_abort,       NULL },
-    { "upmi.initialize",    op_initialize,  NULL },
-    { "upmi.finalize",      op_finalize,    NULL },
-    { "upmi.preinit",       op_preinit,     NULL },
+    { "upmi.put", op_put, NULL },
+    { "upmi.get", op_get, NULL },
+    { "upmi.barrier", op_barrier, NULL },
+    { "upmi.barrier_group", op_barrier_group, NULL },
+    { "upmi.abort", op_abort, NULL },
+    { "upmi.initialize", op_initialize, NULL },
+    { "upmi.finalize", op_finalize, NULL },
+    { "upmi.preinit", op_preinit, NULL },
     { 0 },
 };
 
