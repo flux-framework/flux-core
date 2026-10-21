@@ -90,7 +90,7 @@ test_expect_success 'flux-watch: --since takes negative offset' '
 '
 test_expect_success 'flux-watch: invalid --since fails' '
 	test_expect_code 2 flux watch --since=-1g 2>since.err &&
-	grep "invalid value" since.err
+	grep "invalid Flux standard duration" since.err
 '
 test_expect_success 'flux-watch: --since in future fails' '
 	test_expect_code 2 flux watch --since=+1d 2>since2.err &&

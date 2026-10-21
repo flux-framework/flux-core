@@ -126,18 +126,10 @@ def main():
         if not args.filter:
             args.all = True
         try:
-            since = flux.util.parse_datetime(args.since).timestamp()
+            since = flux.util.parse_timestamp(args.since)
         except ValueError as exc:
-            # Exactly eight digits is an ISO 8601 basic format date
-            # (YYYYMMDD), not a raw timestamp, so do not fall back to float()
-            if len(args.since) == 8 and args.since.isdecimal():
-                LOGGER.error(f"--since: {exc}")
-                sys.exit(2)
-            try:
-                since = float(args.since)
-            except ValueError:
-                LOGGER.error(f"--since: invalid value '{args.since}'")
-                sys.exit(2)
+            LOGGER.error(f"--since: {exc}")
+            sys.exit(2)
 
         # Ensure args.since is in the past
         if since > flux.util.parse_datetime("now").timestamp():
