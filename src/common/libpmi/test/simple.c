@@ -281,6 +281,27 @@ int main (int argc, char *argv[])
         "fake init for protocol 1.0 succeeds");
     ok (fake_init (cfp, 1, 1) == 0,
         "fake init for protocol 1.1 succeeds");
+    ok (fake_init (cfp, 1, 2) == 0,
+        "fake init for protocol 1.2 succeeds");
+
+    /* The server replies with its maximum subversion (2) even though the
+     * client requires only 1.1 (RFC 13 negotiation; enables PMI 1.2 group
+     * barriers for capable clients).
+     */
+    {
+        char ibuf[SIMPLE_MAX_PROTO_LINE];
+        unsigned int subvers = 0;
+        int reply_rc = -1;
+
+        if (fprintf (cfp, "cmd=init pmi_version=1 pmi_subversion=1\n") < 0
+            || fflush (cfp) < 0
+            || !fgets (ibuf, sizeof (ibuf), cfp))
+            BAIL_OUT ("init exchange failed");
+        keyval_parse_int (ibuf, "rc", &reply_rc);
+        keyval_parse_uint (ibuf, "pmi_subversion", &subvers);
+        ok (reply_rc == 0 && subvers == 2,
+            "server bids up to pmi_subversion=2");
+    }
 
     /* Client-side negotiation: the client offers 1.1 but MUST accept a
      * server that bids up to a higher subversion, and MUST reject an
