@@ -82,6 +82,10 @@
 #include "keyval.h"
 #include "pmi.h"
 
+/* Highest PMI-1 subversion this server supports (1.2 adds group barriers).
+ */
+#define PMI_SUBVERSION_MAX 2
+
 struct client {
     int rank;
     void *arg;          // user-supplied void *client argument
@@ -366,7 +370,7 @@ int pmi_simple_server_request (struct pmi_simple_server *pmi,
             goto proto;
         if (keyval_parse_uint (buf, "pmi_subversion", &pmi_subversion) < 0)
             goto proto;
-        if (pmi_version != 1 || pmi_subversion > 1) {
+        if (pmi_version != 1 || pmi_subversion > PMI_SUBVERSION_MAX) {
             if (pmi_version == 2 && cli->rank == 0) {
                 warn (pmi,
                       cli,
@@ -375,10 +379,14 @@ int pmi_simple_server_request (struct pmi_simple_server *pmi,
             snprintf (resp, sizeof (resp), "cmd=response_to_init rc=-1\n");
         }
         else {
+            /* Per RFC 13, reply with the server's maximum subversion,
+             * which may exceed the client's minimum.
+             */
             snprintf (resp,
                       sizeof (resp),
                       "cmd=response_to_init rc=0 "
-                      "pmi_version=1 pmi_subversion=1\n");
+                      "pmi_version=1 pmi_subversion=%d\n",
+                      PMI_SUBVERSION_MAX);
         }
     }
     /* maxes */
