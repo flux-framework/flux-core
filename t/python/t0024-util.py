@@ -27,6 +27,7 @@ from flux.util import (
     UtilDatetime,
     del_treedict,
     parse_datetime,
+    parse_timestamp,
     set_treedict,
 )
 from pycotap import TAPTestRunner
@@ -114,6 +115,44 @@ class TestParseDatetime(unittest.TestCase):
         self.assertEqual(self.parse("tomorrow"), ts(2021, 6, 11))
         self.assertEqual(self.parse("noon tomorrow"), ts(2021, 6, 11, 12))
         self.assertEqual(self.parse("last wed"), ts(2021, 6, 9))
+
+
+class TestParseTimestamp(unittest.TestCase):
+    @classmethod
+    def setUpClass(self):
+        self.now = datetime(2021, 6, 10, 8, 0, 0)
+        self.ts = self.now.timestamp()
+
+    def parse(self, string):
+        return parse_timestamp(string, self.now)
+
+    def test_datetime(self):
+        self.assertEqual(self.parse("now"), self.ts)
+        self.assertEqual(self.parse("-1h"), self.ts - 3600)
+        self.assertEqual(self.parse("2021-06-10 08:00:00"), self.ts)
+        self.assertEqual(self.parse("20210610"), ts(2021, 6, 10))
+
+    def test_timestamp(self):
+        self.assertEqual(self.parse("0"), 0.0)
+        self.assertEqual(self.parse("1623340800"), 1623340800.0)
+        self.assertEqual(self.parse("1623340800.5"), 1623340800.5)
+        self.assertEqual(self.parse("1e9"), 1e9)
+
+    def test_iso8601_basic_date_invalid(self):
+        # Exactly eight digits is never treated as a raw timestamp
+        with self.assertRaisesRegex(ValueError, "Invalid datetime"):
+            self.parse("20211301")  # month 13
+        with self.assertRaisesRegex(ValueError, "Invalid datetime"):
+            self.parse("20210229")  # not a leap year
+
+    def test_invalid(self):
+        # The original parse_datetime() error is raised
+        with self.assertRaisesRegex(ValueError, "Invalid datetime"):
+            self.parse("blursday")
+        with self.assertRaisesRegex(ValueError, "invalid Flux standard duration"):
+            self.parse("-1g")
+        with self.assertRaisesRegex(ValueError, "Invalid datetime"):
+            self.parse("")
 
 
 class TestUtilDatetime(unittest.TestCase):
