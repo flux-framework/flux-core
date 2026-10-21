@@ -1,25 +1,26 @@
-BasedOnStyle : google
-SpaceBeforeParens : Always
-IndentWidth : 4
-BreakBeforeBraces : Linux
-UseTab: Never
-AllowShortIfStatementsOnASingleLine : false
-ConstructorInitializerAllOnOneLineOrOnePerLine : true
-AllowShortFunctionsOnASingleLine : false
-AllowShortLoopsOnASingleLine : false
-BinPackParameters : false
-AllowAllParametersOfDeclarationOnNextLine : false
-AlignTrailingComments : true
-ColumnLimit : 88
-
-# do not put all arguments on one line unless it's the same line as the call
-PenaltyBreakBeforeFirstCallParameter : 10000000
-PenaltyReturnTypeOnItsOwnLine : 65000
-PenaltyBreakString : 10
-
-# These improve formatting results but require clang 3.6/7 or higher
-BreakBeforeBinaryOperators : NonAssignment
+BasedOnStyle: google
 AlignAfterOpenBracket: true
-BinPackArguments : false
-AlignOperands : true
-BreakBeforeTernaryOperators : true
+AlignConsecutiveMacros: Consecutive
+AlignOperands: Align
+AlignTrailingComments:
+  Kind: Always
+  OverEmptyLines: 0
+AllowAllParametersOfDeclarationOnNextLine: false
+AllowShortFunctionsOnASingleLine: Empty
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+BinPackArguments: false
+BinPackParameters: OnePerLine
+BreakBeforeBinaryOperators: NonAssignment
+BreakBeforeBraces: Linux
+BreakBeforeTernaryOperators: true
+ColumnLimit: 88
+IncludeBlocks: Preserve
+IndentWidth: 4
+PackConstructorInitializers: CurrentLine
+# do not put all arguments on one line unless it's the same line as the call
+PenaltyBreakBeforeFirstCallParameter: 10000000
+PointerAlignment: Right
+SpaceBeforeParens: Always
+SpacesBeforeTrailingComments: 1
+UseTab: Never
