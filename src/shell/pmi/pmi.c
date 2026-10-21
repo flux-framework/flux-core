@@ -66,9 +66,11 @@
 #include "src/common/libmissing/argz.h"
 #endif
 #include <flux/core.h>
+#include <flux/idset.h>
 #include <jansson.h>
 
 #include "src/common/libpmi/simple_server.h"
+#include "src/common/libutil/errno_safe.h"
 #include "ccan/str/str.h"
 
 #include "builtins.h"
@@ -184,9 +186,8 @@ static int put_dict (struct shell_pmi *pmi,
                          "local", local ? 1 : 0);
 }
 
-/* The jobdict exchange tag is the PMI barrier group string.  The legacy
- * whole-job barrier (no group) uses the reserved tag PMI_GLOBAL_TAG, which
- * maps back to a NULL group for the PMI server.
+/* The jobdict exchange tag is the PMI barrier group string, or
+ * PMI_GLOBAL_TAG for the legacy whole-job barrier (NULL group).
  */
 #define PMI_GLOBAL_TAG "global"
 
@@ -264,27 +265,89 @@ static int exchange_kvs_get (void *arg,
     return 0;
 }
 
+/* Map an explicit group's ranks (the part of 'group' before :tag) to
+ * the shells that host them.  Returns a new idset, or NULL on failure.
+ */
+static struct idset *group_shells (struct shell_pmi *pmi, const char *group)
+{
+    struct taskmap *map = pmi->shell->info->taskmap;
+    const char *colon;
+    char *prefix = NULL;
+    struct idset *members = NULL;
+    struct idset *shells = NULL;
+    unsigned int rank;
+
+    if (!(colon = strrchr (group, ':'))
+        || !(prefix = strndup (group, colon - group))
+        || !(members = idset_decode (prefix))
+        || !(shells = idset_create (0, IDSET_FLAG_AUTOGROW)))
+        goto error;
+    rank = idset_first (members);
+    while (rank != IDSET_INVALID_ID) {
+        int shell_rank = taskmap_nodeid (map, rank);
+        if (shell_rank < 0 || idset_set (shells, shell_rank) < 0)
+            goto error;
+        rank = idset_next (members, rank);
+    }
+    free (prefix);
+    idset_destroy (members);
+    return shells;
+error:
+    ERRNO_SAFE_WRAP (free, prefix);
+    idset_destroy (members);
+    idset_destroy (shells);
+    return NULL;
+}
+
 /* pmi_simple_ops->barrier_enter() signature.
  *
- * Run a jobdict exchange over all shells, keyed by the group string (the
- * tag), which completes via exchange_exit_cb().
+ * Run a jobdict exchange over the shells in the barrier group: all shells
+ * for the legacy barrier and WORLD, this shell for NODE, and the shells
+ * hosting the members for an explicit group.  The exchange is keyed by
+ * the group string and completes via exchange_exit_cb().
  */
 static int exchange_barrier_enter (void *arg, const char *group)
 {
     struct shell_pmi *pmi = arg;
     const char *tag = group ? group : PMI_GLOBAL_TAG;
+    struct idset *participants = NULL;
+    char *participants_str = NULL;
+    int rc = -1;
 
-    if (pmi->shell->info->shell_size == 1) {
-        pmi_simple_server_barrier_complete (pmi->server, group, 0);
-        return 0;
+    if (group && strncmp (group, "WORLD", 5) != 0) {
+        if (strncmp (group, "NODE", 4) == 0) {
+            if (!(participants = idset_create (0, IDSET_FLAG_AUTOGROW))
+                || idset_set (participants,
+                              pmi->shell->info->shell_rank) < 0) {
+                shell_warn ("NODE barrier: %s", flux_strerror (errno));
+                goto out;
+            }
+        }
+        else if (!(participants = group_shells (pmi, group))) {
+            shell_warn ("group barrier: cannot map members to shells: %s",
+                        flux_strerror (errno));
+            goto out;
+        }
+        if (!(participants_str = idset_encode (participants,
+                                               IDSET_FLAG_RANGE))) {
+            shell_warn ("group barrier: %s", flux_strerror (errno));
+            goto out;
+        }
     }
-    return jobdict_call (pmi,
-                         "jobdict.exchange",
-                         NULL,
-                         "{s:s s:s s:s}",
-                         "name", PMI_JOBDICT,
-                         "tag", tag,
-                         "exit_topic", PMI_EXCHANGE_EXIT_TOPIC);
+    if (jobdict_call (pmi,
+                      "jobdict.exchange",
+                      NULL,
+                      "{s:s s:s s:s? s:s}",
+                      "name", PMI_JOBDICT,
+                      "tag", tag,
+                      "participants", participants_str,
+                      "exit_topic", PMI_EXCHANGE_EXIT_TOPIC) < 0)
+        goto out;
+    rc = 0;
+out:
+    free (participants_str);
+    idset_destroy (participants);
+    return rc; // 0 on success, -1 (PMI_FAIL) on error
 }
 
 /* pmi_simple_ops->kvs_put() signature */
