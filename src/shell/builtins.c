@@ -34,6 +34,7 @@ extern struct shell_builtin builtin_tmpdir;
 extern struct shell_builtin builtin_files;
 extern struct shell_builtin builtin_stage_in;
 extern struct shell_builtin builtin_log_eventlog;
+extern struct shell_builtin builtin_jobdict;
 extern struct shell_builtin builtin_pmi;
 extern struct shell_builtin builtin_input_service;
 extern struct shell_builtin builtin_file_input;
@@ -66,6 +67,7 @@ static struct shell_builtin * builtins [] = {
     &builtin_files,
     &builtin_stage_in,
     &builtin_log_eventlog,
+    &builtin_jobdict,
     &builtin_pmi,
     &builtin_input_service,
     &builtin_file_input,
