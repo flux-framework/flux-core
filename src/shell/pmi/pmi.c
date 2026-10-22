@@ -191,6 +191,7 @@ static int exchange_barrier_enter (void *arg)
     }
     if (exchange_enter (pmi->exchange,
                         PMI_GLOBAL_TAG,
+                        NULL, // all shells participate
                         pmi->pending,
                         exchange_cb,
                         pmi) < 0) {

@@ -70,6 +70,8 @@ flux_shell_SOURCES = \
 	pmi/pmi.c \
 	jobdict/exchange.c \
 	jobdict/exchange.h \
+	jobdict/exchange_tree.c \
+	jobdict/exchange_tree.h \
 	input/util.h \
 	input/util.c \
 	input/service.c \
@@ -158,6 +160,7 @@ TESTS = \
 	test_jobspec.t \
 	test_plugstack.t \
 	test_mustache.t \
+	jobdict/test_exchange_tree.t \
 	mpir/test_rangelist.t \
 	mpir/test_nodelist.t \
 	mpir/test_proctable.t
@@ -249,6 +252,18 @@ test_mustache_t_LDADD = \
 	$(builddir)/libshell.la \
 	$(test_ldadd)
 test_mustache_t_LDFLAGS = \
+	$(test_ldflags)
+
+
+jobdict_test_exchange_tree_t_SOURCES = \
+	jobdict/exchange_tree.c \
+	jobdict/exchange_tree.h \
+	jobdict/test/exchange_tree.c
+jobdict_test_exchange_tree_t_CPPFLAGS = \
+	$(test_cppflags)
+jobdict_test_exchange_tree_t_LDADD = \
+	$(test_ldadd)
+jobdict_test_exchange_tree_t_LDFLAGS = \
 	$(test_ldflags)
 
 

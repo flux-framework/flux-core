@@ -13,6 +13,7 @@
 
 #include <stdbool.h>
 #include <jansson.h>
+#include <flux/idset.h>
 #include <flux/shell.h>
 
 struct exchange;
@@ -35,12 +36,16 @@ struct exchange *exchange_create (flux_shell_t *shell,
 void exchange_destroy (struct exchange *xcg);
 
 /* Enter the exchange identified by 'tag' with this shell's local
- * 'dict' (a json object, or NULL to contribute nothing).  'exit_cb'
- * is invoked once the aggregate result is available on this shell.  Distinct
- * tags identify independent exchanges that may be in flight concurrently.
+ * 'dict' (a json object, or NULL to contribute nothing).
+ * 'participants' is the set of shell ranks taking part, or NULL for all
+ * shells; the k-ary tree is built over the sorted participant set.  This shell
+ * MUST be a member of 'participants'.  'exit_cb' is invoked once the aggregate
+ * result is available on this shell.  Distinct tags identify independent
+ * exchanges that may be in flight concurrently.
  */
 int exchange_enter (struct exchange *xcg,
                     const char *tag,
+                    const struct idset *participants,
                     json_t *dict,
                     exchange_exit_f exit_cb,
                     void *arg);
