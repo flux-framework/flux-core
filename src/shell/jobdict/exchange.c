@@ -151,6 +151,21 @@ static struct exchange_session *session_lookup (struct exchange *xcg,
     return ses;
 }
 
+/* Fail any children still awaiting a response so the error propagates
+ * down the tree rather than leaving them blocked.
+ */
+static void session_fail_children (struct exchange_session *ses)
+{
+    struct exchange *xcg = ses->xcg;
+    const flux_msg_t *msg;
+
+    while ((msg = zlist_pop (ses->requests))) {
+        if (flux_respond_error (xcg->h, msg, EIO, "exchange failed") < 0)
+            xcg_warn (xcg, "error responding to request");
+        flux_msg_decref (msg);
+    }
+}
+
 static void session_process (struct exchange_session *ses)
 {
     struct exchange *xcg = ses->xcg;
@@ -211,14 +226,7 @@ static void session_process (struct exchange_session *ses)
         flux_msg_decref (msg);
     }
 done:
-    /* Fail any children still awaiting a response so the error propagates
-     * down the tree rather than leaving them blocked.
-     */
-    while ((msg = zlist_pop (ses->requests))) {
-        if (flux_respond_error (xcg->h, msg, EIO, "exchange failed") < 0)
-            xcg_warn (xcg, "error responding to request");
-        flux_msg_decref (msg);
-    }
+    session_fail_children (ses);
     /* The exit callback runs while the session is still in the table so it
      * may read the result with exchange_get_result(tag); the session is
      * removed (and freed) once it returns.
@@ -339,6 +347,7 @@ int exchange_enter (struct exchange *xcg,
     struct exchange_tree tree;
     int *subset;
     int n;
+    int saved_errno;
 
     if (!xcg || !tag || !exit_cb) {
         errno = EINVAL;
@@ -369,7 +378,11 @@ int exchange_enter (struct exchange *xcg,
                   tag,
                   tree.nchildren);
         errno = EPROTO;
-        return -1;
+        goto error;
+    }
+    if (dict && json_object_update (ses->data_in, dict) < 0) {
+        errno = ENOMEM;
+        goto error;
     }
     ses->index = tree.index;
     ses->parent = tree.parent;
@@ -377,12 +390,17 @@ int exchange_enter (struct exchange *xcg,
     ses->exit_cb = exit_cb;
     ses->exit_cb_arg = arg;
     ses->local = 1;
-    if (dict && json_object_update (ses->data_in, dict) < 0) {
-        errno = ENOMEM;
-        return -1;
-    }
     session_process (ses);
     return 0;
+error:
+    /* The session cannot proceed, so fail any children already queued on it
+     * and discard it rather than leaving it half-initialized in the table.
+     */
+    saved_errno = errno;
+    session_fail_children (ses);
+    zhashx_delete (xcg->sessions, tag);
+    errno = saved_errno;
+    return -1;
 }
 
 struct exchange *exchange_create (flux_shell_t *shell,
