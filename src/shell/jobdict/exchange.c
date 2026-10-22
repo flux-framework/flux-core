@@ -11,10 +11,11 @@
 /* exchange.c - sync a dict across shells (jobdict's gather+broadcast engine)
  *
  * Each shell calls exchange_enter() with a json_t dictionary and an exit
- * callback.  The dictionaries are gathered to shell 0 over a k-ary tree,
- * merged at each level, then the aggregate dictionary is broadcast back
- * down the tree.  When the result is available on a shell, its exit callback
- * is invoked and may read the result with exchange_get_result().
+ * callback.  The dictionaries are gathered to the lowest participant over a
+ * k-ary tree, merged at each level, then the aggregate dictionary is
+ * broadcast back down the tree.  When the result is available on a shell,
+ * its exit callback is invoked and may read the result with
+ * exchange_get_result().
  *
  * A k-ary tree is computed across shell ranks.  Gather aggregates at each tree
  * level, reducing the number of messages that shell 0 must handle; broadcast
@@ -50,6 +51,7 @@
                     __VA_ARGS__)
 
 struct exchange_session {
+    char *tag;                  // session key (identifies concurrent sessions)
     json_t *data_in;            // gathered dict from self + subtree
     json_t *result;             // aggregate dict (broadcast down the tree)
     exchange_exit_f exit_cb;    // callback for exchange completion
@@ -72,7 +74,7 @@ struct exchange {
     uint32_t parent_rank;
     int child_count;
 
-    struct exchange_session *session;
+    zhashx_t *sessions;         // struct exchange_session hashed by tag
 };
 
 static void response_completion (flux_future_t *f, void *arg);
@@ -90,27 +92,57 @@ static void session_destroy (struct exchange_session *ses)
         flux_future_destroy (ses->f);
         json_decref (ses->data_in);
         json_decref (ses->result);
+        free (ses->tag);
         free (ses);
         errno = saved_errno;
     }
 }
 
-static struct exchange_session *session_create (struct exchange *xcg)
+/* zhashx_destructor_fn footprint */
+static void session_destructor (void **item)
+{
+    if (item) {
+        session_destroy (*item);
+        *item = NULL;
+    }
+}
+
+static struct exchange_session *session_create (struct exchange *xcg,
+                                                  const char *tag)
 {
     struct exchange_session *ses;
 
     if (!(ses = calloc (1, sizeof (*ses))))
         return NULL;
     ses->xcg = xcg;
+    if (!(ses->tag = strdup (tag)))
+        goto error;
     if (!(ses->requests = zlist_new ()))
         goto nomem;
     if (!(ses->data_in = json_object ()))
         goto nomem;
+    if (zhashx_insert (xcg->sessions, tag, ses) < 0) {
+        errno = EEXIST;
+        goto error;
+    }
     return ses;
 nomem:
     errno = ENOMEM;
+error:
     session_destroy (ses);
     return NULL;
+}
+
+/* Look up an existing session by tag, or create one on demand.
+ */
+static struct exchange_session *session_lookup (struct exchange *xcg,
+                                                  const char *tag)
+{
+    struct exchange_session *ses;
+
+    if (!(ses = zhashx_lookup (xcg->sessions, tag)))
+        ses = session_create (xcg, tag);
+    return ses;
 }
 
 static void session_process (struct exchange_session *ses)
@@ -135,13 +167,14 @@ static void session_process (struct exchange_session *ses)
                                        EXCHANGE_SERVICE,
                                        xcg->parent_rank,
                                        0,
-                                       "{s:s s:O}",
+                                       "{s:s s:s s:O}",
                                        "name", xcg->name,
+                                       "tag", ses->tag,
                                        "data", ses->data_in))
                 || flux_future_then (f,
                                      -1,
                                      response_completion,
-                                     xcg) < 0) {
+                                     ses) < 0) {
             flux_future_destroy (f);
             xcg_warn (xcg, "error sending request");
             ses->has_error = 1;
@@ -172,18 +205,20 @@ static void session_process (struct exchange_session *ses)
         flux_msg_decref (msg);
     }
 done:
-    ses->exit_cb (xcg, ses->exit_cb_arg);
-    session_destroy (ses);
-    xcg->session = NULL;
+    /* The exit callback runs while the session is still in the table so it
+     * may read the result with exchange_get_result(tag); the session is
+     * removed (and freed) once it returns.
+     */
+    ses->exit_cb (xcg, ses->tag, ses->exit_cb_arg);
+    zhashx_delete (xcg->sessions, ses->tag);
 }
 
 /* Parent shell has responded to our gather request with the aggregate result.
  */
 static void response_completion (flux_future_t *f, void *arg)
 {
-    struct exchange *xcg = arg;
-    struct exchange_session *ses = xcg->session;
-
+    struct exchange_session *ses = arg;
+    struct exchange *xcg = ses->xcg;
     json_t *result;
 
     /* Unpack a borrowed reference and incref on success only, so that a
@@ -202,34 +237,34 @@ static void response_completion (flux_future_t *f, void *arg)
  */
 void exchange_request (struct exchange *xcg, const flux_msg_t *msg)
 {
+    struct exchange_session *ses;
+    const char *tag;
     json_t *data;
     const char *errstr = NULL;
 
-    if (flux_request_unpack (msg, NULL, "{s:o}", "data", &data) < 0)
+    if (flux_request_unpack (msg, NULL, "{s:s s:o}", "tag", &tag, "data", &data)
+        < 0)
         goto error;
-    if (!xcg->session) {
-        if (!(xcg->session = session_create (xcg)))
-            goto error;
-    }
-    if (zlist_size (xcg->session->requests) == xcg->child_count) {
+    if (!(ses = session_lookup (xcg, tag)))
+        goto error;
+    if (zlist_size (ses->requests) == xcg->child_count) {
         errstr = "exchange received too many child requests";
         errno = EINPROGRESS;
         goto error;
     }
     if (!json_is_object (data)
-        || json_object_update (xcg->session->data_in, data) < 0) {
+        || json_object_update (ses->data_in, data) < 0) {
         errstr = "exchange request failed to merge dict";
         errno = EPROTO;
         goto error;
     }
-    if (zlist_append (xcg->session->requests,
-                      (void *)flux_msg_incref (msg)) < 0) {
+    if (zlist_append (ses->requests, (void *)flux_msg_incref (msg)) < 0) {
         flux_msg_decref (msg);
         errstr = "exchange request failed to save pending request";
         errno = ENOMEM;
         goto error;
     }
-    session_process (xcg->session);
+    session_process (ses);
     return;
 error:
     if (flux_respond_error (xcg->h, msg, errno, errstr) < 0)
@@ -239,30 +274,31 @@ error:
 }
 
 int exchange_enter (struct exchange *xcg,
+                    const char *tag,
                     json_t *dict,
                     exchange_exit_f exit_cb,
                     void *arg)
 {
-    if (!xcg || !exit_cb) {
+    struct exchange_session *ses;
+
+    if (!xcg || !tag || !exit_cb) {
         errno = EINVAL;
         return -1;
     }
-    if (!xcg->session) {
-        if (!(xcg->session = session_create (xcg)))
-            return -1;
-    }
-    if (xcg->session->local) {
+    if (!(ses = session_lookup (xcg, tag)))
+        return -1;
+    if (ses->local) {
         errno = EINPROGRESS;
         return -1;
     }
-    xcg->session->exit_cb = exit_cb;
-    xcg->session->exit_cb_arg = arg;
-    xcg->session->local = 1;
-    if (dict && json_object_update (xcg->session->data_in, dict) < 0) {
+    ses->exit_cb = exit_cb;
+    ses->exit_cb_arg = arg;
+    ses->local = 1;
+    if (dict && json_object_update (ses->data_in, dict) < 0) {
         errno = ENOMEM;
         return -1;
     }
-    session_process (xcg->session);
+    session_process (ses);
     return 0;
 }
 
@@ -298,6 +334,11 @@ struct exchange *exchange_create (flux_shell_t *shell,
         goto error;
     if (!(xcg->name = strdup (name)))
         goto error;
+    if (!(xcg->sessions = zhashx_new ())) {
+        errno = ENOMEM;
+        goto error;
+    }
+    zhashx_set_destructor (xcg->sessions, session_destructor);
     if (flux_shell_info_unpack (shell,
                                 "{s:i s:i}",
                                 "size", &xcg->size,
@@ -326,21 +367,23 @@ void exchange_destroy (struct exchange *xcg)
 {
     if (xcg) {
         int saved_errno = errno;
-        session_destroy (xcg->session);
+        zhashx_destroy (&xcg->sessions);
         free (xcg->name);
         free (xcg);
         errno = saved_errno;
     }
 }
 
-bool exchange_has_error (struct exchange *xcg)
+bool exchange_has_error (struct exchange *xcg, const char *tag)
 {
-    return xcg->session->has_error ? true : false;
+    struct exchange_session *ses = zhashx_lookup (xcg->sessions, tag);
+    return (ses && ses->has_error) ? true : false;
 }
 
-json_t *exchange_get_result (struct exchange *xcg)
+json_t *exchange_get_result (struct exchange *xcg, const char *tag)
 {
-    return xcg->session->result;
+    struct exchange_session *ses = zhashx_lookup (xcg->sessions, tag);
+    return ses ? ses->result : NULL;
 }
 
 /* vi: ts=4 sw=4 expandtab

@@ -138,16 +138,19 @@ nomem:
  ** This is used if pmi.kvs=exchange option is provided.
  **/
 
-static void exchange_cb (struct exchange *xcg, void *arg)
+/* Fixed exchange tag for the global (all-shells) PMI KVS exchange. */
+#define PMI_GLOBAL_TAG "global"
+
+static void exchange_cb (struct exchange *xcg, const char *tag, void *arg)
 {
     struct shell_pmi *pmi = arg;
     int rc = -1;
 
-    if (exchange_has_error (xcg)) {
+    if (exchange_has_error (xcg, tag)) {
         shell_warn ("exchange failed");
         goto done;
     }
-    if (json_object_update (pmi->global, exchange_get_result (xcg)) < 0) {
+    if (json_object_update (pmi->global, exchange_get_result (xcg, tag)) < 0) {
         shell_warn ("failed to update dict after successful exchange");
         goto done;
     }
@@ -200,6 +203,7 @@ static int exchange_barrier_enter (void *arg)
         return 0;
     }
     if (exchange_enter (pmi->exchange,
+                        PMI_GLOBAL_TAG,
                         pmi->pending,
                         exchange_cb,
                         pmi) < 0) {
