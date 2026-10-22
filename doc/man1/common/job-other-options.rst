@@ -130,11 +130,6 @@
    emit a line of output including relevant options for each job which
    would have been submitted.
 
-.. option:: --debug
-
-   Enable job debug events, primarily for debugging Flux itself.
-   The specific effects of this option may change in the future.
-
 These commands use POSIX-style option parsing: option processing stops at
 the first non-option argument.  COMMAND (or SCRIPT for
 :man1:`flux-batch`) and all following arguments are passed to the job
