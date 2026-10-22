@@ -1271,3 +1271,5 @@ fJOBID
 proplist
 ptr
 StandardInputFileDescriptorName
+jobdict
+fluxkeys
