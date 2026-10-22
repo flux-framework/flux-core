@@ -121,11 +121,15 @@ static int topo_reduce_finalize (struct topo *topo)
     }
     if (topo->ctx->rank == 0) {
         if (!inventory_get (topo->ctx->inventory)) {
+            flux_error_t error;
             if (inventory_put (topo->ctx->inventory,
                                resobj,
-                               "dynamic-discovery") < 0) {
-                flux_log_error (topo->ctx->h,
-                                "error setting reduced resource object");
+                               "dynamic-discovery",
+                               &error) < 0) {
+                flux_log (topo->ctx->h,
+                          LOG_ERR,
+                          "error setting reduced resource object: %s",
+                          error.text);
                 goto error;
             }
         }

@@ -34,8 +34,14 @@ const char *inventory_get_method (struct inventory *inv);
  * Caller shall not modify R after calling this function.
  * This triggers writing of resource.R to the KVS, and posting of
  * 'resource-define' to resource.eventlog.  The KVS commits are asynchronous.
+ *
+ * On error, a textual error string will be returned in errp, so that a
+ * caller responding to a request can forward it to the client.
  */
-int inventory_put (struct inventory *inv, json_t *R, const char *method);
+int inventory_put (struct inventory *inv,
+                   json_t *R,
+                   const char *method,
+                   flux_error_t *errp);
 
 /* Return a set of ranks for a string of "targets". The 'targets' argument
  * may be an RFC22 encoded idset or RFC29 hostlist. If an idset, the

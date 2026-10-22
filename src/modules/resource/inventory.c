@@ -204,17 +204,20 @@ out:
 /* (rank 0) Commit resource.R to the KVS, then upon completion,
  * post resource-define event to resource.eventlog.
  */
-int inventory_put (struct inventory *inv, json_t *R, const char *method)
-
+int inventory_put (struct inventory *inv,
+                   json_t *R,
+                   const char *method,
+                   flux_error_t *errp)
 {
     char *cpy;
-    flux_error_t error;
 
     if (inv->ctx->rank != 0) {
+        errprintf (errp, "resource inventory may only be set on rank 0");
         errno = EINVAL;
         return -1;
     }
     if (inv->R) {
+        errprintf (errp, "resource inventory is already set");
         errno = EEXIST;
         return -1;
     }
@@ -245,26 +248,31 @@ int inventory_put (struct inventory *inv, json_t *R, const char *method)
      * thin, sharing all of R but the one key the derivation modifies.
      */
     inv->R_stored = json_incref (R);
-    if (!(inv->R = queue_membership_copy (R)))
+    if (!(inv->R = queue_membership_copy (R))) {
+        errprintf (errp, "error copying R: %s", strerror (errno));
         goto error;
+    }
     if (queue_membership_apply (inv->R,
                                 flux_get_conf (inv->ctx->h),
-                                &error) < 0) {
-        flux_log (inv->ctx->h, LOG_ERR, "%s", error.text);
+                                errp) < 0) {
         errno = EINVAL;
         goto error;
     }
     if (inv->saved_expiration != 0.
-        && inventory_update_expiration (inv, inv->saved_expiration))
+        && inventory_update_expiration (inv, inv->saved_expiration)) {
+        errprintf (errp, "error updating expiration in R");
         goto error;
-    if (!(inv->put_f = inventory_put_R (inv)))
+    }
+    if (!(inv->put_f = inventory_put_R (inv))
+        || flux_future_then (inv->put_f,
+                             -1,
+                             inventory_put_continuation,
+                             inv) < 0
+        || flux_future_aux_set (inv->put_f, "method", (void *)method, NULL) < 0
+        || !(cpy = strdup (method))) {
+        errprintf (errp, "error committing R to the KVS: %s", strerror (errno));
         goto error;
-    if (flux_future_then (inv->put_f, -1, inventory_put_continuation, inv) < 0)
-        goto error;
-    if (flux_future_aux_set (inv->put_f, "method", (void *)method, NULL) < 0)
-        goto error;
-    if (!(cpy = strdup (method)))
-        goto error;
+    }
     inv->method = cpy;
     return 0;
 error:
@@ -600,8 +608,13 @@ static int lookup_R_fallback (struct inventory *inv, flux_jobid_t id)
      *  i.e. R != NULL. (if conversion failed, fall-through to dynamic
      *  discovery will call inventory_put() later).
      */
-    if (R && inventory_put (inv, R, "job-info") < 0)
-        goto done;
+    if (R) {
+        flux_error_t error;
+        if (inventory_put (inv, R, "job-info", &error) < 0) {
+            flux_log (h, LOG_ERR, "%s", error.text);
+            goto done;
+        }
+    }
     rc = 0;
 done:
     /*  Parent handle is not used again in fallback case:
@@ -729,8 +742,11 @@ static int start_resource_watch (struct inventory *inv,
      * we will fall through to dynamic discovery.
      */
     if (R && !config->rediscover) {
-        if (inventory_put (inv, R, "job-info") < 0)
+        flux_error_t error;
+        if (inventory_put (inv, R, "job-info", &error) < 0) {
+            flux_log (h, LOG_ERR, "%s", error.text);
             goto done;
+        }
     }
     rc = 0;
 done:
@@ -751,6 +767,7 @@ static int get_from_kvs (struct inventory *inv, const char *key)
 {
     flux_future_t *f;
     json_t *o;
+    flux_error_t error;
     int rc = -1;
 
     if (!(f = flux_kvs_lookup (inv->ctx->h, NULL, 0, key)))
@@ -760,8 +777,10 @@ static int get_from_kvs (struct inventory *inv, const char *key)
             rc = 0;
         goto done;
     }
-    if (inventory_put (inv, o, "kvs") < 0)
+    if (inventory_put (inv, o, "kvs", &error) < 0) {
+        flux_log (inv->ctx->h, LOG_ERR, "%s", error.text);
         goto done;
+    }
     rc = 0;
 done:
     flux_future_destroy (f);
@@ -993,8 +1012,10 @@ static void resource_reload (flux_t *h,
         free (inv->method);
         inv->method = NULL;
     }
-    if (inventory_put (inv, resobj, "reload") < 0)
+    if (inventory_put (inv, resobj, "reload", &error) < 0) {
+        errstr = error.text;
         goto error;
+    }
     if (inventory_put_finalize (inv) < 0)
         goto error;
     if (flux_respond (h, msg, NULL) < 0)
@@ -1089,8 +1110,11 @@ struct inventory *inventory_create (struct resource_ctx *ctx,
     if (config->R && convert_R_conf (ctx->h, config->R, &R) < 0)
         goto error;
     if (ctx->rank == 0) {
-        if (R && inventory_put (inv, R, "configuration") < 0)
+        flux_error_t error;
+        if (R && inventory_put (inv, R, "configuration", &error) < 0) {
+            flux_log (ctx->h, LOG_ERR, "%s", error.text);
             goto error;
+        }
         if (!inv->R && get_from_kvs (inv, "resource.R") < 0)
             goto error;
         if (!inv->R && start_resource_watch (inv, config) < 0)
