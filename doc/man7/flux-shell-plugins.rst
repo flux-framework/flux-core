@@ -1080,6 +1080,71 @@ running jobs.
 to gather parallel debugger information on demand. When the leader receives
 a request, it collects data from all follower shells before responding.
 
+Job Dictionaries
+----------------
+
+The builtin jobdict plugin provides ephemeral key-value dictionaries
+shared by all shells of a job. Keys put on one shell become visible on
+other shells after an *exchange* in which both shells participate. Process
+managers (such as the builtin PMI-1 plugin and the flux-pmix plugin)
+implement their bootstrap key exchange on a job dictionary, and other
+plugins may use one to exchange small amounts of data among shells.
+
+A job dictionary is driven entirely through the plugin stack (see
+:man3:`flux_shell_plugstack_call`), so plugins outside flux-core may use it
+without any additional C interface. Each operation takes a JSON object of
+input arguments and on failure sets an *errmsg* string in the output
+arguments. Note that :man3:`flux_shell_plugstack_call` returns success when
+no plugin handles a topic, so jobdict.create and jobdict.exchange also set
+*name* in the output arguments on success; its absence means the jobdict
+plugin is not loaded.
+
+**jobdict.create** (name:s, k?:i, reach?:[s...])
+  Create a dictionary. The name must be unique within the shell and must
+  not contain a period. The optional k is the exchange tree
+  fanout (default 2). The optional reach is an array of names of other
+  dictionaries whose keys may be read through this one (see jobdict.get).
+
+**jobdict.put** (name:s, key:s, value:o, local?:b)
+  Store any JSON value under key. The key is exchanged at the next
+  exchange unless local is true, in which case it is visible only on this
+  shell. A key of the form OTHER.SUBKEY, where OTHER is in this
+  dictionary's reach list, is read-only and the put fails.
+
+**jobdict.get** (name:s, key:s) returns (value:o)
+  Look up key in the named dictionary. If the key has the form
+  OTHER.SUBKEY, where OTHER is in this dictionary's reach list, look up
+  SUBKEY in dictionary OTHER instead. If the key is not found, the call
+  succeeds with no value in the output arguments.
+
+**jobdict.exchange** (name:s, tag:s, participants?:s, exit_topic:s)
+  Exchange keys put since the last exchange among the participants, an
+  RFC 22 idset of shell ranks (default all shells). The calling shell must
+  be a participant, and every participant must be a valid shell rank. The
+  tag distinguishes concurrent exchanges on the same dictionary. When the
+  exchange completes on this shell, the exit topic is called through the
+  plugin stack with input arguments (name:s, tag:s, result:o) on success,
+  where result holds the keys exchanged, or (name:s, tag:s, errmsg:s) on
+  failure. Because the exchange sends RPCs to other shells, it must not be
+  called before **shell.post-init**, which follows the init barrier that
+  guarantees all shell services are registered.
+
+Keys exchanged among all shells are then visible on every shell. Keys
+exchanged among a subset of shells are visible within that subset, and are
+carried forward to the next exchange among all shells so that they
+eventually become visible everywhere. This matches the barrier semantics of
+RFC 13.
+
+The builtin fluxkeys plugin creates a job dictionary named *flux* at
+**shell.init** and populates it with local keys that a Flux instance
+launched as the job obtains from its parent: *taskmap* (the RFC 34
+taskmap), *instance-level*, *tbon-interface-hint*, and
+*constrained-resources*. A dictionary created with *flux* in its reach
+list resolves a get of *flux.instance-level* to this value, so process
+manager plugins pass these keys through to their clients with no further
+plumbing. Builtin plugins run
+before plugins loaded from the initrc, so the keys are available to other
+plugins from their own **shell.init** callback onward.
 
 Example: Environment Variable Plugin
 -------------------------------------
