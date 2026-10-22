@@ -90,11 +90,16 @@ test_expect_success 'flux-watch: --since takes negative offset' '
 '
 test_expect_success 'flux-watch: invalid --since fails' '
 	test_expect_code 2 flux watch --since=-1g 2>since.err &&
-	grep "invalid value" since.err
+	grep "invalid Flux standard duration" since.err
 '
 test_expect_success 'flux-watch: --since in future fails' '
 	test_expect_code 2 flux watch --since=+1d 2>since2.err &&
 	grep "appears to be in the future" since2.err
+'
+# An invalid 8 digit date must not fall back to a raw timestamp
+test_expect_success 'flux-watch: invalid ISO 8601 basic date --since fails' '
+	test_expect_code 2 flux watch --since=20211301 2>since3.err &&
+	grep "Invalid datetime" since3.err
 '
 test_expect_success 'flux-watch: --count works' '
 	test_might_fail flux watch -v --all --count=1 >count.out 2>&1 &&

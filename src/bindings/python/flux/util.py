@@ -502,6 +502,39 @@ def parse_datetime(string, now=None):
     return datetime(*time_struct[:6]).astimezone()
 
 
+def parse_timestamp(string, now=None):
+    """Parse a datetime string or raw timestamp to seconds since the epoch
+
+    The string is first parsed with parse_datetime(). If that fails, the
+    string is then parsed as a floating point number of seconds since
+    the epoch.
+
+    Exactly eight digits is always treated as an ISO 8601 basic format
+    calendar date (YYYYMMDD) and never as a raw timestamp, so an invalid
+    date such as "20211301" is an error.
+
+    Args:
+        string: The string to parse as datetime, offset, or timestamp
+        now: Optional: datetime object to use as starttime of any offset
+
+    Returns:
+        A float number of seconds since the epoch
+
+    Raises:
+        ValueError: Input string could not be converted to a timestamp
+
+    """
+    try:
+        return parse_datetime(string, now).timestamp()
+    except ValueError as exc:
+        if len(string) == 8 and string.isdecimal():
+            raise
+        try:
+            return float(string)
+        except ValueError:
+            raise exc from None
+
+
 class UtilDatetime(datetime):
     """
     Subclass of datetime but with a __format__ method that supports

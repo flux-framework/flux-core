@@ -262,6 +262,11 @@ test_expect_success 'flux-jobs --since option must specify a time in the past' '
 	test_must_fail flux jobs --since=+1m
 '
 
+test_expect_success 'flux-jobs --since fails on invalid value' '
+	test_must_fail flux jobs --since=-1g 2>since_bad.err &&
+	grep "invalid Flux standard duration" since_bad.err
+'
+
 # Print the t_inactive timestamp for the 3rd most recently inactive job
 # Then ensure this timestamp limits output to 2 jobs
 test_expect_success 'flux-jobs --since works with timestamp' '
@@ -303,6 +308,14 @@ test_expect_success 'flux-jobs --since works with ISO 8601 basic date of today' 
 # not as a seconds-since-epoch timestamp (which would be in the past)
 test_expect_success 'flux-jobs --since ISO 8601 basic date in future fails' '
 	test_must_fail flux jobs --since=29991231
+'
+
+# An invalid 8 digit date must not fall back to a raw timestamp
+test_expect_success 'flux-jobs --since invalid ISO 8601 basic date fails' '
+	test_must_fail flux jobs --since=20211301 2>since_invalid.err &&
+	grep "Invalid datetime" since_invalid.err &&
+	test_must_fail flux jobs --since=20210229 2>since_invalid2.err &&
+	grep "Invalid datetime" since_invalid2.err
 '
 
 # -a ignored if --filter specified
