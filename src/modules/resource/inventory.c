@@ -946,6 +946,9 @@ static void resource_reload (flux_t *h,
     int force_flag;
     json_t *resobj = NULL;
     json_t *xml = NULL;
+    json_t *old_R = NULL;
+    json_t *old_R_stored = NULL;
+    char *old_method = NULL;
 
     if (flux_request_unpack (msg,
                              NULL,
@@ -1004,25 +1007,41 @@ static void resource_reload (flux_t *h,
         errstr = "resources are busy (unload scheduler?)";
         goto error;
     }
-    if (inv->R) {
-        json_decref (inv->R);
-        inv->R = NULL;
-        json_decref (inv->R_stored);
-        inv->R_stored = NULL;
-        free (inv->method);
-        inv->method = NULL;
-    }
+    /* Set the new inventory aside from the old one rather than destroying
+     * the old one up front, so that a failure below can leave the previous
+     * resource set resident.  inventory_put() only refuses when inv->R is
+     * set, so the fields are cleared, not freed.
+     */
+    old_R = inv->R;
+    old_R_stored = inv->R_stored;
+    old_method = inv->method;
+    inv->R = NULL;
+    inv->R_stored = NULL;
+    inv->method = NULL;
+
     if (inventory_put (inv, resobj, "reload", &error) < 0) {
         errstr = error.text;
-        goto error;
+        goto restore;
     }
-    if (inventory_put_finalize (inv) < 0)
-        goto error;
+    if (inventory_put_finalize (inv) < 0) {
+        errstr = "error committing reloaded R";
+        goto restore;
+    }
+    json_decref (old_R);
+    json_decref (old_R_stored);
+    free (old_method);
     if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "error responding to resource.reload request");
     json_decref (resobj);
     json_decref (xml);
     return;
+restore:
+    /* inventory_put() leaves no partial state behind, so the previous
+     * inventory can simply be moved back into place.
+     */
+    inv->R = old_R;
+    inv->R_stored = old_R_stored;
+    inv->method = old_method;
 error:
     if (flux_respond_error (h, msg, errno, errstr) < 0)
         flux_log_error (h, "error responding to resource.reload request");
