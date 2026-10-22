@@ -79,12 +79,14 @@ struct shell_pmi {
     flux_shell_t *shell;
     struct pmi_simple_server *server;
     bool abort;     // an abort exception has been raised
+    bool nomap;     // pmi-simple.nomap: omit task mapping keys
 };
 
 /* The PMI KVS is a jobdict named after the plugin.  Its puts, gets, and
  * barriers are delegated to the builtin jobdict plugin through the plugin
  * stack (a PMI barrier is a jobdict exchange), and exchange completion is
- * delivered to the topic below.
+ * delivered to the topic below.  The "flux" jobdict is reachable through
+ * it, so a get of flux.KEY is served from there.
  */
 #define PMI_JOBDICT FLUX_SHELL_PLUGIN_NAME
 #define PMI_EXCHANGE_EXIT_TOPIC "pmi-simple.exchange-exit"
@@ -223,6 +225,13 @@ static int exchange_kvs_get (void *arg,
     flux_plugin_arg_t *args;
     const char *val = NULL;
 
+    /* pmi-simple.nomap omits the task mapping keys, which a Flux client
+     * uses to set broker.mapping.  PMI_process_mapping is simply never
+     * put; flux.taskmap is published by the fluxkeys plugin and must be
+     * hidden here.
+     */
+    if (pmi->nomap && streq (key, "flux.taskmap"))
+        return -1; // PMI_ERR_INVALID_KEY
     if (jobdict_call (pmi,
                       "jobdict.get",
                       &args,
@@ -230,10 +239,15 @@ static int exchange_kvs_get (void *arg,
                       "name", PMI_JOBDICT,
                       "key", key) < 0)
         return -1; // PMI_ERR_INVALID_KEY
+    /* A value that does not fit in a PMI-1 get_result response is treated
+     * as not found rather than truncated.  The client handles a missing
+     * flux.taskmap by falling back to PMI_process_mapping.
+     */
     if (flux_plugin_arg_unpack (args,
                                 FLUX_PLUGIN_ARG_OUT,
                                 "{s:s}",
-                                "value", &val) < 0) {
+                                "value", &val) < 0
+        || strlen (val) > SIMPLE_KVS_VAL_MAX) {
         flux_plugin_arg_destroy (args);
         return -1; // PMI_ERR_INVALID_KEY (not found)
     }
@@ -367,68 +381,6 @@ out:
     return 0;
 }
 
-static int set_flux_tbon_interface_hint (struct shell_pmi *pmi)
-{
-    const char *hint;
-
-    if (!(hint = flux_attr_get (pmi->shell->h, "tbon.interface-hint")))
-        return 0;
-    put_dict (pmi, "flux.tbon-interface-hint", hint, true);
-    return 0;
-}
-
-static int set_flux_constrained_resources (struct shell_pmi *pmi)
-{
-    if (pmi->shell->info->constrained_resources)
-        put_dict (pmi, "flux.constrained-resources", "1", true);
-    return 0;
-}
-
-static int set_flux_instance_level (struct shell_pmi *pmi)
-{
-    char *p;
-    long l;
-    int n;
-    int rc = -1;
-    char val [SIMPLE_KVS_VAL_MAX];
-    const char *level = flux_attr_get (pmi->shell->h, "instance-level");
-
-    if (!level)
-        return 0;
-
-    errno = 0;
-    l = strtol (level, &p, 10);
-    if (errno != 0 || *p != '\0' || l < 0) {
-        shell_log_error ("set_flux_instance_level level=%s invalid", level);
-        goto out;
-    }
-    n = snprintf (val, sizeof (val), "%lu", l+1);
-    if (n >= sizeof (val)) {
-        shell_log_errno ("set_flux_instance_level: snprintf");
-        goto out;
-    }
-    put_dict (pmi, "flux.instance-level", val, true);
-    rc = 0;
-out:
-    return rc;
-}
-
-static int set_flux_taskmap (struct shell_pmi *pmi)
-{
-    struct taskmap *map = pmi->shell->info->taskmap;
-    char *val = NULL;
-    int rc = -1;
-
-    if (!(val = taskmap_encode (map, TASKMAP_ENCODE_WRAPPED))
-        || strlen (val) > SIMPLE_KVS_VAL_MAX)
-        goto out;
-    put_dict (pmi, "flux.taskmap", val, true);
-    rc = 0;
-out:
-    free (val);
-    return rc;
-}
-
 static void pmi_destroy (struct shell_pmi *pmi)
 {
     if (pmi) {
@@ -498,9 +450,10 @@ static struct shell_pmi *pmi_create (flux_plugin_t *p, json_t *config)
         if (jobdict_call (pmi,
                           "jobdict.create",
                           NULL,
-                          "{s:s s:i}",
+                          "{s:s s:i s:[s]}",
                           "name", PMI_JOBDICT,
-                          "k", exchange_k) < 0)
+                          "k", exchange_k,
+                          "reach", "flux") < 0)
             goto error;
     }
     else {
@@ -527,12 +480,8 @@ static struct shell_pmi *pmi_create (flux_plugin_t *p, json_t *config)
                                                   flags,
                                                   pmi)))
         goto error;
+    pmi->nomap = nomap;
     if (!nomap && init_clique (pmi) < 0)
-        goto error;
-    if (set_flux_instance_level (pmi) < 0
-        || set_flux_tbon_interface_hint (pmi) < 0
-        || set_flux_constrained_resources (pmi) < 0
-        || (!nomap && set_flux_taskmap (pmi) < 0))
         goto error;
     return pmi;
 error:
