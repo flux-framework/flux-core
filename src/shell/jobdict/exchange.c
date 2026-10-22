@@ -50,6 +50,9 @@
 #define xcg_warn(xcg, ...) \
     flux_shell_log ((xcg)->name, FLUX_SHELL_WARN, __FILE__, __LINE__, \
                     __VA_ARGS__)
+#define xcg_debug(xcg, ...) \
+    flux_shell_log ((xcg)->name, FLUX_SHELL_DEBUG, __FILE__, __LINE__, \
+                    __VA_ARGS__)
 
 struct exchange_session {
     char *tag;                  // session key (identifies concurrent sessions)
@@ -440,10 +443,8 @@ struct exchange *exchange_create (flux_shell_t *shell,
         if (xcg->rank == 0)
             xcg_warn (xcg, "requested fanout too large, using k=%d", k);
     }
-    else {
-        if (xcg->rank == 0)
-            xcg_warn (xcg, "using k=%d", k);
-    }
+    if (xcg->rank == 0)
+        xcg_debug (xcg, "using k=%d", k);
     xcg->k = k;
 
     if (flux_shell_service_register (shell, xcg->name, request_cb, xcg) < 0)
