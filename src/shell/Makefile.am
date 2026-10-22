@@ -69,6 +69,7 @@ flux_shell_SOURCES = \
 	events.h \
 	pmi/pmi.c \
 	jobdict/jobdict.c \
+	fluxkeys.c \
 	jobdict/exchange.c \
 	jobdict/exchange.h \
 	jobdict/exchange_tree.c \
