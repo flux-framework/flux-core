@@ -17,9 +17,10 @@
  * its exit callback is invoked and may read the result with
  * exchange_get_result().
  *
- * A k-ary tree is computed across shell ranks.  Gather aggregates at each tree
- * level, reducing the number of messages that shell 0 must handle; broadcast
- * fans out at each level, reducing the number of messages shell 0 must send.
+ * A k-ary tree is computed across the participating shell ranks.  Gather
+ * aggregates at each tree level, reducing the number of messages the root
+ * must handle; broadcast fans out at each level, reducing the number of
+ * messages the root must send.
  *
  * N.B. This tree is created from thin air for algorithmic purposes.  Nodes
  * that are peers in the ersatz tree may actually be multiple hops apart on the
@@ -37,9 +38,9 @@
 #include <flux/shell.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
-#include "src/common/libutil/kary.h"
 
 #include "exchange.h"
+#include "exchange_tree.h"
 
 #define DEFAULT_TREE_K 2
 
@@ -57,6 +58,10 @@ struct exchange_session {
     exchange_exit_f exit_cb;    // callback for exchange completion
     void *exit_cb_arg;
 
+    int index;                  // this shell's index in the participant set
+    int parent;                 // parent shell rank, or -1 if root of subtree
+    int nchildren;              // number of children in the participant tree
+
     zlist_t *requests;          // pending requests from children
     flux_future_t *f;           // pending request to parent
 
@@ -71,8 +76,7 @@ struct exchange {
     char *name;                 // identifies this handle in inter-shell RPCs
     int size;
     int rank;
-    uint32_t parent_rank;
-    int child_count;
+    int k;                      // resolved tree fanout
 
     zhashx_t *sessions;         // struct exchange_session hashed by tag
 };
@@ -115,6 +119,8 @@ static struct exchange_session *session_create (struct exchange *xcg,
     if (!(ses = calloc (1, sizeof (*ses))))
         return NULL;
     ses->xcg = xcg;
+    ses->index = -1;
+    ses->parent = -1;
     if (!(ses->tag = strdup (tag)))
         goto error;
     if (!(ses->requests = zlist_new ()))
@@ -155,17 +161,17 @@ static void session_process (struct exchange_session *ses)
 
     /* Awaiting self or child input?
      */
-    if (!ses->local || zlist_size (ses->requests) < xcg->child_count)
+    if (!ses->local || zlist_size (ses->requests) < ses->nchildren)
         return;
 
     /* Send gather request to parent, if needed.
      */
-    if (xcg->rank > 0 && !ses->f) {
+    if (ses->parent >= 0 && !ses->f) {
         flux_future_t *f;
 
         if (!(f = flux_shell_rpc_pack (xcg->shell,
                                        EXCHANGE_SERVICE,
-                                       xcg->parent_rank,
+                                       ses->parent,
                                        0,
                                        "{s:s s:s s:O}",
                                        "name", xcg->name,
@@ -188,9 +194,9 @@ static void session_process (struct exchange_session *ses)
     if (ses->f && !flux_future_is_ready (ses->f))
         return;
 
-    /* Shell rank 0 is the root: its gathered data is the final result.
+    /* The root of the participant tree (index 0) holds the final result.
      */
-    if (xcg->rank == 0)
+    if (ses->index == 0)
         ses->result = json_incref (ses->data_in);
 
     /* Broadcast result to children, if any.
@@ -247,7 +253,11 @@ void exchange_request (struct exchange *xcg, const flux_msg_t *msg)
         goto error;
     if (!(ses = session_lookup (xcg, tag)))
         goto error;
-    if (zlist_size (ses->requests) == xcg->child_count) {
+    /* The exact child count is known only once this shell has entered (the
+     * participant set is supplied then).  Before that, no node can have more
+     * than k children, so bound queued requests by the fanout.
+     */
+    if (zlist_size (ses->requests) >= (ses->local ? ses->nchildren : xcg->k)) {
         errstr = "exchange received too many child requests";
         errno = EINPROGRESS;
         goto error;
@@ -273,15 +283,65 @@ error:
                   flux_strerror (errno));
 }
 
+/* Build a sorted, duplicate-free array of participant shell ranks.  If
+ * 'participants' is NULL the participant set defaults to all shells
+ * (0..size-1).  Caller frees *subsetp.  Returns 0 on success, -1 on failure.
+ */
+static int build_subset (struct exchange *xcg,
+                         const struct idset *participants,
+                         int **subsetp,
+                         int *np)
+{
+    int *subset;
+    int n;
+
+    if (participants) {
+        unsigned int id;
+        int i = 0;
+
+        n = idset_count (participants);
+        if (!(subset = calloc (n > 0 ? n : 1, sizeof (int))))
+            return -1;
+        id = idset_first (participants);
+        while (id != IDSET_INVALID_ID) {
+            subset[i++] = id;
+            id = idset_next (participants, id);
+        }
+    }
+    else {
+        n = xcg->size;
+        if (!(subset = calloc (n, sizeof (int))))
+            return -1;
+        for (int i = 0; i < n; i++)
+            subset[i] = i;
+    }
+    *subsetp = subset;
+    *np = n;
+    return 0;
+}
+
 int exchange_enter (struct exchange *xcg,
                     const char *tag,
+                    const struct idset *participants,
                     json_t *dict,
                     exchange_exit_f exit_cb,
                     void *arg)
 {
     struct exchange_session *ses;
+    struct exchange_tree tree;
+    int *subset;
+    int n;
 
     if (!xcg || !tag || !exit_cb) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (build_subset (xcg, participants, &subset, &n) < 0)
+        return -1;
+    exchange_tree_init (&tree, xcg->k, subset, n, xcg->rank);
+    free (subset);
+    if (tree.index < 0) {
+        /* This shell is not a member of the participant set. */
         errno = EINVAL;
         return -1;
     }
@@ -291,6 +351,21 @@ int exchange_enter (struct exchange *xcg,
         errno = EINPROGRESS;
         return -1;
     }
+    /* Requests queued before entry were bounded by the fanout; now that the
+     * child count is known, reject the session if more than that arrived.
+     */
+    if (zlist_size (ses->requests) > tree.nchildren) {
+        xcg_warn (xcg,
+                  "%zu child requests queued for %s but %d expected",
+                  zlist_size (ses->requests),
+                  tag,
+                  tree.nchildren);
+        errno = EPROTO;
+        return -1;
+    }
+    ses->index = tree.index;
+    ses->parent = tree.parent;
+    ses->nchildren = tree.nchildren;
     ses->exit_cb = exit_cb;
     ses->exit_cb_arg = arg;
     ses->local = 1;
@@ -300,21 +375,6 @@ int exchange_enter (struct exchange *xcg,
     }
     session_process (ses);
     return 0;
-}
-
-/* Helper for exchange_create() - calculate the number of children of
- * 'rank' in a 'size' tree of degree 'k'.
- */
-static int child_count (int k, int rank, int size)
-{
-    int i;
-    int count = 0;
-
-    for (i = 0; i < k; i++) {
-        if (kary_childof (k, size, rank, i) != KARY_NONE)
-            count++;
-    }
-    return count;
 }
 
 struct exchange *exchange_create (flux_shell_t *shell,
@@ -355,8 +415,7 @@ struct exchange *exchange_create (flux_shell_t *shell,
         if (xcg->rank == 0)
             xcg_warn (xcg, "using k=%d", k);
     }
-    xcg->parent_rank = kary_parentof (k, xcg->rank);
-    xcg->child_count = child_count (k, xcg->rank, xcg->size);
+    xcg->k = k;
     return xcg;
 error:
     exchange_destroy (xcg);
