@@ -17,13 +17,15 @@
 
 struct exchange;
 
-/* Invoked when the exchange completes (successfully or with error).
- * The callback should check exchange_has_error() and, if no error, may read
- * the aggregate dict with exchange_get_result().
+/* Invoked when the exchange identified by 'tag' completes (successfully or
+ * with error).  The callback should check exchange_has_error(xcg, tag) and,
+ * if no error, may read the aggregate dict with exchange_get_result(xcg, tag).
  */
-typedef void (*exchange_exit_f)(struct exchange *xcg, void *arg);
+typedef void (*exchange_exit_f)(struct exchange *xcg,
+                                const char *tag,
+                                void *arg);
 
-/* Create a handle for performing sequential exchanges over all shell ranks.
+/* Create a handle for performing exchanges over all shell ranks.
  * 'name' is the shell service name used for inter-shell RPCs (must be unique
  * within the shell).  'k' is the tree fanout (k=0 selects internal default).
  */
@@ -32,21 +34,23 @@ struct exchange *exchange_create (flux_shell_t *shell,
                                   int k);
 void exchange_destroy (struct exchange *xcg);
 
-/* Enter one exchange with this shell's local 'dict' (a json object, or NULL
- * to contribute nothing).  'exit_cb' is invoked once the aggregate dict is
- * available on this shell.
+/* Enter the exchange identified by 'tag' with this shell's local
+ * 'dict' (a json object, or NULL to contribute nothing).  'exit_cb'
+ * is invoked once the aggregate result is available on this shell.  Distinct
+ * tags identify independent exchanges that may be in flight concurrently.
  */
 int exchange_enter (struct exchange *xcg,
+                    const char *tag,
                     json_t *dict,
                     exchange_exit_f exit_cb,
                     void *arg);
 
-/* Accessors may be called only from the exchange_exit_f callback.
- * exchange_get_result() returns a json object that is invalidated when the
- * callback returns.
+/* Accessors may be called only from the exchange_exit_f callback, with the
+ * 'tag' passed to that callback.  exchange_get_result() returns a json object
+ * that is invalidated when the callback returns.
  */
-bool exchange_has_error (struct exchange *xcg);
-json_t *exchange_get_result (struct exchange *xcg);
+bool exchange_has_error (struct exchange *xcg, const char *tag);
+json_t *exchange_get_result (struct exchange *xcg, const char *tag);
 
 #endif /* !SHELL_JOBDICT_EXCHANGE_H */
 
