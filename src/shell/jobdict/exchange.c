@@ -8,70 +8,76 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-/* exchange.c - sync local dict across shells
+/* exchange.c - sync a dict across shells (jobdict's gather+broadcast engine)
  *
- * Gather key-value dict from each shell to shell 0, then broadcast
- * the aggregate dict to all shells.
+ * Each shell calls exchange_enter() with a json_t dictionary and an exit
+ * callback.  The dictionaries are gathered to shell 0 over a k-ary tree,
+ * merged at each level, then the aggregate dictionary is broadcast back
+ * down the tree.  When the result is available on a shell, its exit callback
+ * is invoked and may read the result with exchange_get_result().
  *
- * Each shell calls pmi_exchange() with a json_t dictionary and
- * a callback.  Upon completion of the exchange, the callback is invoked.
- * The callback may access an updated json_t dictionary.
+ * A k-ary tree is computed across shell ranks.  Gather aggregates at each tree
+ * level, reducing the number of messages that shell 0 must handle; broadcast
+ * fans out at each level, reducing the number of messages shell 0 must send.
  *
- * A binary tree is computed across all shell ranks.
- * Gather aggregates hashes at each tree level, reducing the number
- * of messages that have to be handled by shell 0.
- * Broadcast fans out at each tree level, reducing the number of messages
- * that have to be sent by rank 0.
- *
- * N.B. This binary tree is created from thin air for algorithmic purposes.
- * Nodes that are peers in the ersatz tree may actually be multiple hops
- * apart on the Flux tree based overlay network at the broker level.
+ * N.B. This tree is created from thin air for algorithmic purposes.  Nodes
+ * that are peers in the ersatz tree may actually be multiple hops apart on the
+ * Flux tree based overlay network at the broker level.
  */
-#define FLUX_SHELL_PLUGIN_NAME "pmi-simple"
+#define FLUX_SHELL_PLUGIN_NAME NULL
 
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
 #include <stdlib.h>
+#include <string.h>
 #include <jansson.h>
 #include <flux/core.h>
 #include <flux/shell.h>
 
+#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/kary.h"
-
-#include "info.h"
-#include "internal.h"
 
 #include "exchange.h"
 
 #define DEFAULT_TREE_K 2
 
-struct session {
-    json_t *dict;               // container for gathered dictionary
-    pmi_exchange_f cb;          // callback for exchange completion
-    void *cb_arg;
+/* Log under the exchange's name rather than a fixed plugin name, since this
+ * component is shared by multiple dictionaries.
+ */
+#define xcg_warn(xcg, ...) \
+    flux_shell_log ((xcg)->name, FLUX_SHELL_WARN, __FILE__, __LINE__, \
+                    __VA_ARGS__)
+
+struct exchange_session {
+    json_t *data_in;            // gathered dict from self + subtree
+    json_t *result;             // aggregate dict (broadcast down the tree)
+    exchange_exit_f exit_cb;    // callback for exchange completion
+    void *exit_cb_arg;
 
     zlist_t *requests;          // pending requests from children
     flux_future_t *f;           // pending request to parent
 
-    struct pmi_exchange *pex;
-    unsigned int local:1;       // pmi_exchange() was called on this shell
+    struct exchange *xcg;
+    unsigned int local:1;       // exchange_enter() was called on this shell
     unsigned int has_error:1;   // an error occurred
 };
 
-struct pmi_exchange {
+struct exchange {
     flux_shell_t *shell;
+    flux_t *h;
+    char *name;                 // identifies this handle in inter-shell RPCs
     int size;
     int rank;
     uint32_t parent_rank;
     int child_count;
 
-    struct session *session;
+    struct exchange_session *session;
 };
 
-static void exchange_response_completion (flux_future_t *f, void *arg);
+static void response_completion (flux_future_t *f, void *arg);
 
-static void session_destroy (struct session *ses)
+static void session_destroy (struct exchange_session *ses)
 {
     if (ses) {
         int saved_errno = errno;
@@ -82,22 +88,23 @@ static void session_destroy (struct session *ses)
             zlist_destroy (&ses->requests);
         }
         flux_future_destroy (ses->f);
-        json_decref (ses->dict);
+        json_decref (ses->data_in);
+        json_decref (ses->result);
         free (ses);
         errno = saved_errno;
     }
 }
 
-static struct session *session_create (struct pmi_exchange *pex)
+static struct exchange_session *session_create (struct exchange *xcg)
 {
-    struct session *ses;
+    struct exchange_session *ses;
 
     if (!(ses = calloc (1, sizeof (*ses))))
         return NULL;
-    ses->pex = pex;
+    ses->xcg = xcg;
     if (!(ses->requests = zlist_new ()))
         goto nomem;
-    if (!(ses->dict = json_object ()))
+    if (!(ses->data_in = json_object ()))
         goto nomem;
     return ses;
 nomem:
@@ -106,10 +113,9 @@ nomem:
     return NULL;
 }
 
-static void session_process (struct session *ses)
+static void session_process (struct exchange_session *ses)
 {
-    struct pmi_exchange *pex = ses->pex;
-    flux_t *h = ses->pex->shell->h;
+    struct exchange *xcg = ses->xcg;
     const flux_msg_t *msg;
 
     if (ses->has_error)
@@ -117,26 +123,27 @@ static void session_process (struct session *ses)
 
     /* Awaiting self or child input?
      */
-    if (!ses->local || zlist_size (ses->requests) < pex->child_count)
+    if (!ses->local || zlist_size (ses->requests) < xcg->child_count)
         return;
 
-    /* Send exchange request, if needed.
+    /* Send gather request to parent, if needed.
      */
-    if (pex->rank > 0 && !ses->f) {
+    if (xcg->rank > 0 && !ses->f) {
         flux_future_t *f;
 
-        if (!(f = flux_shell_rpc_pack (pex->shell,
-                                       "pmi-exchange",
-                                       pex->parent_rank,
+        if (!(f = flux_shell_rpc_pack (xcg->shell,
+                                       EXCHANGE_SERVICE,
+                                       xcg->parent_rank,
                                        0,
-                                       "O",
-                                       ses->dict))
+                                       "{s:s s:O}",
+                                       "name", xcg->name,
+                                       "data", ses->data_in))
                 || flux_future_then (f,
                                      -1,
-                                     exchange_response_completion,
-                                     pex) < 0) {
+                                     response_completion,
+                                     xcg) < 0) {
             flux_future_destroy (f);
-            shell_warn ("error sending pmi-exchange request");
+            xcg_warn (xcg, "error sending request");
             ses->has_error = 1;
             goto done;
         }
@@ -148,11 +155,16 @@ static void session_process (struct session *ses)
     if (ses->f && !flux_future_is_ready (ses->f))
         return;
 
-    /* Send exchange response(s), if needed.
+    /* Shell rank 0 is the root: its gathered data is the final result.
+     */
+    if (xcg->rank == 0)
+        ses->result = json_incref (ses->data_in);
+
+    /* Broadcast result to children, if any.
      */
     while ((msg = zlist_pop (ses->requests))) {
-        if (flux_respond_pack (h, msg, "O", ses->dict) < 0) {
-            shell_warn ("error responding to pmi-exchange request");
+        if (flux_respond_pack (xcg->h, msg, "{s:O}", "data", ses->result) < 0) {
+            xcg_warn (xcg, "error responding to request");
             flux_msg_decref (msg);
             ses->has_error = 1;
             goto done;
@@ -160,101 +172,101 @@ static void session_process (struct session *ses)
         flux_msg_decref (msg);
     }
 done:
-    ses->cb (pex, ses->cb_arg);
+    ses->exit_cb (xcg, ses->exit_cb_arg);
     session_destroy (ses);
-    pex->session = NULL;
+    xcg->session = NULL;
 }
 
-/* PMI implementation on parent has responded to pmi-exchange request.
+/* Parent shell has responded to our gather request with the aggregate result.
  */
-static void exchange_response_completion (flux_future_t *f, void *arg)
+static void response_completion (flux_future_t *f, void *arg)
 {
-    struct pmi_exchange *pex = arg;
-    json_t *dict;
+    struct exchange *xcg = arg;
+    struct exchange_session *ses = xcg->session;
 
-    if (flux_rpc_get_unpack (f, "o", &dict) < 0) {
-        shell_warn ("pmi-exchange request: %s", future_strerror (f, errno));
-        pex->session->has_error = 1;
-        goto done;
+    json_t *result;
+
+    /* Unpack a borrowed reference and incref on success only, so that a
+     * malformed response cannot leave a reference behind.
+     */
+    if (flux_rpc_get_unpack (f, "{s:o}", "data", &result) < 0) {
+        xcg_warn (xcg, "request: %s", future_strerror (f, errno));
+        ses->has_error = 1;
     }
-    if (json_object_update (pex->session->dict, dict) < 0) {
-        shell_warn ("pmi-exchange response handling failed to update dict");
-        pex->session->has_error = 1;
-        goto done;
-    }
-done:
-    session_process (pex->session);
+    else
+        ses->result = json_incref (result);
+    session_process (ses);
 }
 
-/* PMI implementation on child sent a pmi-exchange request
+/* Child shell sent a gather request.
  */
-static void exchange_request_cb (flux_t *h,
-                                 flux_msg_handler_t *mh,
-                                 const flux_msg_t *msg,
-                                 void *arg)
+void exchange_request (struct exchange *xcg, const flux_msg_t *msg)
 {
-    struct pmi_exchange *pex = arg;
-    json_t *dict;
+    json_t *data;
     const char *errstr = NULL;
 
-    if (flux_request_unpack (msg, NULL, "o", &dict) < 0)
+    if (flux_request_unpack (msg, NULL, "{s:o}", "data", &data) < 0)
         goto error;
-    if (!pex->session) {
-        if (!(pex->session = session_create (pex)))
+    if (!xcg->session) {
+        if (!(xcg->session = session_create (xcg)))
             goto error;
     }
-    if (zlist_size (pex->session->requests) == pex->child_count) {
-        errstr = "pmi-exchange received too many child requests";
+    if (zlist_size (xcg->session->requests) == xcg->child_count) {
+        errstr = "exchange received too many child requests";
         errno = EINPROGRESS;
         goto error;
     }
-    if (json_object_update (pex->session->dict, dict) < 0) {
-        errstr = "pmi-exchange request failed to update dict";
-        goto nomem;
+    if (!json_is_object (data)
+        || json_object_update (xcg->session->data_in, data) < 0) {
+        errstr = "exchange request failed to merge dict";
+        errno = EPROTO;
+        goto error;
     }
-    if (zlist_append (pex->session->requests,
+    if (zlist_append (xcg->session->requests,
                       (void *)flux_msg_incref (msg)) < 0) {
         flux_msg_decref (msg);
-        errstr = "pmi-exchange request failed to save pending request";
-        goto nomem;
+        errstr = "exchange request failed to save pending request";
+        errno = ENOMEM;
+        goto error;
     }
-    session_process (pex->session);
+    session_process (xcg->session);
     return;
-nomem:
-    errno = ENOMEM;
 error:
-    if (flux_respond_error (h, msg, errno, errstr) < 0)
-        shell_warn ("error responding to pmi-exchange request: %s",
-                    flux_strerror (errno));
+    if (flux_respond_error (xcg->h, msg, errno, errstr) < 0)
+        xcg_warn (xcg,
+                  "error responding to request: %s",
+                  flux_strerror (errno));
 }
 
-/* PMI implementation on _this_ shell is ready to exchange.
- */
-int pmi_exchange (struct pmi_exchange *pex,
-                  json_t *dict,
-                  pmi_exchange_f cb,
-                  void *arg)
+int exchange_enter (struct exchange *xcg,
+                    json_t *dict,
+                    exchange_exit_f exit_cb,
+                    void *arg)
 {
-    if (!pex->session) {
-        if (!(pex->session = session_create (pex)))
+    if (!xcg || !exit_cb) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (!xcg->session) {
+        if (!(xcg->session = session_create (xcg)))
             return -1;
     }
-    if (pex->session->local) {
+    if (xcg->session->local) {
         errno = EINPROGRESS;
         return -1;
     }
-    pex->session->cb = cb;
-    pex->session->cb_arg = arg;
-    pex->session->local = 1;
-    if (json_object_update (pex->session->dict, dict) < 0) {
+    xcg->session->exit_cb = exit_cb;
+    xcg->session->exit_cb_arg = arg;
+    xcg->session->local = 1;
+    if (dict && json_object_update (xcg->session->data_in, dict) < 0) {
         errno = ENOMEM;
         return -1;
     }
-    session_process (pex->session);
+    session_process (xcg->session);
     return 0;
 }
 
-/* Helper for pmi_exchange_create() - calculate the number of children of
+/* Helper for exchange_create() - calculate the number of children of
  * 'rank' in a 'size' tree of degree 'k'.
  */
 static int child_count (int k, int rank, int size)
@@ -269,58 +281,66 @@ static int child_count (int k, int rank, int size)
     return count;
 }
 
-struct pmi_exchange *pmi_exchange_create (flux_shell_t *shell, int k)
+struct exchange *exchange_create (flux_shell_t *shell,
+                                  const char *name,
+                                  int k)
 {
-    struct pmi_exchange *pex;
+    struct exchange *xcg;
 
-    if (!(pex = calloc (1, sizeof (*pex))))
+    if (!shell || !name) {
+        errno = EINVAL;
         return NULL;
+    }
+    if (!(xcg = calloc (1, sizeof (*xcg))))
+        return NULL;
+    xcg->shell = shell;
+    if (!(xcg->h = flux_shell_get_flux (shell)))
+        goto error;
+    if (!(xcg->name = strdup (name)))
+        goto error;
+    if (flux_shell_info_unpack (shell,
+                                "{s:i s:i}",
+                                "size", &xcg->size,
+                                "rank", &xcg->rank) < 0)
+        goto error;
     if (k <= 0)
         k = DEFAULT_TREE_K;
-    else if (k > shell->info->shell_size) {
-        k = shell->info->shell_size;
-        if (shell->info->shell_rank == 0)
-            shell_warn ("requested exchange fanout too large, using k=%d", k);
+    else if (k > xcg->size) {
+        k = xcg->size;
+        if (xcg->rank == 0)
+            xcg_warn (xcg, "requested fanout too large, using k=%d", k);
     }
     else {
-        if (shell->info->shell_rank == 0)
-            shell_warn ("using k=%d", k);
+        if (xcg->rank == 0)
+            xcg_warn (xcg, "using k=%d", k);
     }
-    pex->shell = shell;
-    pex->size = shell->info->shell_size;
-    pex->rank = shell->info->shell_rank;
-    pex->parent_rank = kary_parentof (k, pex->rank);
-    pex->child_count = child_count (k, pex->rank, pex->size);
-
-    if (flux_shell_service_register (shell,
-                                     "pmi-exchange",
-                                     exchange_request_cb,
-                                     pex) < 0)
-        goto error;
-    return pex;
+    xcg->parent_rank = kary_parentof (k, xcg->rank);
+    xcg->child_count = child_count (k, xcg->rank, xcg->size);
+    return xcg;
 error:
-    pmi_exchange_destroy (pex);
+    exchange_destroy (xcg);
     return NULL;
 }
 
-void pmi_exchange_destroy (struct pmi_exchange *pex)
+void exchange_destroy (struct exchange *xcg)
 {
-    if (pex) {
+    if (xcg) {
         int saved_errno = errno;
-        session_destroy (pex->session);
-        free (pex);
+        session_destroy (xcg->session);
+        free (xcg->name);
+        free (xcg);
         errno = saved_errno;
     }
 }
 
-bool pmi_exchange_has_error (struct pmi_exchange *pex)
+bool exchange_has_error (struct exchange *xcg)
 {
-    return pex->session->has_error ? true : false;
+    return xcg->session->has_error ? true : false;
 }
 
-json_t *pmi_exchange_get_dict (struct pmi_exchange *pex)
+json_t *exchange_get_result (struct exchange *xcg)
 {
-    return pex->session->dict;
+    return xcg->session->result;
 }
 
 /* vi: ts=4 sw=4 expandtab

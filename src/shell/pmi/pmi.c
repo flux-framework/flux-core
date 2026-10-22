@@ -83,7 +83,7 @@ struct shell_pmi {
     json_t *global; // already exchanged
     json_t *pending;// pending to be exchanged
     json_t *locals;  // never exchanged
-    struct pmi_exchange *exchange;
+    struct exchange *exchange;
     bool abort;     // an abort exception has been raised
 };
 
@@ -138,16 +138,16 @@ nomem:
  ** This is used if pmi.kvs=exchange option is provided.
  **/
 
-static void exchange_cb (struct pmi_exchange *pex, void *arg)
+static void exchange_cb (struct exchange *xcg, void *arg)
 {
     struct shell_pmi *pmi = arg;
     int rc = -1;
 
-    if (pmi_exchange_has_error (pex)) {
+    if (exchange_has_error (xcg)) {
         shell_warn ("exchange failed");
         goto done;
     }
-    if (json_object_update (pmi->global, pmi_exchange_get_dict (pex)) < 0) {
+    if (json_object_update (pmi->global, exchange_get_result (xcg)) < 0) {
         shell_warn ("failed to update dict after successful exchange");
         goto done;
     }
@@ -155,6 +155,19 @@ static void exchange_cb (struct pmi_exchange *pex, void *arg)
     rc = 0;
 done:
     pmi_simple_server_barrier_complete (pmi->server, rc);
+}
+
+/* Route an EXCHANGE_SERVICE request from another shell to the PMI exchange,
+ * the only one in the shell for now.
+ */
+static void exchange_request_cb (flux_t *h,
+                                 flux_msg_handler_t *mh,
+                                 const flux_msg_t *msg,
+                                 void *arg)
+{
+    struct shell_pmi *pmi = arg;
+
+    exchange_request (pmi->exchange, msg);
 }
 
 /* pmi_simple_ops->kvs_get() signature */
@@ -186,11 +199,11 @@ static int exchange_barrier_enter (void *arg)
         pmi_simple_server_barrier_complete (pmi->server, 0);
         return 0;
     }
-    if (pmi_exchange (pmi->exchange,
-                      pmi->pending,
-                      exchange_cb,
-                      pmi) < 0) {
-        shell_warn ("pmi_exchange %s", flux_strerror (errno));
+    if (exchange_enter (pmi->exchange,
+                        pmi->pending,
+                        exchange_cb,
+                        pmi) < 0) {
+        shell_warn ("exchange_enter %s", flux_strerror (errno));
         return -1; // PMI_FAIL
     }
     return 0;
@@ -368,7 +381,7 @@ static void pmi_destroy (struct shell_pmi *pmi)
     if (pmi) {
         int saved_errno = errno;
         pmi_simple_server_destroy (pmi->server);
-        pmi_exchange_destroy (pmi->exchange);
+        exchange_destroy (pmi->exchange);
         json_decref (pmi->global);
         json_decref (pmi->pending);
         json_decref (pmi->locals);
@@ -427,7 +440,11 @@ static struct shell_pmi *pmi_create (flux_shell_t *shell, json_t *config)
         shell_pmi_ops.kvs_put = exchange_kvs_put;
         shell_pmi_ops.kvs_get = exchange_kvs_get;
         shell_pmi_ops.barrier_enter = exchange_barrier_enter;
-        if (!(pmi->exchange = pmi_exchange_create (shell, exchange_k)))
+        if (!(pmi->exchange = exchange_create (shell, "pmi", exchange_k))
+            || flux_shell_service_register (shell,
+                                            EXCHANGE_SERVICE,
+                                            exchange_request_cb,
+                                            pmi) < 0)
             goto error;
     }
     else {
