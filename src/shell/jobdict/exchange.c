@@ -8,7 +8,7 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-/* pmi_exchange.c - sync local dict across shells
+/* exchange.c - sync local dict across shells
  *
  * Gather key-value dict from each shell to shell 0, then broadcast
  * the aggregate dict to all shells.
@@ -42,7 +42,7 @@
 #include "info.h"
 #include "internal.h"
 
-#include "pmi_exchange.h"
+#include "exchange.h"
 
 #define DEFAULT_TREE_K 2
 

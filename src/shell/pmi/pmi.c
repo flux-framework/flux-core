@@ -75,7 +75,7 @@
 #include "builtins.h"
 #include "internal.h"
 #include "task.h"
-#include "pmi_exchange.h"
+#include "jobdict/exchange.h"
 
 struct shell_pmi {
     flux_shell_t *shell;
