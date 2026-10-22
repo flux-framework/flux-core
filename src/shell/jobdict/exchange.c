@@ -211,6 +211,14 @@ static void session_process (struct exchange_session *ses)
         flux_msg_decref (msg);
     }
 done:
+    /* Fail any children still awaiting a response so the error propagates
+     * down the tree rather than leaving them blocked.
+     */
+    while ((msg = zlist_pop (ses->requests))) {
+        if (flux_respond_error (xcg->h, msg, EIO, "exchange failed") < 0)
+            xcg_warn (xcg, "error responding to request");
+        flux_msg_decref (msg);
+    }
     /* The exit callback runs while the session is still in the table so it
      * may read the result with exchange_get_result(tag); the session is
      * removed (and freed) once it returns.
