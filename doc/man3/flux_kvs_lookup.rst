@@ -28,7 +28,7 @@ SYNOPSIS
                                    ...);
 
    int flux_kvs_lookup_get_raw (flux_future_t *f,
-                                const void **data
+                                const void **data,
                                 size_t *len);
 
    int flux_kvs_lookup_get_dir (flux_future_t *f,

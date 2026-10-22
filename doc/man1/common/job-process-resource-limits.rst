@@ -29,7 +29,7 @@ The :option:`--rlimit` rules work similar to the :option:`--env` option rules:
    that are propagated by default).
 
 We start with a default list of resource limits to propagate,
-then applies all rules specified via :option:`--rlimit` on the command line.
+then apply all rules specified via :option:`--rlimit` on the command line.
 Therefore, to propagate only one limit, ``-*`` should first be used to
 start with an empty set, e.g. :option:`--rlimit=-*,core` will only propagate
 the ``core`` resource limit.

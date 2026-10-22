@@ -128,7 +128,7 @@
    Don't actually submit job. Just emit jobspec on stdout and exit for
    ``run``, ``submit``, ``alloc``, and ``batch``. For ``bulksubmit``,
    emit a line of output including relevant options for each job which
-   would have been submitted,
+   would have been submitted.
 
 .. option:: --debug
 
