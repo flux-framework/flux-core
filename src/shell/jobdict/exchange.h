@@ -8,8 +8,8 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-#ifndef SHELL_PMI_EXCHANGE_H
-#define SHELL_PMI_EXCHANGE_H
+#ifndef SHELL_JOBDICT_EXCHANGE_H
+#define SHELL_JOBDICT_EXCHANGE_H
 
 /* Create handle for performing multiple sequential exchanges.
  * 'k' is the tree fanout (k=0 selects internal default).
@@ -35,7 +35,7 @@ int pmi_exchange (struct pmi_exchange *pex,
 bool pmi_exchange_has_error (struct pmi_exchange *pex);
 json_t *pmi_exchange_get_dict (struct pmi_exchange *pex);
 
-#endif /* !SHELL_PMI_EXCHANGE_H */
+#endif /* !SHELL_JOBDICT_EXCHANGE_H */
 
 /* vi: ts=4 sw=4 expandtab
  */
