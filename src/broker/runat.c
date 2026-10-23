@@ -53,7 +53,6 @@ struct runat_entry {
     bool completed;
     bool interactive;
     bool foreground;
-    bool needs_foreground;
     runat_completion_f cb;
     void *cb_arg;
 };
@@ -273,32 +272,28 @@ static void state_change_cb (flux_subprocess_t *p,
     switch (state) {
         case FLUX_SUBPROCESS_INIT:
         case FLUX_SUBPROCESS_EXITED:
+        case FLUX_SUBPROCESS_STOPPED: /* deprecated */
             break;
         case FLUX_SUBPROCESS_FAILED:
             completion_cb (p);
-            break;
-        case FLUX_SUBPROCESS_STOPPED:
-            /* STOPPED may arrive before RUNNING due to a protocol race
-             * (issue #5083) so the pid may not yet be available. If
-             * available, bring process into foreground immediately.
-             * Otherwise, defer via needs_foreground flag until RUNNING state.
-             */
-            if (flux_subprocess_pid (p) > 0)
-                foreground_runat_entry (r, entry, p);
-            else
-                entry->needs_foreground = true;
             break;
         case FLUX_SUBPROCESS_RUNNING:
             if (entry->aborted) {
                 if (kill_async (p, abort_signal) < 0)
                     flux_log_error (r->h, "kill %s", entry->name);
             }
-            else if (entry->needs_foreground) {
-                foreground_runat_entry (r, entry, p);
-                entry->needs_foreground = false;
-            }
             break;
     }
+}
+
+static void sigchld_cb (flux_subprocess_t *p,
+                        flux_subprocess_sigchld_t sigchld)
+{
+    struct runat *r = flux_subprocess_aux_get (p, "runat");
+    struct runat_entry *entry = flux_subprocess_aux_get (p, "runat_entry");
+
+    if (sigchld == FLUX_SUBPROCESS_SIGCHLD_STOPPED)
+        foreground_runat_entry (r, entry, p);
 }
 
 /* Log subprocess output.
@@ -377,6 +372,7 @@ static flux_subprocess_t *start_command (struct runat *r,
         .on_channel_out = NULL,
         .on_stdout = NULL,
         .on_stderr = NULL,
+        .on_sigchld = sigchld_cb,
     };
 
     if (runat_command_setenv (cmd, env_blocklist, r->local_uri, r->jobid) < 0)

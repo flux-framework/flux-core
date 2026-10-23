@@ -41,6 +41,7 @@ int stdout_eof_cb_count;
 int stderr_eof_cb_count;
 int state_change_cb_count;
 int stopped_cb_count;
+int continued_cb_count;
 int timer_cb_count;
 
 static int fdcount (void)
@@ -800,20 +801,22 @@ void test_state_change (flux_reactor_t *r)
     flux_cmd_destroy (cmd);
 }
 
-void state_change_stopped_cb (flux_subprocess_t *p,
-                              flux_subprocess_state_t state)
+void sigchld_stopped_cb (flux_subprocess_t *p,
+                         flux_subprocess_sigchld_t sigchld)
 {
-    diag ("state_change_stopped: state = %s",
-          flux_subprocess_state_string (state));
-    if (state == FLUX_SUBPROCESS_STOPPED) {
+    diag ("sigchld = %s",
+          flux_subprocess_sigchld_string (sigchld));
+    if (sigchld == FLUX_SUBPROCESS_SIGCHLD_STOPPED) {
         flux_future_t *f = flux_subprocess_kill (p, SIGKILL);
-        ok (true, "subprocess state == STOPPED in state change handler");
+        ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
+            "sigchld returned when job was running");
+        ok (true, "sigchld == STOPPED in sigchld handler");
         flux_future_destroy (f);
         stopped_cb_count++;
     }
 }
 
-void test_state_change_stopped (flux_reactor_t *r)
+void test_sigchld_stopped (flux_reactor_t *r)
 {
     char *av[] = { "/bin/sleep", "30", NULL };
     flux_cmd_t *cmd;
@@ -822,7 +825,7 @@ void test_state_change_stopped (flux_reactor_t *r)
     ok ((cmd = flux_cmd_create (2, av, NULL)) != NULL, "flux_cmd_create");
 
     flux_subprocess_ops_t ops = {
-        .on_state_change = state_change_stopped_cb
+        .on_sigchld = sigchld_stopped_cb
     };
     stopped_cb_count = 0;
     p = flux_local_exec (r, 0, cmd, &ops);
@@ -843,6 +846,61 @@ void test_state_change_stopped (flux_reactor_t *r)
     flux_cmd_destroy (cmd);
 }
 
+void sigchld_continued_cb (flux_subprocess_t *p,
+                           flux_subprocess_sigchld_t sigchld)
+{
+    diag ("sigchld = %s",
+          flux_subprocess_sigchld_string (sigchld));
+    if (sigchld == FLUX_SUBPROCESS_SIGCHLD_STOPPED) {
+        flux_future_t *f = flux_subprocess_kill (p, SIGCONT);
+        ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
+            "sigchld returned when job was running");
+        ok (true, "sigchld == STOPPED in sigchld handler");
+        flux_future_destroy (f);
+        stopped_cb_count++;
+    }
+    else if (sigchld == FLUX_SUBPROCESS_SIGCHLD_CONTINUED) {
+        flux_future_t *f = flux_subprocess_kill (p, SIGKILL);
+        ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
+            "sigchld returned when job was running");
+        ok (true, "sigchld == CONTINUED in sigchld handler");
+        flux_future_destroy (f);
+        continued_cb_count++;
+    }
+}
+
+void test_sigchld_continued (flux_reactor_t *r)
+{
+    char *av[] = { "/bin/sleep", "30", NULL };
+    flux_cmd_t *cmd;
+    flux_subprocess_t *p = NULL;
+
+    ok ((cmd = flux_cmd_create (2, av, NULL)) != NULL, "flux_cmd_create");
+
+    flux_subprocess_ops_t ops = {
+        .on_sigchld = sigchld_continued_cb
+    };
+    stopped_cb_count = 0;
+    continued_cb_count = 0;
+    p = flux_local_exec (r, 0, cmd, &ops);
+    ok (p != NULL, "flux_local_exec");
+
+    ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
+        "subprocess state == RUNNING after flux_local_exec");
+
+    flux_future_t *f = flux_subprocess_kill (p, SIGSTOP);
+    ok (f != NULL,
+        "flux_subprocess_kill SIGSTOP");
+    flux_future_destroy (f);
+
+    int rc = flux_reactor_run (r, 0);
+    ok (rc == 0, "flux_reactor_run returned zero status");
+    ok (stopped_cb_count == 1, "subprocess was stopped");
+    ok (continued_cb_count == 1, "subprocess was continued");
+    flux_subprocess_destroy (p);
+    flux_cmd_destroy (cmd);
+}
+
 void test_state_strings (void)
 {
     ok (!strcasecmp (flux_subprocess_state_string (FLUX_SUBPROCESS_INIT), "Init"),
@@ -855,6 +913,16 @@ void test_state_strings (void)
         "flux_subprocess_state_string returns NULL on bad state");
     is (flux_subprocess_state_string (FLUX_SUBPROCESS_STOPPED),
         "Stopped");
+}
+
+void test_sigchld_strings (void)
+{
+    is (flux_subprocess_sigchld_string (FLUX_SUBPROCESS_SIGCHLD_STOPPED),
+        "Stopped");
+    is (flux_subprocess_sigchld_string (FLUX_SUBPROCESS_SIGCHLD_CONTINUED),
+        "Continued");
+    ok (!flux_subprocess_sigchld_string (100),
+        "flux_subprocess_sigchld_string returns NULL on bad sigchld");
 }
 
 void test_exec_fail (flux_reactor_t *r)
@@ -1304,10 +1372,14 @@ int main (int argc, char *argv[])
     test_kill_eofs (r);
     diag ("state_change");
     test_state_change (r);
-    diag ("state_change_stopped");
-    test_state_change_stopped (r);
+    diag ("sigchld_stopped");
+    test_sigchld_stopped (r);
+    diag ("sigchld_continued");
+    test_sigchld_continued (r);
     diag ("state_strings");
     test_state_strings ();
+    diag ("sigchld_strings");
+    test_sigchld_strings ();
     diag ("exec_fail");
     test_exec_fail (r);
     diag ("context");

@@ -133,17 +133,6 @@ static void process_new_state (flux_subprocess_t *p,
     if (p->state == FLUX_SUBPROCESS_FAILED)
         return;
 
-    if (state == FLUX_SUBPROCESS_STOPPED) {
-        if (p->ops.on_state_change) {
-            /* always a chance caller may destroy subprocess in
-             * callback */
-            subprocess_incref (p);
-            (*p->ops.on_state_change) (p, FLUX_SUBPROCESS_STOPPED);
-            subprocess_decref (p);
-        }
-        return;
-    }
-
     p->state = state;
 
     /* On EXITED, leave the output watchers running so any remaining
@@ -164,6 +153,33 @@ static void process_new_state (flux_subprocess_t *p,
 
     if (p->state != p->state_reported)
         state_change_start (p);
+}
+
+static void process_new_sigchld (flux_subprocess_t *p,
+                                 flux_subprocess_sigchld_t sigchld)
+{
+    if (sigchld == FLUX_SUBPROCESS_SIGCHLD_STOPPED) {
+        /* discard SIGCONT if it is not reported yet */
+        if (p->sigchld_pending == FLUX_SUBPROCESS_SIGCHLD_CONTINUED) {
+            p->sigchld_pending = 0;
+            sigchld_notify_stop (p);
+        }
+        else {
+            sigchld_set (p, FLUX_SUBPROCESS_SIGCHLD_STOPPED);
+            sigchld_notify_start (p);
+        }
+    }
+    else if (sigchld == FLUX_SUBPROCESS_SIGCHLD_CONTINUED) {
+        /* discard SIGSTOP if it is not reported yet */
+        if (p->sigchld_pending == FLUX_SUBPROCESS_SIGCHLD_STOPPED) {
+            p->sigchld_pending = 0;
+            sigchld_notify_stop (p);
+        }
+        else {
+            sigchld_set (p, FLUX_SUBPROCESS_SIGCHLD_CONTINUED);
+            sigchld_notify_start (p);
+        }
+    }
 }
 
 static void process_add_credit (flux_subprocess_t *p, json_t *channels)
@@ -600,7 +616,10 @@ static void rexec_continuation (flux_future_t *f, void *arg)
         process_new_state (p, FLUX_SUBPROCESS_RUNNING);
     }
     else if (subprocess_rexec_is_stopped (f)) {
-        process_new_state (p, FLUX_SUBPROCESS_STOPPED);
+        process_new_sigchld (p, FLUX_SUBPROCESS_SIGCHLD_STOPPED);
+    }
+    else if (subprocess_rexec_is_continued (f)) {
+        process_new_sigchld (p, FLUX_SUBPROCESS_SIGCHLD_CONTINUED);
     }
     else if (subprocess_rexec_is_finished (f, &p->status)) {
         process_new_state (p, FLUX_SUBPROCESS_EXITED);
