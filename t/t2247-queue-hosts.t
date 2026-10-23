@@ -225,6 +225,19 @@ test_expect_success 'resource.reload reports the membership error' '
 	test_debug "cat badreload.err" &&
 	grep "invalid hosts: nosuchhost" badreload.err
 '
+# A reload that fails leaves the resource set it was serving in place.
+test_expect_success 'a failed resource.reload keeps the previous R' '
+	flux resource R >prev.json &&
+	test_must_fail flux resource reload reload.json &&
+	flux resource R >post.json &&
+	test_cmp prev.json post.json
+'
+test_expect_success 'a reload still succeeds after a failed one' '
+	flux config load </dev/null &&
+	flux resource reload reload.json &&
+	flux resource R >recovered.json &&
+	jq -e ".execution.R_lite[0].rank == \"0-3\"" <recovered.json
+'
 test_expect_success 'restore a working resource module again' '
 	flux config load </dev/null &&
 	flux module reload resource &&
