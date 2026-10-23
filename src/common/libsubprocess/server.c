@@ -855,6 +855,7 @@ static void server_exec_cb (flux_t *h,
      */
     bool background = !flux_msg_is_streaming (msg);
 
+    err_init (&error);
     if (server_auth_unpack (s,
                             msg,
                             &error,
@@ -881,6 +882,14 @@ static void server_exec_cb (flux_t *h,
     }
     if (background && (local_flags & FLUX_SUBPROCESS_FLAGS_STDIO_FALLTHROUGH)) {
         errmsg = "stdio-fallthrough flag is not allowed in background mode";
+        errno = EINVAL;
+        goto error;
+    }
+    /* LOCAL_UNBUF is a client-side output optimization and is not
+     * meaningful for a background subprocess launched by the server.
+     */
+    if (background && (local_flags & FLUX_SUBPROCESS_FLAGS_LOCAL_UNBUF)) {
+        errmsg = "local-unbuf flag is not allowed in background mode";
         errno = EINVAL;
         goto error;
     }
@@ -1105,6 +1114,7 @@ static void server_kill_cb (flux_t *h,
     flux_subprocess_t *p;
     flux_future_t *f = NULL;
 
+    err_init (&error);
     if (server_auth_unpack (s,
                             msg,
                             &error,
@@ -1201,6 +1211,7 @@ static void server_list_cb (flux_t *h,
     flux_error_t error;
     const char *errmsg = NULL;
 
+    err_init (&error);
     if (server_auth_unpack (s, msg, &error, NULL) < 0) {
         errmsg = error.text;
         goto error;
@@ -1267,10 +1278,12 @@ static void server_disconnect_cb (flux_t *h,
                 else
                     server_kill (p, SIGKILL);
             }
-            if (p->waiter
-                && streq (flux_msg_route_first (p->waiter), sender)) {
-                flux_msg_decref (p->waiter);
-                p->waiter = NULL;
+            if (p->waiter) {
+                const char *wsender = flux_msg_route_first (p->waiter);
+                if (wsender && streq (wsender, sender)) {
+                    flux_msg_decref (p->waiter);
+                    p->waiter = NULL;
+                }
             }
             p = zlistx_next (s->subprocesses);
         }
@@ -1289,6 +1302,7 @@ static void server_wait_cb (flux_t *h,
     pid_t pid;
     const char *label = NULL;
 
+    err_init (&error);
     if (server_auth_unpack (s,
                             msg,
                             &error,
@@ -1447,6 +1461,7 @@ static void server_attach_cb (flux_t *h,
     const char *errmsg = NULL;
     flux_subprocess_t *p;
 
+    err_init (&error);
     if (server_auth_unpack (s,
                             msg,
                             &error,
