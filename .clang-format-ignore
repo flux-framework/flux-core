@@ -1,0 +1,33 @@
+# Code that clang-format and scripts/clang-format-flux must not reformat.
+# This is vendored or copied third party code, maintained upstream.
+#
+# Patterns are relative to this directory.  '*' does not match '/';
+# use '**' to match subdirectories.  See the clang-format documentation.
+
+# vendored libraries
+src/common/libccan/**
+src/common/libczmqcontainers/**
+src/common/libev/**
+src/common/liblsd/**
+src/common/libmissing/**
+src/common/libtap/**
+src/common/libtomlc99/**
+src/common/libyuarel/**
+src/common/liboptparse/getopt*
+
+# generated
+src/bindings/python/_flux/**
+
+# individually copied files
+src/bindings/lua/lalarm.c
+src/common/libidset/veb.[ch]
+src/common/libidset/veb_mach.c
+src/common/libutil/fdwalk.[ch]
+src/common/libutil/mnemonic.[ch]
+src/common/libutil/mn_wordlist.c
+src/common/libutil/sha1.[ch]
+src/common/libutil/sha256.[ch]
+src/common/libutil/test/sha1.c
+src/common/libutil/test/sha256.c
+src/common/libutil/test/blobref.c
+src/common/libutil/test/levenshtein.c
