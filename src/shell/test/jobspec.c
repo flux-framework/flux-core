@@ -227,6 +227,92 @@ struct input bad_input[] = {
     { NULL, NULL, NULL },
 };
 
+/*  Return the first element of a parsed jobspec's command array as a C string,
+ *  or NULL. Used to check which task command jobspec_resolve_task_command ()
+ *  selected.
+ */
+static const char *command0 (struct jobspec *js)
+{
+    return json_string_value (json_array_get (js->command, 0));
+}
+
+/*  A jobspec with two tasks, each bound to a different slot label, mirroring
+ *  the per-xor-slot task selection use case.
+ */
+static const char *multitask_jobspec =
+    "{\"version\": 1,"
+    " \"resources\": [{\"type\": \"slot\", \"count\": 1, \"label\": \"task\","
+    "   \"with\": [{\"type\": \"core\", \"count\": 1}]}],"
+    " \"tasks\": ["
+    "   {\"command\": [\"app_a\"], \"slot\": \"alpha\", \"count\": {\"per_slot\": 1}},"
+    "   {\"command\": [\"app_b\"], \"slot\": \"beta\", \"count\": {\"per_slot\": 1}}],"
+    " \"attributes\": {\"system\": {\"duration\": 0, \"cwd\": \"/tmp\","
+    "   \"environment\": {}}}}";
+
+static const char *multitask_R =
+    "{\"version\": 1, \"execution\": {\"R_lite\":"
+    " [{\"rank\": \"0\", \"children\": {\"core\": \"0\"}}]}}";
+
+static void test_task_resolution (void)
+{
+    struct jobspec *js;
+    rcalc_t *rs;
+    json_error_t error;
+
+    /*  Multi-task jobspec parses, and command defaults to tasks[0].
+     */
+    rs = rcalc_create (multitask_R);
+    js = jobspec_parse (multitask_jobspec, rs, &error);
+    ok (js != NULL, "multi-task jobspec parses");
+    if (js) {
+        ok (json_array_size (js->tasks) == 2,
+            "multi-task jobspec captured both tasks");
+        is (command0 (js), "app_a",
+            "command defaults to tasks[0] before resolution");
+
+        /*  NULL and empty labels keep the tasks[0] default.
+         */
+        ok (jobspec_resolve_task_command (js, NULL) == 0,
+            "resolve with NULL label succeeds");
+        is (command0 (js), "app_a", "NULL label keeps tasks[0]");
+        ok (jobspec_resolve_task_command (js, "") == 0,
+            "resolve with empty label succeeds");
+        is (command0 (js), "app_a", "empty label keeps tasks[0]");
+
+        /*  A matching label selects that task's command.
+         */
+        ok (jobspec_resolve_task_command (js, "beta") == 0,
+            "resolve with label 'beta' succeeds");
+        is (command0 (js), "app_b", "label 'beta' selects app_b");
+        ok (jobspec_resolve_task_command (js, "alpha") == 0,
+            "resolve with label 'alpha' succeeds");
+        is (command0 (js), "app_a", "label 'alpha' selects app_a");
+
+        /*  A label with no matching task fails.
+         */
+        ok (jobspec_resolve_task_command (js, "gamma") < 0,
+            "resolve with unknown label fails");
+
+        jobspec_destroy (js);
+    }
+    rcalc_destroy (rs);
+
+    /*  A single-task jobspec (the common case) is unaffected: resolving any
+     *  label either keeps tasks[0] (no label) or fails cleanly.
+     */
+    rs = rcalc_create (good_input[0].r);
+    js = jobspec_parse (good_input[0].j, rs, &error);
+    ok (js != NULL, "single-task jobspec parses");
+    if (js) {
+        is (command0 (js), "hostname", "single-task command is tasks[0]");
+        ok (jobspec_resolve_task_command (js, NULL) == 0,
+            "single-task resolve with NULL label succeeds");
+        is (command0 (js), "hostname", "single-task command unchanged");
+        jobspec_destroy (js);
+    }
+    rcalc_destroy (rs);
+}
+
 int main (int argc, char **argv)
 {
     plan (NO_PLAN);
@@ -303,6 +389,8 @@ int main (int argc, char **argv)
             jobspec_destroy (js);
         rcalc_destroy (rs);
     }
+
+    test_task_resolution ();
 
     done_testing ();
     return 0;
