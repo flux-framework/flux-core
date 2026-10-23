@@ -114,7 +114,7 @@ all
   Skip lines with empty resource sets in output. This is the default when
   `-i, --include` is used.
 
-.. options:: --no-skip-empty
+.. option:: --no-skip-empty
 
   Do not skip empty resource sets in output, even with `-i, --include`.
 
