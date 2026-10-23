@@ -34,6 +34,7 @@
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libmissing/json_object_update_recursive.h"
+#include "src/common/libfluxutil/conf_policy.h"
 #include "ccan/str/str.h"
 
 #include "queues.h"
@@ -50,9 +51,11 @@ struct queue {
      * deep-copies before merging, so neither is ever mutated in place.
      * queue_dup() relies on this to share them with a copy by incref.
      */
-    json_t *requires;           /* required properties array (own; a
-                                 * virtual queue's is always NULL - see
-                                 * queue_root() for the effective value)
+    json_t *requires;           /* effective required properties array:
+                                 * configured 'requires', or ["+NAME"] for
+                                 * a 'hosts' queue; a virtual queue's is
+                                 * always NULL - see queue_root() for its
+                                 * effective value
                                  */
     json_t *policy;             /* this queue's own [queues.NAME.policy]
                                  * table (own only; NULL if unset). See
@@ -273,19 +276,45 @@ static int queue_parse_config (struct queue *q, json_t *config)
 {
     json_t *requires = NULL;
     json_t *policy = NULL;
+    const char *hosts = NULL;
 
+    /* N.B. json_unpack() stores the keys it converts before reaching one
+     * that fails, so 'requires' and 'policy' may hold references here even
+     * on error (e.g. a 'hosts' that is not a string).
+     */
     if (config && json_unpack (config,
-                               "{s?O s?O}",
+                               "{s?O s?O s?s}",
                                "requires", &requires,
-                               "policy", &policy) < 0) {
+                               "policy", &policy,
+                               "hosts", &hosts) < 0) {
         errno = EINVAL;
-        return -1;
+        goto error;
+    }
+    /* A queue that declares 'hosts' (RFC 33) has membership property
+     * "+NAME" (RFC 20 instance-local), applied to those hosts by the
+     * resource module. Materialize the effective requires as ["+NAME"]
+     * here so queue_requires() and the queue-list RPC report it uniformly,
+     * the same as an explicit 'requires'. 'hosts' and 'requires' are
+     * mutually exclusive (conf_policy.c), so this never overrides a
+     * configured value.
+     */
+    if (!requires && hosts && q->name) {
+        char prop[QUEUE_PROPERTY_MAX];
+        (void)snprintf (prop, sizeof (prop), "+%s", q->name);
+        if (!(requires = json_pack ("[s]", prop))) {
+            errno = ENOMEM;
+            goto error;
+        }
     }
     json_decref (q->requires);
     q->requires = requires;   /* may be NULL */
     json_decref (q->policy);
     q->policy = policy;        /* may be NULL */
     return 0;
+error:
+    ERRNO_SAFE_WRAP (json_decref, requires);
+    ERRNO_SAFE_WRAP (json_decref, policy);
+    return -1;
 }
 
 static struct queue *queue_alloc (struct queues *queues,
