@@ -211,6 +211,25 @@ test_expect_success 'restore a working resource module' '
 	flux module load resource &&
 	flux module load sched-simple
 '
+# The reload request responds with the membership error, rather than a
+# bare "Invalid argument" from the errno alone.
+test_expect_success 'resource.reload reports the membership error' '
+	flux R encode -r 0-3 -H test[0-3] -c 0-1 >reload.json &&
+	cat >badreload.toml <<-EOT &&
+	[queues.batch]
+	hosts = "nosuchhost"
+	EOT
+	flux config load <badreload.toml &&
+	flux module remove sched-simple &&
+	test_must_fail flux resource reload reload.json 2>badreload.err &&
+	test_debug "cat badreload.err" &&
+	grep "invalid hosts: nosuchhost" badreload.err
+'
+test_expect_success 'restore a working resource module again' '
+	flux config load </dev/null &&
+	flux module reload resource &&
+	flux module load sched-simple
+'
 
 # ------------------------------------------------------------------
 # job-manager: effective membership in the queue-list conf object
