@@ -15,7 +15,7 @@ SYNOPSIS
                        void **buf,
                        size_t *size);
 
-  flux_msg_t *flux_msg_decode (void *buf, size_t size);
+  flux_msg_t *flux_msg_decode (const void *buf, size_t size);
 
 Link with :command:`-lflux-core`.
 
