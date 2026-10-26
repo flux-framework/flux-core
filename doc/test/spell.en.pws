@@ -1274,3 +1274,5 @@ StandardInputFileDescriptorName
 subinstances
 jobdict
 fluxkeys
+dstns
+srcns

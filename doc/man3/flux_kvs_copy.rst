@@ -12,12 +12,16 @@ SYNOPSIS
    #include <flux/core.h>
 
    flux_future_t *flux_kvs_copy (flux_t *h,
+                                 const char *srcns,
                                  const char *srckey,
+                                 const char *dstns,
                                  const char *dstkey,
                                  int commit_flags);
 
    flux_future_t *flux_kvs_move (flux_t *h,
+                                 const char *srcns,
                                  const char *srckey,
+                                 const char *dstns,
                                  const char *dstkey,
                                  int commit_flags);
 
