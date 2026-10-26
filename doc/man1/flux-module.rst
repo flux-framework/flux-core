@@ -83,7 +83,7 @@ suffix.
 When :program:`flux module load` completes successfully, the new module has
 entered the running state (see LIST OUTPUT below).
 
-.. option:: -n, --name=NAME
+.. option:: --name=NAME
 
   Override the default module name.
 
@@ -108,7 +108,7 @@ Reload module *name*. This is equivalent to running
 
   Suppress failure if *module* is not loaded and proceed with loading.
 
-.. option:: -n, --name=NAME
+.. option:: --name=NAME
 
   Override the default module name.
 
