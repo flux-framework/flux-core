@@ -106,7 +106,7 @@ This status line may be suppressed by setting
 .. option:: -w, --wait-event=EVENT
 
    Wait for event *EVENT* before detaching from eventlog. The default is
-   ``finish``.
+   ``clean``.
 
 .. option:: -E, --show-events
 

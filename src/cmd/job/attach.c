@@ -63,7 +63,7 @@ struct optparse_option attach_opts[] = {
     },
     { .name = "wait-event", .key = 'w', .has_arg = 1, .arginfo = "NAME",
       .usage = "Wait for event NAME before detaching from eventlog "
-               "(default=finish)"
+               "(default=clean)"
     },
     { .name = "label-io", .key = 'l', .has_arg = 0,
       .usage = "Label output by rank",
