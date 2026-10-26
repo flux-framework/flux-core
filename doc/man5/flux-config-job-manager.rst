@@ -54,7 +54,7 @@ housekeeping
    Note: The housekeeping script runs as the instance owner (e.g. "flux").
    On a real system, "command" is configured to "imp run housekeeping",
    and the IMP is configured to launch the flux-housekeeping systemd
-   service as root. (See :man5:`flux-config-security-imp` for details
+   service as root. (See :security:man5:`flux-config-security-imp` for details
    on configuring :command:`flux imp run`).
 
 

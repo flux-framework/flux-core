@@ -392,7 +392,7 @@ INPUT/OUTPUT
 .. option:: pty.interactive
 
   Enable an interactive pty on rank 0, suitable for use with
-  :man1:`flux job attach`.
+  :man1:`flux-job` ``attach``.
 
   By default, only rank 0 gets a pty and output is not captured. Override
   these defaults with additional pty options:
@@ -406,7 +406,7 @@ INPUT/OUTPUT
   Set output destination for stdout/stderr. *TYPE* may be:
 
   **kvs**
-    Store output in the KVS (default). Retrieved via :man1:`flux job attach`.
+    Store output in the KVS (default). Retrieved via :man1:`flux-job` ``attach``.
 
   **term**
     Write directly to terminal (bypasses KVS).
@@ -621,7 +621,7 @@ archived using :man1:`flux-archive`.
 
 .. option:: stage-in.pattern=PATTERN
 
-  Filter extracted files using a :man7:`glob` pattern.
+  Filter extracted files using a :linux:man7:`glob` pattern.
 
   .. code-block:: console
 

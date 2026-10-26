@@ -28,7 +28,7 @@ with ``flux_plugin_arg_unpack(3)``, and ``arg`` is any opaque argument passed
 when registering the handler.
 
 Multiple plugins may be loaded simultaneously. All matching handlers are
-called in load order. See :man5:`flux-conf-job-manager` or
+called in load order. See :man5:`flux-config-job-manager` or
 :man1:`flux-jobtap` for loading plugins.
 
 JOBTAP PLUGIN NAMES
@@ -1117,7 +1117,7 @@ To fully prevent conflicts, explicitly remove the builtin priority plugin:
 
     flux jobtap remove .priority-default
 
-or via configuration (See :man5:`flux-conf-job-manager`)
+or via configuration (See :man5:`flux-config-job-manager`)
 
 ::
 
@@ -1290,5 +1290,5 @@ RESOURCES
 SEE ALSO
 ========
 
-:man1:`flux-jobtap`, :man5:`flux-conf-job-manager`
+:man1:`flux-jobtap`, :man5:`flux-config-job-manager`
 
