@@ -291,7 +291,7 @@ flux_subprocess_t *flux_shell_task_subprocess (flux_shell_task_t *task);
 
 /*  Call `cb` when channel `name` is ready for reading.
  *
- *  Callback can then call flux_shell_task_get_subprocess() and use
+ *  Callback can then call flux_shell_task_subprocess() and use
  *   flux_subprocess_read() or getline() on the result to get
  *   available data.
  *
