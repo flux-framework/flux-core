@@ -74,7 +74,7 @@ Crontab lines have five standard fields, similar to :linux:man5:`crontab`:
 
 Everything after the day of week is considered a command to be run.
 
-.. option:: -o, options=LIST
+.. option:: -o, --options=LIST
 
   Set comma separated `EXTRA OPTIONS`_ for all cron entries.
 
@@ -96,7 +96,7 @@ at
 Run *command* at specific date and time described by *time*.  Any time
 string that can be parsed by :linux:man1:`date` is acceptable.
 
-.. option:: -o, options=LIST
+.. option:: -o, --options=LIST
 
   Set comma separated `EXTRA OPTIONS`_ for all cron entries.
 
