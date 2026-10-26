@@ -21,7 +21,7 @@ SYNOPSIS
                                  size_t *len);
 
    int flux_response_decode_error (const flux_msg_t *msg,
-                                   const char *errstr);
+                                   const char **errstr);
 
 Link with :command:`-lflux-core`.
 
@@ -42,8 +42,10 @@ setting :var:`data` and :var:`len` to the payload data and length. The storage
 for the raw payload belongs to :var:`msg` and should not be freed.
 
 :func:`flux_response_decode_error` decodes an optional error string included
-with an error response. This fails if the response is not an error,
-or does not include an error string payload.
+with an error response, assigning it to :var:`errstr`.  This fails if the
+response is not an error, or does not include an error string payload.
+The storage for the error string belongs to :var:`msg` and should not
+be freed.
 
 
 RETURN VALUE
