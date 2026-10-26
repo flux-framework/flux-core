@@ -100,7 +100,7 @@ test_expect_success 'kvstest works with -o pmi-simple.exchange.k=1' '
 '
 test_expect_success 'kvstest works with -o pmi-simple.exchange.k=SIZE' '
 	flux run -n${SIZE} -N${SIZE} -o pmi-simple.exchange.k=${SIZE} \
-		${kvstest} 2>kvstest_k.err &&
+		-o verbose ${kvstest} 2>kvstest_k.err &&
 	grep "using k=${SIZE}" kvstest_k.err
 '
 test_expect_success 'kvstest works with -o pmi-simple.exchange.k=SIZE+1' '

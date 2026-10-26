@@ -1272,3 +1272,5 @@ proplist
 ptr
 StandardInputFileDescriptorName
 subinstances
+jobdict
+fluxkeys

@@ -18,7 +18,7 @@
  * the name "pmi" via an entry in builtins.c builtins array.
  *
  * At shell "init", the plugin initializes a PMI object including the
- * pmi simple server and empty local kvs cache.
+ * pmi simple server, and creates a jobdict to serve as the PMI KVS.
  *
  * During each task's "task init" callback, the pmi plugin sets up the
  * subprocess channel, sets the PMI_FD, PMI_RANK, and PMI_SIZE environment
@@ -33,7 +33,8 @@
  *
  * Other requests have callbacks from the engine to provide data,
  * which is fed back to the engine, which then calls shell_pmi_response_send().
- * These are kvs_get, kvs_put, and barrier.  Although the task
+ * These are kvs_get, kvs_put, and barrier, all delegated to the jobdict
+ * plugin through the plugin stack.  Although the task
  * is effectively blocked while these callbacks are handled, they are
  * implemented with asynchronous continuation callbacks so that other tasks
  * and the shell's reactor remain live while the task awaits an answer.
@@ -67,25 +68,28 @@
 #include <flux/core.h>
 #include <jansson.h>
 
-#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libpmi/simple_server.h"
-#include "src/common/libutil/errno_safe.h"
 #include "ccan/str/str.h"
 
 #include "builtins.h"
 #include "internal.h"
 #include "task.h"
-#include "pmi_exchange.h"
 
 struct shell_pmi {
     flux_shell_t *shell;
     struct pmi_simple_server *server;
-    json_t *global; // already exchanged
-    json_t *pending;// pending to be exchanged
-    json_t *locals;  // never exchanged
-    struct pmi_exchange *exchange;
     bool abort;     // an abort exception has been raised
+    bool nomap;     // pmi-simple.nomap: omit task mapping keys
 };
+
+/* The PMI KVS is a jobdict named after the plugin.  Its puts, gets, and
+ * barriers are delegated to the builtin jobdict plugin through the plugin
+ * stack (a PMI barrier is a jobdict exchange), and exchange completion is
+ * delivered to the topic below.  The "flux" jobdict is reachable through
+ * it, so a get of flux.KEY is served from there.
+ */
+#define PMI_JOBDICT FLUX_SHELL_PLUGIN_NAME
+#define PMI_EXCHANGE_EXIT_TOPIC "pmi-simple.exchange-exit"
 
 /* pmi_simple_ops->warn() signature */
 static void shell_pmi_warn (void *client, const char *msg)
@@ -117,44 +121,98 @@ static void shell_pmi_abort (void *arg,
                       msg ? msg : "");
 }
 
-static int put_dict (json_t *dict, const char *key, const char *val)
-{
-    json_t *o;
-
-    if (!(o = json_string (val)))
-        goto nomem;
-    if (json_object_set_new (dict, key, o) < 0) {
-        // jansson decrefs the new object on failure
-        goto nomem;
-    }
-    return 0;
-nomem:
-    errno = ENOMEM;
-    return -1;
-}
-
 /**
- ** ops for using purpose-built dict exchange for PMI KVS
+ ** ops for implementing the PMI KVS on a jobdict
  ** This is used if pmi.kvs=exchange option is provided.
  **/
 
-static void exchange_cb (struct pmi_exchange *pex, void *arg)
+/* Call a jobdict topic through the plugin stack with packed IN args.
+ * On success, *argsp is set to the args (caller destroys) so OUT values
+ * may be read.  On failure, log the jobdict errmsg and return -1.
+ */
+static int jobdict_call (struct shell_pmi *pmi,
+                         const char *topic,
+                         flux_plugin_arg_t **argsp,
+                         const char *fmt,
+                         ...)
 {
-    struct shell_pmi *pmi = arg;
-    int rc = -1;
+    flux_plugin_arg_t *args;
+    va_list ap;
+    int rc;
+    const char *errmsg = NULL;
 
-    if (pmi_exchange_has_error (pex)) {
-        shell_warn ("exchange failed");
-        goto done;
+    if (!(args = flux_plugin_arg_create ()))
+        return -1;
+    va_start (ap, fmt);
+    rc = flux_plugin_arg_vpack (args, FLUX_PLUGIN_ARG_IN, fmt, ap);
+    va_end (ap);
+    if (rc < 0)
+        goto error;
+    if (flux_shell_plugstack_call (pmi->shell, topic, args) < 0) {
+        (void)flux_plugin_arg_unpack (args,
+                                      FLUX_PLUGIN_ARG_OUT,
+                                      "{s:s}",
+                                      "errmsg", &errmsg);
+        shell_warn ("%s: %s", topic, errmsg ? errmsg : "failed");
+        goto error;
     }
-    if (json_object_update (pmi->global, pmi_exchange_get_dict (pex)) < 0) {
-        shell_warn ("failed to update dict after successful exchange");
-        goto done;
+    if (argsp)
+        *argsp = args;
+    else
+        flux_plugin_arg_destroy (args);
+    return 0;
+error:
+    flux_plugin_arg_destroy (args);
+    return -1;
+}
+
+/* Store a key in the PMI jobdict.  A 'local' key is visible only on this
+ * shell; others are exchanged at PMI barriers.
+ */
+static int put_dict (struct shell_pmi *pmi,
+                     const char *key,
+                     const char *val,
+                     bool local)
+{
+    return jobdict_call (pmi,
+                         "jobdict.put",
+                         NULL,
+                         "{s:s s:s s:s s:b}",
+                         "name", PMI_JOBDICT,
+                         "key", key,
+                         "value", val,
+                         "local", local ? 1 : 0);
+}
+
+/* Fixed jobdict exchange tag for the global (all-shells) PMI barrier. */
+#define PMI_GLOBAL_TAG "global"
+
+/* The jobdict exchange has completed on this shell (successfully or not).
+ */
+static int exchange_exit_cb (flux_plugin_t *p,
+                            const char *topic,
+                            flux_plugin_arg_t *args,
+                            void *data)
+{
+    struct shell_pmi *pmi = data;
+    const char *tag;
+    const char *errmsg = NULL;
+    int rc = 0;
+
+    if (flux_plugin_arg_unpack (args,
+                                FLUX_PLUGIN_ARG_IN,
+                                "{s:s s?s}",
+                                "tag", &tag,
+                                "errmsg", &errmsg) < 0) {
+        shell_warn ("error unpacking exchange exit args");
+        return -1;
     }
-    json_object_clear (pmi->pending);
-    rc = 0;
-done:
+    if (errmsg) {
+        shell_warn ("exchange %s: %s", tag, errmsg);
+        rc = -1;
+    }
     pmi_simple_server_barrier_complete (pmi->server, rc);
+    return 0;
 }
 
 /* pmi_simple_ops->kvs_get() signature */
@@ -164,20 +222,45 @@ static int exchange_kvs_get (void *arg,
                              const char *key)
 {
     struct shell_pmi *pmi = arg;
-    json_t *o;
+    flux_plugin_arg_t *args;
     const char *val = NULL;
 
-    if ((o = json_object_get (pmi->locals, key))
-        || (o = json_object_get (pmi->pending, key))
-        || (o = json_object_get (pmi->global, key))) {
-        val = json_string_value (o);
-        pmi_simple_server_kvs_get_complete (pmi->server, cli, val);
-        return 0;
+    /* pmi-simple.nomap omits the task mapping keys, which a Flux client
+     * uses to set broker.mapping.  PMI_process_mapping is simply never
+     * put; flux.taskmap is published by the fluxkeys plugin and must be
+     * hidden here.
+     */
+    if (pmi->nomap && streq (key, "flux.taskmap"))
+        return -1; // PMI_ERR_INVALID_KEY
+    if (jobdict_call (pmi,
+                      "jobdict.get",
+                      &args,
+                      "{s:s s:s}",
+                      "name", PMI_JOBDICT,
+                      "key", key) < 0)
+        return -1; // PMI_ERR_INVALID_KEY
+    /* A value that does not fit in a PMI-1 get_result response is treated
+     * as not found rather than truncated.  The client handles a missing
+     * flux.taskmap by falling back to PMI_process_mapping.
+     */
+    if (flux_plugin_arg_unpack (args,
+                                FLUX_PLUGIN_ARG_OUT,
+                                "{s:s}",
+                                "value", &val) < 0
+        || strlen (val) > SIMPLE_KVS_VAL_MAX) {
+        flux_plugin_arg_destroy (args);
+        return -1; // PMI_ERR_INVALID_KEY (not found)
     }
-    return -1; // PMI_ERR_INVALID_KEY
+    pmi_simple_server_kvs_get_complete (pmi->server, cli, val);
+    flux_plugin_arg_destroy (args);
+    return 0;
 }
 
-/* pmi_simple_ops->barrier_enter() signature */
+/* pmi_simple_ops->barrier_enter() signature.
+ *
+ * Run a jobdict exchange over all shells, keyed by the fixed global tag,
+ * which completes via exchange_exit_cb().
+ */
 static int exchange_barrier_enter (void *arg)
 {
     struct shell_pmi *pmi = arg;
@@ -186,14 +269,13 @@ static int exchange_barrier_enter (void *arg)
         pmi_simple_server_barrier_complete (pmi->server, 0);
         return 0;
     }
-    if (pmi_exchange (pmi->exchange,
-                      pmi->pending,
-                      exchange_cb,
-                      pmi) < 0) {
-        shell_warn ("pmi_exchange %s", flux_strerror (errno));
-        return -1; // PMI_FAIL
-    }
-    return 0;
+    return jobdict_call (pmi,
+                         "jobdict.exchange",
+                         NULL,
+                         "{s:s s:s s:s}",
+                         "name", PMI_JOBDICT,
+                         "tag", PMI_GLOBAL_TAG,
+                         "exit_topic", PMI_EXCHANGE_EXIT_TOPIC);
 }
 
 /* pmi_simple_ops->kvs_put() signature */
@@ -206,9 +288,7 @@ static int exchange_kvs_put (void *arg,
 
     /* Hack to support "node scope" for partial PMI2 impl needed for Cray.
      */
-    if (strstarts (key, "local::"))
-        return put_dict (pmi->locals, key, val);
-    return put_dict (pmi->pending, key, val);
+    return put_dict (pmi, key, val, strstarts (key, "local::"));
 }
 
 /**
@@ -295,72 +375,10 @@ static int init_clique (struct shell_pmi *pmi)
             shell_warn ("PMI_process_mapping overflows PMI max value.");
         goto out;
     }
-    put_dict (pmi->locals, "PMI_process_mapping", s);
+    put_dict (pmi, "PMI_process_mapping", s, true);
 out:
     free (s);
     return 0;
-}
-
-static int set_flux_tbon_interface_hint (struct shell_pmi *pmi)
-{
-    const char *hint;
-
-    if (!(hint = flux_attr_get (pmi->shell->h, "tbon.interface-hint")))
-        return 0;
-    put_dict (pmi->locals, "flux.tbon-interface-hint", hint);
-    return 0;
-}
-
-static int set_flux_constrained_resources (struct shell_pmi *pmi)
-{
-    if (pmi->shell->info->constrained_resources)
-        put_dict (pmi->locals, "flux.constrained-resources", "1");
-    return 0;
-}
-
-static int set_flux_instance_level (struct shell_pmi *pmi)
-{
-    char *p;
-    long l;
-    int n;
-    int rc = -1;
-    char val [SIMPLE_KVS_VAL_MAX];
-    const char *level = flux_attr_get (pmi->shell->h, "instance-level");
-
-    if (!level)
-        return 0;
-
-    errno = 0;
-    l = strtol (level, &p, 10);
-    if (errno != 0 || *p != '\0' || l < 0) {
-        shell_log_error ("set_flux_instance_level level=%s invalid", level);
-        goto out;
-    }
-    n = snprintf (val, sizeof (val), "%lu", l+1);
-    if (n >= sizeof (val)) {
-        shell_log_errno ("set_flux_instance_level: snprintf");
-        goto out;
-    }
-    put_dict (pmi->locals, "flux.instance-level", val);
-    rc = 0;
-out:
-    return rc;
-}
-
-static int set_flux_taskmap (struct shell_pmi *pmi)
-{
-    struct taskmap *map = pmi->shell->info->taskmap;
-    char *val = NULL;
-    int rc = -1;
-
-    if (!(val = taskmap_encode (map, TASKMAP_ENCODE_WRAPPED))
-        || strlen (val) > SIMPLE_KVS_VAL_MAX)
-        goto out;
-    put_dict (pmi->locals, "flux.taskmap", val);
-    rc = 0;
-out:
-    free (val);
-    return rc;
 }
 
 static void pmi_destroy (struct shell_pmi *pmi)
@@ -368,10 +386,6 @@ static void pmi_destroy (struct shell_pmi *pmi)
     if (pmi) {
         int saved_errno = errno;
         pmi_simple_server_destroy (pmi->server);
-        pmi_exchange_destroy (pmi->exchange);
-        json_decref (pmi->global);
-        json_decref (pmi->pending);
-        json_decref (pmi->locals);
         free (pmi);
         errno = saved_errno;
     }
@@ -407,8 +421,9 @@ static int parse_args (json_t *config,
     return 0;
 }
 
-static struct shell_pmi *pmi_create (flux_shell_t *shell, json_t *config)
+static struct shell_pmi *pmi_create (flux_plugin_t *p, json_t *config)
 {
+    flux_shell_t *shell = flux_plugin_get_shell (p);
     struct shell_pmi *pmi;
     struct shell_info *info = shell->info;
     int flags = shell->verbose ? PMI_SIMPLE_SERVER_TRACE : 0;
@@ -427,7 +442,18 @@ static struct shell_pmi *pmi_create (flux_shell_t *shell, json_t *config)
         shell_pmi_ops.kvs_put = exchange_kvs_put;
         shell_pmi_ops.kvs_get = exchange_kvs_get;
         shell_pmi_ops.barrier_enter = exchange_barrier_enter;
-        if (!(pmi->exchange = pmi_exchange_create (shell, exchange_k)))
+        if (flux_plugin_add_handler (p,
+                                     PMI_EXCHANGE_EXIT_TOPIC,
+                                     exchange_exit_cb,
+                                     pmi) < 0)
+            goto error;
+        if (jobdict_call (pmi,
+                          "jobdict.create",
+                          NULL,
+                          "{s:s s:i s:[s]}",
+                          "name", PMI_JOBDICT,
+                          "k", exchange_k,
+                          "reach", "flux") < 0)
             goto error;
     }
     else {
@@ -454,18 +480,8 @@ static struct shell_pmi *pmi_create (flux_shell_t *shell, json_t *config)
                                                   flags,
                                                   pmi)))
         goto error;
-    if (!(pmi->global = json_object ())
-        || !(pmi->pending = json_object ())
-        || !(pmi->locals = json_object ())) {
-        errno = ENOMEM;
-        goto error;
-    }
+    pmi->nomap = nomap;
     if (!nomap && init_clique (pmi) < 0)
-        goto error;
-    if (set_flux_instance_level (pmi) < 0
-        || set_flux_tbon_interface_hint (pmi) < 0
-        || set_flux_constrained_resources (pmi) < 0
-        || (!nomap && set_flux_taskmap (pmi) < 0))
         goto error;
     return pmi;
 error:
@@ -533,7 +549,7 @@ static int shell_pmi_init (flux_plugin_t *p,
         return 0; // plugin disabled
     shell_debug ("simple wire protocol is enabled");
 
-    if (!(pmi = pmi_create (shell, config)))
+    if (!(pmi = pmi_create (p, config)))
         return -1;
     if (flux_plugin_aux_set (p, "pmi", pmi, (flux_free_f) pmi_destroy) < 0) {
         pmi_destroy (pmi);
