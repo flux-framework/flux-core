@@ -408,9 +408,6 @@ INPUT/OUTPUT
   **kvs**
     Store output in the KVS (default). Retrieved via :man1:`flux-job` ``attach``.
 
-  **term**
-    Write directly to terminal (bypasses KVS).
-
   **file**
     Write to a file. Requires ``output.<stream>.path`` to be set.
 
