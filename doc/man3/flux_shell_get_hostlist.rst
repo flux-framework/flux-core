@@ -1,5 +1,5 @@
 ==========================
-flux_shell_get_hostname(3)
+flux_shell_get_hostlist(3)
 ==========================
 
 .. default-domain:: c
