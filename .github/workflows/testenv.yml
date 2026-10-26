@@ -37,7 +37,7 @@ permissions:
 jobs:
   setup:
     name: Determine distros to rebuild
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       distros: ${{ steps.get-distros.outputs.distros }}
     steps:
@@ -73,7 +73,7 @@ jobs:
       matrix:
         distro: ${{ fromJson(needs.setup.outputs.distros) }}
     timeout-minutes: 90
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       DISTRO: ${{ matrix.distro }}
     steps:
@@ -144,7 +144,7 @@ jobs:
       matrix:
         distro: ['bookworm']
     timeout-minutes: 90
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       DISTRO: ${{ matrix.distro }}
     steps:
@@ -182,7 +182,7 @@ jobs:
       fail-fast: false
       matrix:
         distro: ${{ fromJson(needs.setup.outputs.distros) }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 90
     env:
       DISTRO: ${{ matrix.distro }}
@@ -273,7 +273,7 @@ jobs:
     strategy:
       matrix:
         distro: ['bookworm']
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 90
     env:
       DISTRO: ${{ matrix.distro }}
@@ -352,7 +352,7 @@ jobs:
     concurrency:
       group: testenv-publish-${{ matrix.distro }}
       cancel-in-progress: false
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       DISTRO: ${{ matrix.distro }}
     steps:
