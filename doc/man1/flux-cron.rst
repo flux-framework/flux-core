@@ -164,7 +164,7 @@ is an arbitrary floating point duration with optional suffix *s* for
 seconds, *m* for minutes, *h* for hours and *d* for days.  If no suffix is
 specified, seconds is assumed.
 
-.. option:: -n, --name=STRING
+.. option:: -N, --name=STRING
 
   Set a name for this cron entry to *STRING*.
 
