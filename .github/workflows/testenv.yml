@@ -69,6 +69,7 @@ jobs:
     needs: [setup]
     if: needs.setup.outputs.distros != '[]'
     strategy:
+      fail-fast: false
       matrix:
         distro: ${{ fromJson(needs.setup.outputs.distros) }}
     timeout-minutes: 90
@@ -97,12 +98,14 @@ jobs:
           name: testenv-${{ matrix.distro }}-amd64
           path: out/testenv-${{ matrix.distro }}-amd64.tar
           if-no-files-found: error
+          retention-days: 1
 
   build-arm64-container:
     name: build new testenv container for arm64
     needs: [setup]
     if: needs.setup.outputs.distros != '[]'
     strategy:
+      fail-fast: false
       matrix:
         distro: ${{ fromJson(needs.setup.outputs.distros) }}
     timeout-minutes: 90
@@ -131,6 +134,7 @@ jobs:
           name: testenv-${{ matrix.distro }}-arm64
           path: out/testenv-${{ matrix.distro }}-arm64.tar
           if-no-files-found: error
+          retention-days: 1
 
   build-386-container:
     name: build new testenv container for 386
@@ -168,12 +172,14 @@ jobs:
           name: testenv-${{ matrix.distro }}-386
           path: out/testenv-${{ matrix.distro }}-386.tar
           if-no-files-found: error
+          retention-days: 1
 
   test-amd64-container:
     name: Test newly-built amd64 container
     needs: [setup, build-amd64-container]
     if: ${{ github.event_name != 'workflow_dispatch' || !inputs.skip-tests }}
     strategy:
+      fail-fast: false
       matrix:
         distro: ${{ fromJson(needs.setup.outputs.distros) }}
     runs-on: ubuntu-latest
@@ -218,6 +224,7 @@ jobs:
     needs: [setup, build-arm64-container]
     if: ${{ github.event_name != 'workflow_dispatch' || !inputs.skip-tests }}
     strategy:
+      fail-fast: false
       matrix:
         distro: ${{ fromJson(needs.setup.outputs.distros) }}
     runs-on: ubuntu-24.04-arm
@@ -339,8 +346,12 @@ jobs:
       (needs.test-386-container.result == 'success' ||
        needs.test-386-container.result == 'skipped')
     strategy:
+      fail-fast: false
       matrix:
         distro: ${{ fromJson(needs.setup.outputs.distros) }}
+    concurrency:
+      group: testenv-publish-${{ matrix.distro }}
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     env:
       DISTRO: ${{ matrix.distro }}
