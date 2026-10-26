@@ -422,6 +422,12 @@ INPUT/OUTPUT
   Supports mustache templates for dynamic paths. See MUSTACHE TEMPLATES
   in :man1:`flux-submit` for full documentation.
 
+.. option:: output.{stdout,stderr}.label=BOOL
+
+  When stdout/stderr is redirected to a file, prefix each line with the
+  task rank that produced it, e.g. ``0: hello``. Output stored in the KVS
+  is not affected.
+
 .. option:: output.limit=SIZE
 
   Limit KVS output to *SIZE* bytes per stream. Once exceeded, output is
