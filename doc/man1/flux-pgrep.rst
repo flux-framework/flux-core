@@ -85,7 +85,7 @@ OPTIONS
 
    Suppress printing of the header line. (pgrep only)
 
-.. option:: -w, --wait
+.. option:: --wait
 
    Wait for jobs to finish after cancel. (pkill only)
 
