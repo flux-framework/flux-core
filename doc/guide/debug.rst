@@ -150,7 +150,7 @@ unique temporary directory. This is particularly effective for finding
 race conditions or intermittent failures that only appear under concurrent
 execution. Adjust the ``--cc`` range as needed for your testing requirements.
 Test concurrency can be further increased by running this example under
-:command:`flux start -N`, where N is greater than 1.
+:command:`flux start -s N`, where N is greater than 1.
 
 .. note::
   Similar to ``bulksubmit``, failures can be identified with
