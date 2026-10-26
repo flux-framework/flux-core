@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e
+
 die() {
     echo "$(basename $0): $@" >&2
     exit 1
@@ -43,6 +45,8 @@ source macos-venv/bin/activate
 pip3 install setuptools
 pip3 install -r scripts/requirements-dev.txt
 
-luarocks --lua-version 5.4 install luaposix --tree /opt/homebrew
+# Pin luaposix: release 38 requires the luarocks-build-luke backend and
+# drops the legacy top-level posix.exec/stat/setrlimit API that flux uses.
+luarocks --lua-version 5.4 install luaposix 37.0-1 --tree /opt/homebrew
 
 echo "Now run scripts/configure-macos.sh"
