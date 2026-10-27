@@ -470,25 +470,53 @@ static struct pmi_simple_ops shell_pmi_ops = {
     .warn           = shell_pmi_warn,
 };
 
+/* Parse pmi-simple.version, a string from a config file but a real
+ * from the command line, into a PMI-1 subversion.
+ */
+static int parse_version (json_t *version, int *subversion)
+{
+    const char *s = json_string_value (version);
+    char buf[16];
+
+    if (!s) {
+        snprintf (buf, sizeof (buf), "%g", json_number_value (version));
+        s = buf;
+    }
+    if (streq (s, "1.1"))
+        *subversion = 1;
+    else if (streq (s, "1.2"))
+        *subversion = 2;
+    else {
+        shell_log_error ("option error: version must be 1.1 or 1.2");
+        return -1;
+    }
+    return 0;
+}
+
 static int parse_args (json_t *config,
                        int *exchange_k,
                        const char **kvs,
-                       int *nomap)
+                       int *nomap,
+                       int *subversion)
 {
     json_error_t error;
+    json_t *version = NULL;
 
     if (config) {
         if (json_unpack_ex (config,
                             &error,
                             0,
-                            "{s?s s?{s?i !} s?i !}",
+                            "{s?s s?{s?i !} s?i s?o !}",
                             "kvs", kvs,
                             "exchange",
                               "k", exchange_k,
-                            "nomap", nomap) < 0) {
+                            "nomap", nomap,
+                            "version", &version) < 0) {
             shell_log_error ("option error: %s", error.text);
             return -1;
         }
+        if (version && parse_version (version, subversion) < 0)
+            return -1;
     }
     return 0;
 }
@@ -504,12 +532,13 @@ static struct shell_pmi *pmi_create (flux_plugin_t *p, json_t *config)
     const char *kvs = "exchange";
     int exchange_k = 0; // 0=use default tree fanout
     int nomap = 0;      // avoid generation of PMI_process_mapping
+    int subversion = 0; // 0=offer the server's maximum PMI-1 subversion
 
     if (!(pmi = calloc (1, sizeof (*pmi))))
         return NULL;
     pmi->shell = shell;
 
-    if (parse_args (config, &exchange_k, &kvs, &nomap) < 0)
+    if (parse_args (config, &exchange_k, &kvs, &nomap, &subversion) < 0)
         goto error;
     if (streq (kvs, "exchange")) {
         shell_pmi_ops.kvs_put = exchange_kvs_put;
@@ -554,6 +583,9 @@ static struct shell_pmi *pmi_create (flux_plugin_t *p, json_t *config)
                                                   kvsname,
                                                   flags,
                                                   pmi)))
+        goto error;
+    if (subversion > 0
+        && pmi_simple_server_set_subversion (pmi->server, subversion) < 0)
         goto error;
     pmi->nomap = nomap;
     if (!nomap && init_clique (pmi) < 0)

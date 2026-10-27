@@ -77,6 +77,12 @@ struct pmi_simple_server *pmi_simple_server_create (struct pmi_simple_ops ops,
                                                     void *arg);
 void pmi_simple_server_destroy (struct pmi_simple_server *pmi);
 
+/* Set the maximum PMI-1 subversion offered in the init reply (default 2).
+ * Setting 1 hides the PMI-1.2 group barrier from clients.
+ */
+int pmi_simple_server_set_subversion (struct pmi_simple_server *pmi,
+                                      int subversion);
+
 /* Put null-terminated request with sending client reference to protocol
  * engine.  The request should end with a newline.
  * Returns 1 indicating finalized / close fd, 0 on success, -1 on failure.
