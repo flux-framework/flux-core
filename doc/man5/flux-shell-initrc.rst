@@ -401,7 +401,7 @@ shell.info
 A table containing shell metadata. Read-only. Available fields:
 
 **jobid**
-  Job ID as a string.
+  Job ID as an integer.
 
 **instance_owner**
   The instance owner userid of the enclosing instance
