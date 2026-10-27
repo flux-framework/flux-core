@@ -304,6 +304,7 @@ TESTSCRIPTS = \
 	t3001-mpi-personalities.t \
 	t3002-pmi.t \
 	t3003-mpi-abort.t \
+	t3004-mpi-sessions.t \
 	t3201-crontabs.t \
 	t3300-system-basic.t \
 	t3301-system-latestart.t \
@@ -565,6 +566,7 @@ check_PROGRAMS += \
 	mpi/hello \
 	mpi/abort \
 	mpi/version \
+	mpi/sessions \
 	mpi/mpich_basic/self \
 	mpi/mpich_basic/simple \
 	mpi/mpich_basic/sendrecv \
@@ -682,6 +684,11 @@ mpi_version_SOURCES = mpi/version.c
 mpi_version_CPPFLAGS = $(MPI_CFLAGS) $(test_cppflags)
 mpi_version_LDADD = $(MPI_CLDFLAGS) $(test_ldadd)
 mpi_version_LDFLAGS = $(test_ldflags)
+
+mpi_sessions_SOURCES = mpi/sessions.c
+mpi_sessions_CPPFLAGS = $(MPI_CFLAGS) $(test_cppflags)
+mpi_sessions_LDADD = $(MPI_CLDFLAGS) $(test_ldadd)
+mpi_sessions_LDFLAGS = $(test_ldflags)
 
 mpi_mpich_basic_adapt_SOURCES = mpi/mpich_basic/adapt.c mpi/mpich_basic/GetOpt.c mpi/mpich_basic/GetOpt.h
 mpi_mpich_basic_adapt_CPPFLAGS = $(MPI_CFLAGS) $(test_cppflags)
