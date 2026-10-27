@@ -75,10 +75,6 @@ status
 
 Report the current queue status.
 
-.. option:: -q, --queue=NAME
-
-   Select a queue by name.
-
 .. option:: -v, --verbose
 
    Display more detail about internal job manager state.
@@ -118,10 +114,6 @@ enable
 .. program:: flux queue enable
 
 Allow jobs to be submitted to the queue.
-
-.. option:: -q, --queue=NAME
-
-   Select a queue by name.
 
 .. option:: -a, --all
 
