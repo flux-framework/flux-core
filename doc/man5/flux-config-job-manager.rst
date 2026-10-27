@@ -170,7 +170,7 @@ epilog
    command
       (optional, string) An array of strings specifying the command to run. If
       ``exec.imp`` is set, the default command is ``["flux-imp",
-      "run", "prolog"]``, otherwise it is an error if command is not set.
+      "run", "epilog"]``, otherwise it is an error if command is not set.
    per-rank
       (optional, bool) By default the job-manager epilog only runs ``command``
       on rank 0. With ``per-rank=true``, the command will be run on each
