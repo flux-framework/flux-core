@@ -179,7 +179,7 @@ Examples:
 urgency
 -------
 
-.. program:: flux job wait
+.. program:: flux job urgency
 
 :program:`flux job urgency` changes a job's urgency value.  The urgency
 may also be specified at job submission time.  The argument *N* has a range
