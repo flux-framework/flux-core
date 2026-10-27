@@ -125,7 +125,7 @@ Reload module *name*. This is equivalent to running
 remove
 ------
 
-.. program:: flux module reload
+.. program:: flux module remove
 
 Remove module *name*.
 
