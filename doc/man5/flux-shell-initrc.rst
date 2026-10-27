@@ -418,6 +418,11 @@ A table containing shell metadata. Read-only. Available fields:
 **service**
   Shell service name (format: ``<userid>-shell-<jobid>``).
 
+**constrained_resources**
+  Boolean indicating whether the job's resources are constrained to its
+  allocation, as configured by ``exec.sdexec-constrain-resources``
+  (see :man5:`flux-config-exec`).
+
 **options**
   Shell options table (i.e. ``attributes.system.shell.options``)
   from jobspec.
