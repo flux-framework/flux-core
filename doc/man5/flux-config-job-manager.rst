@@ -216,8 +216,6 @@ EXAMPLE
 
    [job-manager]
 
-   journal-size-limit = 10000
-
    inactive-age-limit = "7d"
    inactive-num-limit = 10000
 
