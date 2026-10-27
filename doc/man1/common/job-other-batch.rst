@@ -70,4 +70,4 @@
 
 .. option:: --quiet
 
-   Suppress logging of jobids to stdout
+   *(batch only)* Suppress logging of jobids to stdout
