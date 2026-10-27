@@ -51,7 +51,7 @@ via a set of *RULE* expressions. The currently supported rules are
    Examples:
        ``PATH``, ``FLUX_*_PATH``, ``/^OMP.*/``
 
-Since we always starts with a copy of the current environment,
+Since we always start with a copy of the current environment,
 the default implicit rule is ``*`` (or :option:`--env=*`). To start with an
 empty environment instead, the ``-*`` rule or :option:`--env-remove=*` option
 should be used. For example, the following will only export the current

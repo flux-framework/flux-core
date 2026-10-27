@@ -107,7 +107,7 @@ shown to submitting users.
 
    Do not preserve the new queue disabled state across a Flux instance restart.
 
-.. options:: -m, --message=REASON
+.. option:: -m, --message=REASON
 
    Add a reason that the queue is disabled. This will be shown to users
    who attempt to submit to the queue.
@@ -160,7 +160,7 @@ resources.
 
    Do not preserve the new queue stop state across a Flux instance restart.
 
-.. options:: -m, --message=REASON
+.. option:: -m, --message=REASON
 
    Add a reason that the queue is stopped. This message will be displayed
    in the output of :command:`flux queue status`.

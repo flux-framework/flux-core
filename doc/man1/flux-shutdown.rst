@@ -67,7 +67,7 @@ OPTIONS
 
    Show only error log messages (severity level <= LOG_WARNING level).
 
-.. option:: --verbose=[LEVEL]
+.. option:: -v, --verbose=[LEVEL]
 
    Increase output verbosity.  Level 1 shows all log messages.  Higher
    verbosity levels are reserved for future use.

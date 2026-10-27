@@ -119,7 +119,7 @@ OPTIONS
    Print extended details before tree output. This is the same as
    :option:`--details=default`.
 
-.. option:: -d, --detail=NAME
+.. option:: -d, --details=NAME
 
    Select a named extended details format. The list of supported names
    can be seen in :option:`flux pstree --help` output.

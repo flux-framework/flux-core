@@ -784,7 +784,7 @@ exec eventlog and can be used for tool synchronization, debugging, or
 creating a permanent record of plugin state.
 
 Context is added as JSON and becomes part of the event visible via
-:man1:`flux job eventlog`:
+:man1:`flux-job` ``eventlog``:
 
 .. code-block:: c
 
@@ -1069,7 +1069,7 @@ service on the leader shell (rank 0) that follower shells use to send task
 output for aggregation.
 
 **Interactive I/O**: The input plugin implements an input service for
-interactive standard input, allowing clients like :man1:`flux job attach`
+interactive standard input, allowing clients like :man1:`flux-job` ``attach``
 to send data to job tasks.
 
 **Remote execution**: The rexec plugin implements an RFC 42 Subprocess
@@ -1342,7 +1342,7 @@ Test plugins in isolation:
   $ flux start -s1 -S conf.shell_pluginpath=$(pwd)
   $ flux run -o userrc=test.lua myapp
 
-Use :man3:`shell_log` for debug logging:
+Use :man3:`flux_shell_log` for debug logging:
 
 .. code-block:: c
 

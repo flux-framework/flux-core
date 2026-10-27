@@ -11,8 +11,7 @@ SYNOPSIS
 
    #include <flux/core.h>
 
-   flux_watcher_t *flux_watcher_set_priority (flux_watcher_t *w,
-                                              int priority);
+   void flux_watcher_set_priority (flux_watcher_t *w, int priority);
 
 Link with :command:`-lflux-core`.
 

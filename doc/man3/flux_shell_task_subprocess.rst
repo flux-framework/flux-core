@@ -21,7 +21,7 @@ DESCRIPTION
 ===========
 
 :func:`flux_shell_task_subprocess` returns the subprocess for a shell
-task in var:`task_fork` and :var:`task_exit` callbacks.
+task in :var:`task_fork` and :var:`task_exit` callbacks.
 
 :func:`flux_shell_task_cmd` returns the cmd structure for a shell task.
 

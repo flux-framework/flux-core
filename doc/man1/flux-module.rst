@@ -6,12 +6,12 @@ flux-module(1)
 SYNOPSIS
 ========
 
-| **flux** **module** **load** [*--name*] [*--exec*] *module* [*args...*]
-| **flux** **module** **reload** [*--name*] [*--exec*] [*--force*] *module* [*args...*]
+| **flux** **module** **load** [*--name=NAME*] [*--exec*] *module* [*args...*]
+| **flux** **module** **reload** [*--name=NAME*] [*--exec*] [*--force*] *module* [*args...*]
 | **flux** **module** **remove** [*--force*] *name*
 | **flux** **module** **list** [*-l*]
 | **flux** **module** **stats** [*-R*] [*--clear*] *name*
-| **flux** **module** **debug** [*--setbit=VAL*] [*--clearbit=VAL*] [*--set=MASK*] [*--clear=MASK*] *name*
+| **flux** **module** **debug** [*--setbit=MASK*] [*--clearbit=MASK*] [*--set=MASK*] [*--clear*] *name*
 | **flux** **module** **trace** [-f] [*-t TYPE,...*] [-T *topic-glob*] [*name...*]
 
 
@@ -83,7 +83,7 @@ suffix.
 When :program:`flux module load` completes successfully, the new module has
 entered the running state (see LIST OUTPUT below).
 
-.. option:: -n, --name=NAME
+.. option:: --name=NAME
 
   Override the default module name.
 
@@ -108,7 +108,7 @@ Reload module *name*. This is equivalent to running
 
   Suppress failure if *module* is not loaded and proceed with loading.
 
-.. option:: -n, --name=NAME
+.. option:: --name=NAME
 
   Override the default module name.
 

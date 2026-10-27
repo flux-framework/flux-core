@@ -14,7 +14,7 @@ SYNOPSIS
    flux_msg_t *flux_request_encode (const char *topic, const char *s);
 
    flux_msg_t *flux_request_encode_raw (const char *topic,
-                                        void *data,
+                                        const void *data,
                                         size_t len);
 
 Link with :command:`-lflux-core`.
