@@ -12,7 +12,7 @@ SYNOPSIS
   #include <flux/core.h>
 
   const char *flux_conf_builtin_get (const char *key,
-                                     enum flux_conf_flags hint);
+                                     enum flux_conf_builtin_hint hint);
 
 
 Link with :command:`-lflux-core`.
