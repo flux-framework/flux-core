@@ -32,10 +32,12 @@ name: rebuild testenv containers using docker buildx
 env:
   DOCKERHUB_REPO: fluxrm
   DOCKER_USERNAME: travisflux
+permissions:
+  contents: read
 jobs:
   setup:
     name: Determine distros to rebuild
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       distros: ${{ steps.get-distros.outputs.distros }}
     steps:
@@ -65,12 +67,13 @@ jobs:
   build-amd64-container:
     name: build new testenv container for amd64
     needs: [setup]
-    if: needs.setup.outputs.distros
+    if: needs.setup.outputs.distros != '[]'
     strategy:
+      fail-fast: false
       matrix:
         distro: ${{ fromJson(needs.setup.outputs.distros) }}
     timeout-minutes: 90
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       DISTRO: ${{ matrix.distro }}
     steps:
@@ -95,12 +98,14 @@ jobs:
           name: testenv-${{ matrix.distro }}-amd64
           path: out/testenv-${{ matrix.distro }}-amd64.tar
           if-no-files-found: error
+          retention-days: 1
 
   build-arm64-container:
     name: build new testenv container for arm64
     needs: [setup]
-    if: needs.setup.outputs.distros
+    if: needs.setup.outputs.distros != '[]'
     strategy:
+      fail-fast: false
       matrix:
         distro: ${{ fromJson(needs.setup.outputs.distros) }}
     timeout-minutes: 90
@@ -129,6 +134,7 @@ jobs:
           name: testenv-${{ matrix.distro }}-arm64
           path: out/testenv-${{ matrix.distro }}-arm64.tar
           if-no-files-found: error
+          retention-days: 1
 
   build-386-container:
     name: build new testenv container for 386
@@ -138,7 +144,7 @@ jobs:
       matrix:
         distro: ['bookworm']
     timeout-minutes: 90
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       DISTRO: ${{ matrix.distro }}
     steps:
@@ -166,15 +172,17 @@ jobs:
           name: testenv-${{ matrix.distro }}-386
           path: out/testenv-${{ matrix.distro }}-386.tar
           if-no-files-found: error
+          retention-days: 1
 
   test-amd64-container:
     name: Test newly-built amd64 container
     needs: [setup, build-amd64-container]
     if: ${{ github.event_name != 'workflow_dispatch' || !inputs.skip-tests }}
     strategy:
+      fail-fast: false
       matrix:
         distro: ${{ fromJson(needs.setup.outputs.distros) }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 90
     env:
       DISTRO: ${{ matrix.distro }}
@@ -216,6 +224,7 @@ jobs:
     needs: [setup, build-arm64-container]
     if: ${{ github.event_name != 'workflow_dispatch' || !inputs.skip-tests }}
     strategy:
+      fail-fast: false
       matrix:
         distro: ${{ fromJson(needs.setup.outputs.distros) }}
     runs-on: ubuntu-24.04-arm
@@ -264,7 +273,7 @@ jobs:
     strategy:
       matrix:
         distro: ['bookworm']
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 90
     env:
       DISTRO: ${{ matrix.distro }}
@@ -337,12 +346,15 @@ jobs:
       (needs.test-386-container.result == 'success' ||
        needs.test-386-container.result == 'skipped')
     strategy:
+      fail-fast: false
       matrix:
         distro: ${{ fromJson(needs.setup.outputs.distros) }}
-    runs-on: ubuntu-latest
+    concurrency:
+      group: testenv-publish-${{ matrix.distro }}
+      cancel-in-progress: false
+    runs-on: ubuntu-24.04
     env:
       DISTRO: ${{ matrix.distro }}
-      DOCKER_PASSWORD: ${{ secrets.DOCKER_HUB_TRAVISFLUX_TOKEN }}
     steps:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4.4.1
@@ -351,7 +363,7 @@ jobs:
         uses: docker/login-action@v4.6.0
         with:
           username: ${{ env.DOCKER_USERNAME }}
-          password: ${{ env.DOCKER_PASSWORD }}
+          password: ${{ secrets.DOCKER_HUB_TRAVISFLUX_TOKEN }}
 
       - name: Download amd64 artifact
         uses: actions/download-artifact@v8.0.1
