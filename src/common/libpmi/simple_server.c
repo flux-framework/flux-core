@@ -83,6 +83,7 @@
 #include "pmi.h"
 
 /* Highest PMI-1 subversion this server supports (1.2 adds group barriers).
+ * pmi_simple_server_set_subversion() may lower it to 1.
  */
 #define PMI_SUBVERSION_MAX 2
 
@@ -119,6 +120,7 @@ struct pmi_simple_server {
     zhashx_t *barriers; // struct barrier hashed by group string
 
     int flags;
+    int subversion;     // maximum PMI-1 subversion offered to clients
 };
 
 
@@ -185,6 +187,17 @@ static void barrier_destructor (void **item)
         barrier_destroy (*item);
         *item = NULL;
     }
+}
+
+int pmi_simple_server_set_subversion (struct pmi_simple_server *pmi,
+                                      int subversion)
+{
+    if (!pmi || subversion < 1 || subversion > PMI_SUBVERSION_MAX) {
+        errno = EINVAL;
+        return -1;
+    }
+    pmi->subversion = subversion;
+    return 0;
 }
 
 /* Create a barrier from a barrier_in group string: NULL for the legacy
@@ -266,6 +279,7 @@ struct pmi_simple_server *pmi_simple_server_create (struct pmi_simple_ops ops,
     pmi->universe_size = universe_size;
     pmi->local_size = local_size;
     pmi->flags = flags;
+    pmi->subversion = PMI_SUBVERSION_MAX;
     pmi->kvsname = strdup (kvsname);
     pmi->clients = client_hash_create ();
     if (!(pmi->barriers = zhashx_new ())) {
@@ -370,7 +384,7 @@ int pmi_simple_server_request (struct pmi_simple_server *pmi,
             goto proto;
         if (keyval_parse_uint (buf, "pmi_subversion", &pmi_subversion) < 0)
             goto proto;
-        if (pmi_version != 1 || pmi_subversion > PMI_SUBVERSION_MAX) {
+        if (pmi_version != 1 || pmi_subversion > pmi->subversion) {
             if (pmi_version == 2 && cli->rank == 0) {
                 warn (pmi,
                       cli,
@@ -386,7 +400,7 @@ int pmi_simple_server_request (struct pmi_simple_server *pmi,
                       sizeof (resp),
                       "cmd=response_to_init rc=0 "
                       "pmi_version=1 pmi_subversion=%d\n",
-                      PMI_SUBVERSION_MAX);
+                      pmi->subversion);
         }
     }
     /* maxes */

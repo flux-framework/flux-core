@@ -593,6 +593,15 @@ PMI CONFIGURATION
   Higher fanout reduces exchange time but increases message size and
   leader load.
 
+.. option:: pmi-simple.version=VERSION
+
+  Set the maximum PMI-1 protocol version offered to clients, either
+  ``1.1`` or ``1.2``.  Default: ``1.2``
+
+  PMI 1.2 adds the group barrier used by MPICH 5 to bootstrap MPI Sessions.
+  Setting ``1.1`` hides it, so clients that would otherwise use it fall
+  back to PMI 1.1 behavior.
+
 STAGE-IN
 ========
 
