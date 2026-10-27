@@ -185,7 +185,7 @@ Block until all queues become empty.  It is sometimes useful to run after
 :program:`flux queue disable`, to wait until the system is quiescent and can
 be taken down for maintenance.
 
-.. option:: --timeout=FSD
+.. option:: -t, --timeout=FSD
 
    Limit the time that the command will block.
 
@@ -199,7 +199,7 @@ and no outstanding alloc requests to the scheduler).  It may be useful to run
 after :program:`flux queue stop` to wait until the scheduler and execution
 system are quiescent before maintenance involving them.
 
-.. option:: --timeout=FSD
+.. option:: -t, --timeout=FSD
 
    Limit the time that the command will block.
 
