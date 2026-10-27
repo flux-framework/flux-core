@@ -85,7 +85,7 @@ get
 .. program:: flux kvs get
 
 Retrieve the value stored under *key* and print it on standard output.
-It is an error if *key* does not exist, unless :option:``--waitcreate`` is
+It is an error if *key* does not exist, unless :option:`--waitcreate` is
 specified.  It is an error if *key* is a directory.
 
 If multiple *key* arguments are specified, their values are concatenated.
