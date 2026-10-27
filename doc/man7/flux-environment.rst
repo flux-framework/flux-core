@@ -106,7 +106,7 @@ The following are set in the environment of each task spawned by
 .. envvar:: FLUX_JOB_CC
 
    When :option:`flux submit --cc` or :option:`flux bulksubmit --cc` is used
-   to submit a set of jobs, :envvar:`FLUX_JOB_CC` is set to the the integer
+   to submit a set of jobs, :envvar:`FLUX_JOB_CC` is set to the integer
    id of the current job in the set.
 
 .. envvar:: FLUX_JOB_TMPDIR
