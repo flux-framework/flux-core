@@ -108,6 +108,11 @@ Reload module *name*. This is equivalent to running
 
   Suppress failure if *module* is not loaded and proceed with loading.
 
+.. option:: --cancel
+
+  Forcibly terminate the module if it does not respond to the shutdown
+  request, as described for :program:`flux module remove` below.
+
 .. option:: --name=NAME
 
   Override the default module name.
