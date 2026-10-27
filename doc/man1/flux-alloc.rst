@@ -107,8 +107,9 @@ via the :option:`--rlimit=RULE` option:
 EXIT STATUS
 ===========
 
-The job exit status is normally the batch script exit status.
-This result is stored in the KVS.
+The job exit status is normally the exit status of the initial program,
+that is, *COMMAND* or the interactive shell.  This result is stored in
+the KVS.
 
 OTHER OPTIONS
 =============
