@@ -135,7 +135,7 @@ The following are set in the environment of each task spawned by
 
    The ``pmi`` shell plugin sets these variables in the job environment to
    aid in the bootstrap of parallel programs.  They are not set when the simple
-   PMI server is disabled, e.g.  with :option:`flux run -opmi=none`.
+   PMI server is disabled, e.g.  with :option:`flux run -opmi=off`.
 
    The :envvar:`PMI_*` variables are standard for PMI-1 and are described
    in Flux RFC 13.
