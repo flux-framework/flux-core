@@ -128,7 +128,7 @@ prolog
    supported for the ``[job-manager.prolog]`` table:
 
    command
-      (optional, string) An array of strings specifying the command to run. If
+      (optional, array) An array of strings specifying the command to run. If
       ``exec.imp`` is set, the default command is ``["flux-imp",
       "run", "prolog"]``, otherwise it is an error if command is not set.
    per-rank
@@ -168,7 +168,7 @@ epilog
    The ``[job-manager.epilog]`` table supports the following keys:
 
    command
-      (optional, string) An array of strings specifying the command to run. If
+      (optional, array) An array of strings specifying the command to run. If
       ``exec.imp`` is set, the default command is ``["flux-imp",
       "run", "epilog"]``, otherwise it is an error if command is not set.
    per-rank
