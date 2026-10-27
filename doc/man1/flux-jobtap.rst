@@ -28,7 +28,7 @@ load
 Load a new plugin into the job-manager.  Optional *key=val* arguments
 occurring after *plugin*  will set config *key* to *val* for *plugin*.
 
-.. option:: --remove=NAME
+.. option:: -r, --remove=NAME
 
   Remove plugin *NAME* before loading *plugin*.  *NAME* may be a
   :linux:man7:`glob` pattern match.
