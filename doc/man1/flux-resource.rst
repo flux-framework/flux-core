@@ -15,7 +15,7 @@ SYNOPSIS
 
 | **flux** **resource** **status** [*-n*] [*-o* *FORMAT*] [*-s* *STATES*] [*-q* *QUEUE*] [*-i* *TARGETS*] [*-L* [*WHEN*]]
 
-| **flux** **resource** **drain** [*-n*] [*-o* *FORMAT*] [*-i* *TARGETS*] [*-L* [*WHEN*]]
+| **flux** **resource** **drain** [*-n*] [*-o* *FORMAT*] [*-q* *QUEUE*] [*-i* *TARGETS*] [*-L* [*WHEN*]]
 | **flux** **resource** **drain** [*-f*] [*-u*] [*targets*] [*reason*]
 | **flux** **resource** **undrain** [*-f*] [*-u*] *targets* [*reason*]
 
