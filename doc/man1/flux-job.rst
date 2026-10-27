@@ -17,7 +17,7 @@ SYNOPSIS
 | **flux** **job** **kill** [*--signal=SIG*] *ids...*
 | **flux** **job** **killall** [*-f*] [*--user=USER*] [*--signal=SIG*]
 | **flux** **job** **raise** [*--severity=N*] [*--type=TYPE*] *ids...* [*--*] [*message...*]
-| **flux** **job** **raiseall** [*--severity=N*] [*--user=USER*] [*--states=STATES*] *type* [ [*--*] [*message...*]
+| **flux** **job** **raiseall** [*--severity=N*] [*--user=USER*] [*--states=STATES*] *type* [*--*] [*message...*]
 | **flux** **job** **taskmap** [*OPTIONS*] *id* | *taskmap*
 | **flux** **job** **timeleft** [*-H*] [*id*]
 | **flux** **job** **purge** [*-f*] [*--age-limit=FSD*] [*--num-limit=N*] [*ids...*]
