@@ -180,6 +180,33 @@ test_expect_success 'flux-pmi exchange --count works' '
 	flux run --label-io -n2 \
 	    flux pmi exchange --count=2
 '
+test_expect_success 'PMI server offers pmi_subversion=2 by default' '
+	flux run -n1 -o verbose=2 flux pmi barrier 2>ver.err &&
+	grep "response_to_init rc=0 pmi_version=1 pmi_subversion=2" ver.err
+'
+test_expect_success 'pmi-simple.version=1.1 offers pmi_subversion=1' '
+	flux run -n1 -o verbose=2 -o pmi-simple.version=1.1 \
+	    flux pmi barrier 2>ver11.err &&
+	grep "response_to_init rc=0 pmi_version=1 pmi_subversion=1" ver11.err
+'
+test_expect_success 'pmi-simple.version=1.2 offers pmi_subversion=2' '
+	flux run -n1 -o verbose=2 -o pmi-simple.version=1.2 \
+	    flux pmi barrier 2>ver12.err &&
+	grep "response_to_init rc=0 pmi_version=1 pmi_subversion=2" ver12.err
+'
+test_expect_success 'pmi-simple.version accepts a string' '
+	flux run -n1 -o verbose=2 -o pmi-simple.version=\"1.1\" \
+	    flux pmi barrier 2>verstr.err &&
+	grep "response_to_init rc=0 pmi_version=1 pmi_subversion=1" verstr.err
+'
+test_expect_success 'pmi-simple.version=1.0 is rejected' '
+	test_must_fail flux run -n1 -o pmi-simple.version=1.0 true 2>ver10.err &&
+	grep "version must be 1.1 or 1.2" ver10.err
+'
+test_expect_success 'pmi-simple.version=2.0 is rejected' '
+	test_must_fail flux run -n1 -o pmi-simple.version=2.0 true 2>ver20.err &&
+	grep "version must be 1.1 or 1.2" ver20.err
+'
 test_expect_success 'flux-pmi get PMI_process_mapping works' '
 	flux run --label-io -n2 \
 	    flux pmi get PMI_process_mapping
