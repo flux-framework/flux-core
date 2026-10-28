@@ -153,15 +153,6 @@ OPTIONS
 
    Don't execute anything. This option is most useful with -v.
 
-.. option:: --rundir=DIR
-
-   (only with :option:`--test-size`) Set the directory that will be
-   used as the rundir directory for the instance. If the directory
-   does not exist then it will be created during instance startup.
-   If a DIR is not set with this option, a unique temporary directory
-   will be created. Unless DIR was pre-existing, it will be removed
-   when the instance is destroyed.
-
 .. option:: --wrap=ARGS
 
    Wrap broker execution in a comma-separated list of arguments. This is

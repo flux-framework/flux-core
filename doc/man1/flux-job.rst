@@ -106,7 +106,7 @@ This status line may be suppressed by setting
 .. option:: -w, --wait-event=EVENT
 
    Wait for event *EVENT* before detaching from eventlog. The default is
-   ``finish``.
+   ``clean``.
 
 .. option:: -E, --show-events
 
@@ -524,10 +524,9 @@ Options:
 
   Display human-readable output.
 
-.. option:: -L, --color=WHEN
+.. option:: -L, --color[=WHEN]
 
-  Colorize output when supported and WHEN condition is met
-  (always, never, or auto).  Default: always.
+  .. include:: common/color.rst
 
 .. option:: -F, --follow
 

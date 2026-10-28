@@ -82,6 +82,17 @@ OPTIONS
    calculated based on the elapsed time as described in the description
    of the :option:`-progress` option.
 
+.. option:: -l, --label-io
+
+   Prefix each line of job output with the jobid and task rank that
+   produced it.
+
+.. option:: -v, --verbose
+
+   Increase verbosity.  With one :option:`-v`, log the number of jobs being
+   watched and the exit status of each job as it completes.  With
+   :option:`-vv`, also log each job eventlog event.
+
 EXIT STATUS
 ===========
 

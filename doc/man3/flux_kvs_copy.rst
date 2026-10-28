@@ -47,8 +47,10 @@ to the commit within :func:`flux_kvs_copy`, and to the commit which performs
 the unlink.
 
 :func:`flux_kvs_copy` and :func:`flux_kvs_move` are capable of working across
-namespaces. See :man3:`flux_kvs_commit` for info on how to select a
-namespace other than the default.
+namespaces.  :var:`srckey` is read from namespace :var:`srcns` and
+:var:`dstkey` is written to namespace :var:`dstns`.  If either namespace
+is NULL, the value of :envvar:`FLUX_KVS_NAMESPACE` is used if set,
+otherwise the default (primary) namespace.
 
 
 CAVEATS

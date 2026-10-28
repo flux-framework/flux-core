@@ -29,8 +29,9 @@ SYNOPSIS
                                          void *arg);
 
    void flux_periodic_watcher_reset (flux_watcher_t *w,
-                                     double offset,
-                                     double interval);
+                                     double next_wakeup,
+                                     double interval,
+                                     flux_reschedule_f reschedule_cb);
 
 Link with :command:`-lflux-core`.
 
@@ -56,6 +57,12 @@ then system time is set back by 1 hour, it will take approximately 1 hour,
 If a periodic watcher is running in manual reschedule mode (:var:`reschedule_cb`
 is non-NULL), and the user-provided reschedule callback returns a time
 that is before the current time, the watcher will be silently stopped.
+
+:func:`flux_periodic_watcher_reset` reconfigures an existing periodic
+watcher :var:`w` to next trigger at absolute wall clock time
+:var:`next_wakeup`, and optionally every :var:`interval` thereafter, or
+in manual reschedule mode if :var:`reschedule_cb` is non-NULL.
+If the watcher is active, it is restarted with the new parameters.
 
 Note: the Flux reactor is based on libev. For additional important
 information on the behavior of periodic, refer to the libev documentation

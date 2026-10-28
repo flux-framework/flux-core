@@ -208,15 +208,19 @@ flag bits is private to the module and its test drivers.
 
 .. option:: -S, --set=MASK
 
-  Set debug flags to *MASK*.
+  Set debug flags to *MASK*.  The value may be prefixed with ``0x`` to
+  indicate hexadecimal or ``0`` to indicate octal, otherwise the value is
+  interpreted as decimal.
 
-.. option:: -s, --setbit=VAL
+.. option:: -s, --setbit=MASK
 
-  Set one debug flag *VAL* to 1.
+  Set the debug bits specified in *MASK* without disturbing other bits.
+  The value is interpreted as above.
 
-.. option:: -c, --clearbit=VAL
+.. option:: -c, --clearbit=MASK
 
-  Set one debug flag *VAL* to 0.
+  Clear the debug bits specified in *MASK* without disturbing other bits.
+  The value is interpreted as above.
 
 trace
 -----
@@ -259,32 +263,6 @@ named modules, or all modules if none are named.
 
    With :option:`--human`, display the time delta between messages instead
    of a relative offset since the last absolute timestamp.
-
-
-DEBUG OPTIONS
-=============
-
-.. program:: flux module debug
-
-.. option:: -c, --clear
-
-   Set debug flags to zero.
-
-.. option:: -S, --set=MASK
-
-   Set debug flags to MASK.
-   The value may be prefixed with 0x to indicate hexadecimal or 0
-   to indicate octal, otherwise the value is interpreted as decimal.
-
-.. option:: -c, --clearbit=MASK
-
-   Clear the debug bits specified in MASK without disturbing other bits.
-   The value is interpreted as above.
-
-.. option:: -s, --setbit=MASK
-
-   Set the debug bits specified in MASK without disturbing other bits.
-   The value is interpreted as above.
 
 
 LIST OUTPUT
