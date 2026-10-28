@@ -34,6 +34,12 @@ owner is allowed to use :option:`--user=all`). To see how many jobs
 OPTIONS
 =======
 
+.. option:: --all
+
+   Target all jobs for the current user, or for the user selected with
+   :option:`--user`.  This option is implied by :option:`--user` and
+   :option:`--states`.
+
 .. option:: -n, --dry-run
 
    Do not cancel any jobs, but print a message indicating how many jobs

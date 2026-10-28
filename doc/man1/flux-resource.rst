@@ -13,9 +13,9 @@ SYNOPSIS
 | **flux** **resource** **info** [*-s* *STATES*] [*-q* *QUEUE*] [*-i* *TARGETS*]
 | **flux** **resource** **R** [*-s* *STATES*] [*-q* *QUEUE*] [*-i* *TARGETS*]
 
-| **flux** **resource** **status** [*-n*] [*-o* *FORMAT*] [*-s* *STATES*] [*-q* *QUEUE*] [*-i* *TARGETS*]
+| **flux** **resource** **status** [*-n*] [*-o* *FORMAT*] [*-s* *STATES*] [*-q* *QUEUE*] [*-i* *TARGETS*] [*-L* [*WHEN*]]
 
-| **flux** **resource** **drain** [*-n*] [*-o* *FORMAT*] [*-i* *TARGETS*]
+| **flux** **resource** **drain** [*-n*] [*-o* *FORMAT*] [*-q* *QUEUE*] [*-i* *TARGETS*] [*-L* [*WHEN*]]
 | **flux** **resource** **drain** [*-f*] [*-u*] [*targets*] [*reason*]
 | **flux** **resource** **undrain** [*-f*] [*-u*] *targets* [*reason*]
 
@@ -266,6 +266,10 @@ resources that share a state and online/offline state.
   Normally, :program:`flux resource status` skips lines with no resources,
   unless the :option:`-s, --states` option is used.
 
+.. option:: -L, --color[=WHEN]
+
+  .. include:: common/color.rst
+
 drain
 -----
 
@@ -294,6 +298,10 @@ following options are available:
   specified either as an idset of broker ranks or list of hosts or nodes in
   hostlist form. It is not an error to specify ranks, nodes, or hosts which
   do not exist.
+
+.. option:: -L, --color[=WHEN]
+
+  .. include:: common/color.rst
 
 If specified with *targets* (IDSET or HOSTLIST), drain the specified nodes.
 Any remaining free arguments are recorded as a reason for the drain event.

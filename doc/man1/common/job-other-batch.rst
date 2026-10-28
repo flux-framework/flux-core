@@ -63,11 +63,11 @@
    When the job script is complete, archive the Flux
    instance's KVS content to ``FILE``, which should have a suffix known
    to :linux:man3:`libarchive`, and may be a mustache template as described
-   above for :option:`--output`.  The content may be unarchived directly or
-   examined within a test instance started with the
-   :option:`flux-start --recovery` option.  If ``FILE`` is unspecified,
+   in the MUSTACHE TEMPLATES section of :man1:`flux-batch`.  The content
+   may be unarchived directly or examined within a test instance started
+   with the :option:`flux-start --recovery` option.  If ``FILE`` is unspecified,
    ``flux-{{jobid}}-dump.tgz`` is used.
 
 .. option:: --quiet
 
-   Suppress logging of jobids to stdout
+   *(batch only)* Suppress logging of jobids to stdout

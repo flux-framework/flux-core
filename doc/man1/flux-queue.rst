@@ -75,10 +75,6 @@ status
 
 Report the current queue status.
 
-.. option:: -q, --queue=NAME
-
-   Select a queue by name.
-
 .. option:: -v, --verbose
 
    Display more detail about internal job manager state.
@@ -118,10 +114,6 @@ enable
 .. program:: flux queue enable
 
 Allow jobs to be submitted to the queue.
-
-.. option:: -q, --queue=NAME
-
-   Select a queue by name.
 
 .. option:: -a, --all
 
@@ -193,7 +185,7 @@ Block until all queues become empty.  It is sometimes useful to run after
 :program:`flux queue disable`, to wait until the system is quiescent and can
 be taken down for maintenance.
 
-.. option:: --timeout=FSD
+.. option:: -t, --timeout=FSD
 
    Limit the time that the command will block.
 
@@ -207,7 +199,7 @@ and no outstanding alloc requests to the scheduler).  It may be useful to run
 after :program:`flux queue stop` to wait until the scheduler and execution
 system are quiescent before maintenance involving them.
 
-.. option:: --timeout=FSD
+.. option:: -t, --timeout=FSD
 
    Limit the time that the command will block.
 

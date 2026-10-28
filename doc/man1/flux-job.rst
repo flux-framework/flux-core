@@ -20,7 +20,7 @@ SYNOPSIS
 | **flux** **job** **raiseall** [*--severity=N*] [*--user=USER*] [*--states=STATES*] *type* [*--*] [*message...*]
 | **flux** **job** **taskmap** [*OPTIONS*] *id* | *taskmap*
 | **flux** **job** **timeleft** [*-H*] [*id*]
-| **flux** **job** **purge** [*-f*] [*--age-limit=FSD*] [*--num-limit=N*] [*ids...*]
+| **flux** **job** **purge** [*-f*] [*--age-limit=FSD*] [*--num-limit=N*] [*--batch=N*] [*ids...*]
 | **flux** **job** **info** [*--original*] [*--base*] *id* *key*
 | **flux** **job** **hostpids** [*OPTIONS*] *id*
 | **flux** **job** **eventlog** [*-F*] [*-H*] [*-p PATH*] *id*
@@ -412,6 +412,11 @@ criteria:
 .. option:: --num-limit=COUNT
 
    Purge the oldest inactive jobs until there are at most COUNT left.
+
+.. option:: --batch=COUNT
+
+   Purge at most COUNT jobs per request to the job manager, repeating
+   requests until no more jobs match (default 50, maximum 100).
 
 .. option:: -f, --force
 
