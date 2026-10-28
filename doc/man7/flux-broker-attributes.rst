@@ -445,7 +445,7 @@ content.backing-module
    on rank 0 where the content backing store is active.  Default:
    ``content-sqlite``.
 
-content.hash:ref :`[readonly] <attr_readonly>`
+content.hash :ref:`[readonly] <attr_readonly>`
    The selected hash algorithm.  Default ``sha1``.  Other options: ``sha256``.
 
 content.dump

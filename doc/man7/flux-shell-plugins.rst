@@ -598,7 +598,7 @@ A minimal C plugin follows this structure:
 
 Plugins must define ``FLUX_SHELL_PLUGIN_NAME`` before including the
 shell plugin header ``<flux/shell.h>``. This is necessary for shell logging
-functions to work properly. Failure to define ``FLUX_PLUGIN_NAME`` will
+functions to work properly. Failure to define ``FLUX_SHELL_PLUGIN_NAME`` will
 result in a compile-time error.
 
 .. code-block:: c

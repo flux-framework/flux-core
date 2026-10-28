@@ -313,7 +313,7 @@ Load optional site config:
   source_if_exists ("/etc/flux/site/shell-extras.lua")
 
 
-.. shell_source_rcpath
+.. _shell_source_rcpath:
 
 shell.source_rcpath(pattern)
 ----------------------------
@@ -387,7 +387,7 @@ file.
 SHELL INFORMATION
 =================
 
-.. _shell_rcpath
+.. _shell_rcpath:
 
 shell.rcpath
 ------------
@@ -401,7 +401,7 @@ shell.info
 A table containing shell metadata. Read-only. Available fields:
 
 **jobid**
-  Job ID as a string.
+  Job ID as an integer.
 
 **instance_owner**
   The instance owner userid of the enclosing instance
@@ -810,7 +810,7 @@ meaningful before the task starts.
 
   task.unsetenv ("UNWANTED_VAR")
 
-.. _examples
+.. _examples:
 
 EXAMPLES
 ========

@@ -195,7 +195,7 @@ be taken down for maintenance.
 
 .. option:: --timeout=FSD
 
-   Limit the time that the command` will block.
+   Limit the time that the command will block.
 
 idle
 ----
@@ -209,7 +209,7 @@ system are quiescent before maintenance involving them.
 
 .. option:: --timeout=FSD
 
-   Limit the time that the command` will block.
+   Limit the time that the command will block.
 
 
 OUTPUT FORMAT

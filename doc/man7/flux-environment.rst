@@ -106,7 +106,7 @@ The following are set in the environment of each task spawned by
 .. envvar:: FLUX_JOB_CC
 
    When :option:`flux submit --cc` or :option:`flux bulksubmit --cc` is used
-   to submit a set of jobs, :envvar:`FLUX_JOB_CC` is set to the the integer
+   to submit a set of jobs, :envvar:`FLUX_JOB_CC` is set to the integer
    id of the current job in the set.
 
 .. envvar:: FLUX_JOB_TMPDIR
@@ -135,7 +135,7 @@ The following are set in the environment of each task spawned by
 
    The ``pmi`` shell plugin sets these variables in the job environment to
    aid in the bootstrap of parallel programs.  They are not set when the simple
-   PMI server is disabled, e.g.  with :option:`flux run -opmi=none`.
+   PMI server is disabled, e.g.  with :option:`flux run -opmi=off`.
 
    The :envvar:`PMI_*` variables are standard for PMI-1 and are described
    in Flux RFC 13.

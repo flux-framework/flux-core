@@ -11,7 +11,7 @@ SYNOPSIS
 
   #include <flux/core.h>
 
-  flux_conf_t *flux_get_conf (flux_t *h);
+  const flux_conf_t *flux_get_conf (flux_t *h);
 
   int flux_set_conf_new (flux_t *h, const flux_conf_t *conf);
 

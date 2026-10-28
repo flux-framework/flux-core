@@ -25,7 +25,7 @@ SYNOPSIS
                                    int errnum,
                                    const char *errstr);
 
-   void flux_future_fulfill_with (flux_future_t *f, flux_future_t *p);
+   int flux_future_fulfill_with (flux_future_t *f, flux_future_t *p);
 
    void flux_future_fatal_error (flux_future_t *f,
                                  int errnum,

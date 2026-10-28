@@ -782,7 +782,7 @@ REXEC OPTIONS
 
     $ flux run -o rexec-shutdown-timeout=30s myapp
 
- .. option:: rexec.sign-required
+.. option:: rexec.sign-required
 
   Require RFC 42 request signatures on all requests to the rexec subprocess
   server. By default, signatures are only required when the job owner differs

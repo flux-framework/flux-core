@@ -128,8 +128,8 @@ prolog
    supported for the ``[job-manager.prolog]`` table:
 
    command
-      (optional, string) An array of strings specifying the command to run. If
-      ``exec.imp`` is set, the the default command is ``["flux-imp",
+      (optional, array) An array of strings specifying the command to run. If
+      ``exec.imp`` is set, the default command is ``["flux-imp",
       "run", "prolog"]``, otherwise it is an error if command is not set.
    per-rank
       (optional, bool) By default the job-manager prolog only runs ``command``
@@ -168,9 +168,9 @@ epilog
    The ``[job-manager.epilog]`` table supports the following keys:
 
    command
-      (optional, string) An array of strings specifying the command to run. If
-      ``exec.imp`` is set, the the default command is ``["flux-imp",
-      "run", "prolog"]``, otherwise it is an error if command is not set.
+      (optional, array) An array of strings specifying the command to run. If
+      ``exec.imp`` is set, the default command is ``["flux-imp",
+      "run", "epilog"]``, otherwise it is an error if command is not set.
    per-rank
       (optional, bool) By default the job-manager epilog only runs ``command``
       on rank 0. With ``per-rank=true``, the command will be run on each
@@ -215,8 +215,6 @@ EXAMPLE
 ::
 
    [job-manager]
-
-   journal-size-limit = 10000
 
    inactive-age-limit = "7d"
    inactive-num-limit = 10000

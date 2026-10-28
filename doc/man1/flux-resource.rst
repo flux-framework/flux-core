@@ -255,7 +255,7 @@ resources that share a state and online/offline state.
   Customize output formatting.  See the `OUTPUT FORMAT`_ section below for
   details.
 
-.. option:: -n,--no-header
+.. option:: -n, --no-header
 
   Suppress header from output,
 
@@ -279,7 +279,7 @@ following options are available:
   Customize output formatting.  See the `OUTPUT FORMAT`_ section below for
   details.
 
-.. option:: -n,--no-header
+.. option:: -n, --no-header
 
   Suppress header from output,
 
