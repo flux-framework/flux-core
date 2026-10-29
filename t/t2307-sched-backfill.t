@@ -16,6 +16,21 @@ flux R encode -r0-1 -c0-1 -g0 >R.test.gpu
 
 query_free="flux resource list --state=free -no {rlist}"
 
+# Ranks the scheduler considers down, from its own resource set rather
+# than the resource module's.
+sched_down_ranks() {
+	FLUX_RESOURCE_LIST_RPC=sched.resource-status \
+	    flux resource list -s down -no "{ranks}"
+}
+
+# Usage: reload_sched_with R-FILE
+#   Install a different resource set under sched-backfill.
+reload_sched_with() {
+	flux module remove sched-backfill &&
+	flux resource reload "$1" &&
+	flux module load sched-backfill
+}
+
 alloc_summary() { flux jobs -no {annotations.sched.resource_summary} "$1"; }
 t_estimate()    { flux jobs -no {annotations.sched.t_estimate} "$1"; }
 
@@ -412,6 +427,152 @@ test_expect_success 'sched-backfill: undrain rank 0 unblocks pending job' '
 test_expect_success 'sched-backfill: cancel drain test jobs' '
 	flux cancel $(cat jd1.id) $(cat jd2.id) $(cat jd3.id) &&
 	flux job wait-event --timeout=5 $(cat jd3.id) free
+'
+
+#
+# A head job that cannot fit even on a completely idle cluster is
+# waiting on drained or down nodes. Nothing will free them, so it has
+# no reservation for backfill to respect: it is set aside for the pass
+# and the jobs behind it still run. A four-node set is used here so
+# that two nodes can be drained and two remain for the jobs behind.
+#
+test_expect_success 'sched-backfill: load a four node resource set' '
+	flux R encode -r0-3 -c0-1 >R.test4 &&
+	reload_sched_with R.test4
+'
+# The scheduler must see the drain, not just the resource module, so
+# this queries its resource set rather than the default one.
+test_expect_success 'sched-backfill: drain two of the four nodes' '
+	flux resource drain 2-3 maintenance &&
+	test "$(sched_down_ranks)" = "2-3"
+'
+test_expect_success 'sched-backfill: occupy one of the remaining nodes' '
+	flux submit -N1 --time-limit=3600s hostname >jb1.id &&
+	flux job wait-event --timeout=5 $(cat jb1.id) alloc
+'
+test_expect_success 'sched-backfill: a head job needing drained nodes pends' '
+	flux submit -N4 --time-limit=60s hostname >jb2.id &&
+	test_expect_code 1 flux job wait-event --timeout=0.5 $(cat jb2.id) alloc &&
+	test_expect_code 1 flux job wait-event --timeout=0.5 $(cat jb2.id) exception
+'
+test_expect_success 'sched-backfill: it has no shadow time' '
+	wait_no_annotation $(cat jb2.id) t_estimate
+'
+test_expect_success 'sched-backfill: a job behind it still runs' '
+	flux submit -N1 --time-limit=60s hostname >jb3.id &&
+	flux job wait-event --timeout=5 $(cat jb3.id) alloc
+'
+# A pass continues past a job it can start, so every queued job behind
+# the set-aside head that fits is allocated, not just the first. Both
+# are queued while the nodes are busy and then released by a single
+# free event, so one pass has to place both.
+test_expect_success 'sched-backfill: queue two jobs behind the set aside head' '
+	flux cancel $(cat jb1.id) $(cat jb3.id) &&
+	flux job wait-event --timeout=5 $(cat jb3.id) free &&
+	flux submit -N2 --time-limit=3600s hostname >jb6.id &&
+	flux job wait-event --timeout=5 $(cat jb6.id) alloc &&
+	flux submit -N1 --time-limit=60s hostname >jb3a.id &&
+	flux submit -N1 --time-limit=60s hostname >jb3b.id &&
+	test_expect_code 1 flux job wait-event --timeout=0.5 $(cat jb3b.id) alloc
+'
+test_expect_success 'sched-backfill: one free event releases both' '
+	flux cancel $(cat jb6.id) &&
+	flux job wait-event --timeout=5 $(cat jb3a.id) alloc &&
+	flux job wait-event --timeout=5 $(cat jb3b.id) alloc &&
+	test "$(flux jobs -no {state} $(cat jb2.id))" = "SCHED"
+'
+test_expect_success 'sched-backfill: restore one running job' '
+	flux cancel $(cat jb3a.id) $(cat jb3b.id) &&
+	flux job wait-event --timeout=5 $(cat jb3b.id) free &&
+	flux submit -N1 --time-limit=3600s hostname >jb1.id &&
+	flux job wait-event --timeout=5 $(cat jb1.id) alloc &&
+	flux submit -N1 --time-limit=60s hostname >jb3.id &&
+	flux job wait-event --timeout=5 $(cat jb3.id) alloc
+'
+# Several such heads in a row are each set aside in turn.
+test_expect_success 'sched-backfill: a second blocked head does not stop it' '
+	flux cancel $(cat jb3.id) &&
+	flux job wait-event --timeout=5 $(cat jb3.id) free &&
+	flux submit -N3 --time-limit=60s hostname >jb4.id &&
+	test_expect_code 1 flux job wait-event --timeout=0.5 $(cat jb4.id) alloc &&
+	flux submit -N1 --time-limit=60s hostname >jb5.id &&
+	flux job wait-event --timeout=5 $(cat jb5.id) alloc
+'
+test_expect_success 'sched-backfill: undraining lets the head job run' '
+	flux cancel $(cat jb1.id) $(cat jb5.id) &&
+	flux job wait-event --timeout=5 $(cat jb5.id) free &&
+	flux resource undrain 2-3 &&
+	flux job wait-event --timeout=10 $(cat jb2.id) alloc
+'
+test_expect_success 'sched-backfill: cancel the blocked head test jobs' '
+	flux cancel $(cat jb2.id) $(cat jb4.id) &&
+	flux job wait-event --timeout=5 $(cat jb4.id) clean
+'
+
+#
+# A head job whose shadow time is unknown for any other reason keeps its
+# place: here the running job has no time limit and the instance has no
+# expiration, so the simulation cannot advance to its end. The head job
+# would fit once it ends, so backfill must not run behind it, or a
+# stream of short jobs could starve it.
+#
+test_expect_success 'sched-backfill: occupy nodes with an unbounded job' '
+	flux submit -N2 hostname >ju1.id &&
+	flux job wait-event --timeout=5 $(cat ju1.id) alloc
+'
+test_expect_success 'sched-backfill: a head job that fits later pends' '
+	flux submit -N4 --time-limit=60s hostname >ju2.id &&
+	test_expect_code 1 flux job wait-event --timeout=0.5 $(cat ju2.id) alloc &&
+	wait_no_annotation $(cat ju2.id) t_estimate
+'
+test_expect_success 'sched-backfill: a job behind it does not run' '
+	flux submit -N1 --time-limit=60s hostname >ju3.id &&
+	test_expect_code 1 flux job wait-event --timeout=0.5 $(cat ju3.id) alloc
+'
+test_expect_success 'sched-backfill: cancel the unbounded test jobs' '
+	flux cancel $(cat ju1.id) $(cat ju2.id) $(cat ju3.id) &&
+	flux job wait-event --timeout=5 $(cat ju3.id) clean
+'
+#
+# The reservation belongs to the effective head -- the first job that is
+# not set aside -- not to the highest-priority pending job. Here a job
+# needing the drained nodes is set aside, and the job behind it cannot
+# run now but will once a running job with a time limit ends, so it owns
+# the shadow time and a short job backfills around it.
+#
+test_expect_success 'sched-backfill: load a four node set with three cores' '
+	flux R encode -r0-3 -c0-2 >R.test4c &&
+	reload_sched_with R.test4c &&
+	flux resource drain 2-3 maintenance
+'
+test_expect_success 'sched-backfill: occupy one core of each live node' '
+	flux submit -n2 -N2 --time-limit=3600s hostname >je1.id &&
+	flux job wait-event --timeout=5 $(cat je1.id) alloc
+'
+test_expect_success 'sched-backfill: a job needing drained nodes is set aside' '
+	flux submit -N4 --time-limit=60s hostname >je2.id &&
+	test_expect_code 1 flux job wait-event --timeout=0.5 $(cat je2.id) alloc
+'
+test_expect_success 'sched-backfill: the job behind it owns the shadow time' '
+	flux submit -n6 -N2 --time-limit=60s hostname >je3.id &&
+	test_expect_code 1 flux job wait-event --timeout=0.5 $(cat je3.id) alloc &&
+	wait_annotation $(cat je3.id) t_estimate "[0-9]"
+'
+test_expect_success 'sched-backfill: the set-aside job has none' '
+	wait_no_annotation $(cat je2.id) t_estimate
+'
+test_expect_success 'sched-backfill: a short job backfills around it' '
+	flux submit -n1 --time-limit=10s hostname >je4.id &&
+	flux job wait-event --timeout=5 $(cat je4.id) alloc
+'
+test_expect_success 'sched-backfill: cancel the effective head test jobs' '
+	flux cancel $(cat je1.id) $(cat je2.id) $(cat je3.id) $(cat je4.id) &&
+	flux job wait-event --timeout=5 $(cat je4.id) clean &&
+	flux resource undrain 2-3
+'
+
+test_expect_success 'sched-backfill: restore the two node resource set' '
+	reload_sched_with R.test
 '
 
 test_expect_success 'sched-backfill: drain cleanup and queue drain' '
