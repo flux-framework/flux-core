@@ -92,7 +92,9 @@ RUN apt-get update \
 RUN locale-gen en_US.UTF-8
 
 # NOTE: luaposix installed by rocks due to Ubuntu bug: #1752082 https://bugs.launchpad.net/ubuntu/+source/lua-posix/+bug/1752082
-RUN luarocks install luaposix
+# Pin luaposix: release 38 requires the luarocks-build-luke backend and
+# drops the legacy top-level posix.exec/stat/setrlimit API that flux uses.
+RUN luarocks install luaposix 37.0-1
 
 # Install catch by hand for now:
 COPY scripts/fetch-and-build-catch.sh /fetch-and-build-catch.sh
