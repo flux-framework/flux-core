@@ -29,6 +29,27 @@ head job fits.  This gives an accurate shadow time that respects topology
 and property constraints — it tightens the backfill window compared to
 count-based heuristics without over-constraining candidates.
 
+Sometimes no shadow time can be computed.  There are two reasons, and
+they are handled differently:
+
+- The job does not fit on an idle cluster, because the resources it
+  needs are drained, down, or gone.  No expiration will free them, so
+  the job is set aside and the next job becomes the head.  It keeps
+  its place in the queue and runs as soon as the resources return.
+- The running jobs have no known end time.  The job would fit once
+  they end, so it stays the head and backfill stops behind it.  This
+  keeps a stream of short jobs from starving it.
+
+Setting a job aside relaxes the EASY guarantee, as other schedulers
+also do.  A reservation is a point in time, and a job that can never
+run has none to protect.  Blocking the queue would not start it any
+sooner, and would idle the cluster until its resources return.
+
+A job set aside for a long time can still be delayed by jobs that
+backfilled meanwhile.  Nothing bounds that here.  The usual fixes are
+priority aging, or a drain end time used as the shadow time, which
+would make this the second case above.  Flux drains have no end time.
+
 Load with::
 
     flux module load sched-backfill [queue-depth=N|unlimited] [log-level=LEVEL]
@@ -66,18 +87,21 @@ class BackfillScheduler(Scheduler):
     Helper methods (not base-class overrides):
       - :meth:`_try_alloc`        — attempt a real allocation, handling exceptions
       - :meth:`_shadow_time`      — compute head job's reservation time via simulation
-      - :meth:`_annotate_pending` — send ``t_estimate`` annotation to the head job
+      - :meth:`_annotate_pending` — maintain ``t_estimate`` across the queue
     """
 
     def __init__(self, h, *args):
         super().__init__(h, *args)
-        # Cache for _shadow_time(): keyed on (pool.generation, head.jobid).
-        # pool.generation is bumped on every pool mutation (job start/complete,
-        # node up/down), so the cache is automatically invalidated whenever
-        # the shadow time could have changed.  Canceling a non-head pending
-        # job does not mutate the pool and therefore does not invalidate it.
-        self._shadow_cache_key = None
-        self._shadow_cache_value = None
+        # Cache for _shadow_time(), keyed by jobid and discarded whenever
+        # pool.generation changes.  pool.generation is bumped on every pool
+        # mutation (job start/complete, node up/down), so a shadow time is
+        # dropped whenever it could have changed.  Canceling a non-head
+        # pending job does not mutate the pool and does not invalidate it.
+        #
+        # N.B. a dict rather than a single slot: one pass may consult
+        # several head jobs, which a single slot would thrash.
+        self._shadow_cache = {}
+        self._shadow_cache_gen = None
 
     # ------------------------------------------------------------------
     # Scheduler overrides
@@ -148,22 +172,31 @@ class BackfillScheduler(Scheduler):
         job.request.success(alloc, annotations)
         return True
 
-    def _annotate_pending(self, shadow):
-        """Post ``t_estimate`` annotation on the head-of-queue job.
+    def _annotate_pending(self, head, shadow):
+        """Maintain the ``t_estimate`` annotation across the pending queue.
 
-        Only sends the annotation when the value has changed since the last
-        send, to avoid redundant RPC overhead.
+        Exactly one pending job carries a ``t_estimate``: the one holding
+        the reservation.  It is set here and cleared everywhere else, so
+        that a job which was the head on an earlier pass does not keep a
+        stale estimate.  An annotation is sent only when its value has
+        changed, to avoid redundant RPC overhead.
+
+        N.B. the job holding the reservation is not always the
+        highest-priority pending one.  A job that cannot run until
+        resources return is set aside and sorts ahead of it, so the
+        caller passes the job it computed the shadow time for.
 
         Args:
+            head: The :class:`~flux.scheduler.PendingJob` holding the
+                reservation, or None if no job does.
             shadow: Shadow time in seconds since the Unix epoch, or ``None``
                 if the shadow time is unknown.
         """
-        if not self._queue:
-            return
-        head = sorted(self._queue)[0]
-        if head._last_annotation != shadow:
-            head._last_annotation = shadow
-            head.request.annotate({"sched": {"t_estimate": shadow}})
+        for job in self._queue:
+            value = shadow if job is head else None
+            if job._last_annotation != value:
+                job._last_annotation = value
+                job.request.annotate({"sched": {"t_estimate": value}})
 
     def _shadow_time(self, head):
         """Compute the EASY reservation time for the head job via direct simulation.
@@ -185,25 +218,33 @@ class BackfillScheduler(Scheduler):
                 for which the reservation is being computed.
 
         Returns:
-            The earliest wall-clock time (seconds since the Unix epoch) at
-            which the head job is guaranteed to fit, or ``None`` if the
-            request is permanently infeasible or no future expirations remain.
+            A (shadow, never) tuple.  'shadow' is the earliest wall-clock
+            time at which the head job is guaranteed to fit, or None if
+            no such time could be determined.  'never' is True when the
+            job does not fit even on a completely idle cluster, so no
+            expiration can ever make room for it; see the module
+            docstring for why the two None cases differ.
         """
-        key = (self.resources.generation, head.jobid)
-        if self._shadow_cache_key == key:
-            return self._shadow_cache_value
+        generation = self.resources.generation
+        if generation != self._shadow_cache_gen:
+            self._shadow_cache.clear()
+            self._shadow_cache_gen = generation
+        if head.jobid in self._shadow_cache:
+            return self._shadow_cache[head.jobid]
 
         sim = self.resources.copy()
         rr = head.resource_request
         t = 0.0
         shadow = None
+        never = False
         while True:
             try:
                 sim.alloc(head.jobid, rr)
                 shadow = max(t, time.time())  # map sim time to wall clock
                 break
             except InfeasibleRequest:
-                break  # permanently infeasible — shadow stays None
+                never = True  # cannot be satisfied by this cluster at all
+                break
             except InsufficientResources:
                 # Not enough resources now; advance to the next expiration.
                 nxt = min(
@@ -211,22 +252,33 @@ class BackfillScheduler(Scheduler):
                     default=None,
                 )
                 if nxt is None:
-                    break  # no future expirations — shadow stays None
+                    # No expiration left to wait for.  Everything with a
+                    # known end time has already been freed above, so
+                    # freeing the rest leaves an idle cluster: if the job
+                    # still does not fit, nothing will ever make room for
+                    # it.  Otherwise it is only the unknown end times
+                    # that prevent a shadow time being computed.
+                    for jid, _ in sim.job_end_times():
+                        sim.free(jid)
+                    try:
+                        sim.alloc(head.jobid, rr)
+                    except (InfeasibleRequest, InsufficientResources):
+                        never = True
+                    break
                 t = nxt
-                for jid, end_time in list(sim.job_end_times()):
+                for jid, end_time in sim.job_end_times():
                     if 0 < end_time <= t:
                         sim.free(jid)
 
-        self._shadow_cache_key = key
-        self._shadow_cache_value = shadow
-        return shadow
+        self._shadow_cache[head.jobid] = (shadow, never)
+        return (shadow, never)
 
     def schedule(self):
-        """Schedule the head job; backfill lower-priority jobs around its reservation.
+        """Schedule what fits; backfill the rest around the head's reservation.
 
-        If the head job allocates immediately, recurse to handle the new head
-        (which may also be immediately schedulable).  If it is blocked, compute
-        its shadow time and attempt to backfill each lower-priority job that:
+        Jobs are taken in priority order and allocated while they fit.  The
+        first job that does not becomes the head and receives a reservation,
+        and each lower-priority job may then backfill if it:
 
         1. Has a known duration, and
         2. Will finish (``now + duration``) before the shadow time — the EASY
@@ -235,27 +287,56 @@ class BackfillScheduler(Scheduler):
         if not self._queue:
             return
 
-        head = self._queue[0]
+        # Walk the queue in priority order, allocating what fits, until a
+        # job is found that must hold a reservation.
+        #
+        # A job that cannot be allocated and has no shadow time because it
+        # does not fit even on an idle cluster is waiting on resources that
+        # no expiration will free.  It has no reservation for backfill to
+        # respect, so it is set aside and the scan continues.  It keeps its
+        # place in the queue and is reconsidered on every pass, so it runs
+        # as soon as those resources return.
+        #
+        # Any other job becomes the effective head, and backfill proceeds
+        # around its shadow time as usual.  That includes a job whose
+        # shadow time is unknown because the running jobs have no known
+        # end time: backfill stops behind it, so that a stream of short
+        # jobs cannot starve it.
+        # N.B. an allocated job is popped from self._queue before the
+        # yield that follows it.  The yield returns to the reactor, where
+        # an alloc or free callback may push or remove queue entries, so
+        # the queue must be correct at every yield rather than written
+        # back from a snapshot at the end of the pass.
+        setaside = []
+        head = None
+        shadow = None
+        while self._queue:
+            job = heapq.heappop(self._queue)
+            if self._try_alloc(job):
+                yield
+                continue
+            shadow, never = self._shadow_time(job)
+            if not never:
+                head = job
+                break
+            self.log.debug(f"{JobID(job.jobid).f58}: no resources will free; set aside")
+            setaside.append(job)
+        # Whatever is left is the backfill candidate set.  As on the
+        # pre-existing path, it is snapshotted here and written back at
+        # the end of the pass.
+        rest = sorted(self._queue)
 
-        # Only the head job carries a t_estimate annotation.  Clear any stale
-        # annotation on non-head jobs (e.g. a job displaced by a higher-priority
-        # arrival since the last schedule() call).
-        for job in self._queue[1:]:
-            if job._last_annotation is not None:
-                job._last_annotation = None
-                job.request.annotate({"sched": {"t_estimate": None}})
-
-        if self._try_alloc(head):
-            heapq.heappop(self._queue)
-            yield from self.schedule()  # chain generator so reactor stays live during recursion
+        if head is None:
+            # Every job was allocated or set aside; none holds a reservation.
+            self._queue = setaside
+            heapq.heapify(self._queue)
+            self._annotate_pending(None, None)
             return
 
-        # Head is blocked — compute its shadow time (EASY reservation).
-        shadow = self._shadow_time(head)
         now = time.time()
 
-        kept = [head]
-        for job in sorted(self._queue[1:]):  # priority order among non-head jobs
+        kept = setaside + [head]
+        for job in rest:
             duration = job.resource_request.duration
             # EASY constraint: backfill only if the job finishes before shadow.
             can_backfill = (
@@ -271,7 +352,7 @@ class BackfillScheduler(Scheduler):
 
         self._queue = kept
         heapq.heapify(self._queue)
-        self._annotate_pending(shadow)
+        self._annotate_pending(head, shadow)
 
 
 def mod_main(h, *args):
