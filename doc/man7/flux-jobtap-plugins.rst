@@ -230,8 +230,9 @@ job.state.depend
   a job. Jobs remain in ``DEPEND`` state until all dependencies are removed
   via ``flux_jobtap_dependency_remove()``. A dependency may be used only once.
   A second ``flux_jobtap_dependency_add()`` call with the same description
-  returns ``EEXIST``, even if the dependency was removed. This enables
-  idempotent operation during job-manager or plugin restart.
+  succeeds without adding the dependency again, even if the dependency was
+  removed. This enables idempotent operation during job-manager or plugin
+  restart.
 
   .. note::
     See :ref:`event_processing` for important information about when state
