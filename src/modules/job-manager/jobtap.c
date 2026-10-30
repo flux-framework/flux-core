@@ -2222,6 +2222,30 @@ static struct job * jobtap_lookup_active_jobid (flux_plugin_t *p,
     return job;
 }
 
+int flux_jobtap_dependency_check (flux_plugin_t *p,
+                                  flux_jobid_t id,
+                                  const char *description)
+{
+    struct job *job;
+
+    if (!p || !description || !flux_plugin_aux_get (p, "flux::jobtap")) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (!(job = jobtap_lookup_active_jobid (p, id)))
+        return -1;
+
+    /* Dependencies left behind after an exception no longer block the job.
+     */
+    if (job->state != FLUX_JOB_STATE_NEW
+        && job->state != FLUX_JOB_STATE_DEPEND)
+        return 0;
+
+    return !job_dependency_is_queued (job, "dependency-remove", description)
+        && (grudgeset_contains (job->dependencies, description)
+            || job_dependency_is_queued (job, "dependency-add", description));
+}
+
 /* Job aux items are not stored in the job aux container directly, to avoid
  * segfaults that might result from registering a destructor resident in a
  * plugin that could be unloaded before the item is destroyed.
