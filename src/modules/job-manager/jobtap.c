@@ -2140,13 +2140,20 @@ static int jobtap_emit_dependency_event (struct jobtap *jobtap,
             return 0;
     }
     /* Removing a dependency that is removed or queued for removal is a
-     * no-op.
+     * no-op. Removing a description that was never added fails. Check for
+     * a queued add, since an add posted earlier in the same callback is not
+     * applied yet.
      */
     else {
         if (job_dependency_is_queued (job, "dependency-remove", description)
             || (grudgeset_used (job->dependencies, description)
                 && !grudgeset_contains (job->dependencies, description)))
             return 0;
+        if (!grudgeset_used (job->dependencies, description)
+            && !job_dependency_is_queued (job, "dependency-add", description)) {
+            errno = ENOENT;
+            return -1;
+        }
     }
     return event_job_post_pack (jobtap->ctx->event,
                                 job,
