@@ -484,6 +484,16 @@ error:
     return -1;
 }
 
+static int job_id_cmp (const void *a1, const void *a2)
+{
+    const struct job *j1 = a1;
+    const struct job *j2 = a2;
+
+    if (j1->id < j2->id)
+        return -1;
+    return j1->id > j2->id ? 1 : 0;
+}
+
 int restart_from_kvs (struct job_manager *ctx)
 {
     const char *dirname = "job";
@@ -516,12 +526,17 @@ int restart_from_kvs (struct job_manager *ctx)
     flux_log (ctx->h, LOG_INFO, "restart: %d jobs", loader.count);
     job_loader_finalize (&loader);
 
-    /* Get active jobs as list for safe iteration:
+    /* Get active jobs as list for safe iteration. Sort by jobid so that
+     * plugins get job.create and job.new in submit order, not hash order.
+     * Plugins that keep jobs in submit order, such as .history, can then
+     * insert each job in constant time.
      */
     if (!(active_jobs = zhashx_values (ctx->active_jobs))) {
         flux_log (ctx->h, LOG_ERR, "restart: failed to get active_jobs list");
         return -1;
     }
+    zlistx_set_comparator (active_jobs, job_id_cmp);
+    zlistx_sort (active_jobs);
 
     /* Post flux-restart to any jobs in SCHED state, so they may
      * transition back to PRIORITY and re-obtain the priority.
