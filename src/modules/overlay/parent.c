@@ -223,7 +223,7 @@ flux_msg_t *parent_recvmsg (struct parent *parent)
         errno = EINVAL;
         return NULL;
     }
-    return zmqutil_msg_recv (parent->zsock);
+    return zmqutil_msg_recv_ex (parent->zsock, true);
 }
 
 void parent_set_hello_responded (struct parent *parent, bool error)

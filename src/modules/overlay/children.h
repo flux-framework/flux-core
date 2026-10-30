@@ -148,6 +148,7 @@ int children_sendmsg (struct children *ctx, const flux_msg_t *msg);
 
 /* Receive message from children via bind socket.
  * Returns message on success, NULL on error with errno set.
+ * Does not block: errno is EAGAIN if no message is available.
  */
 flux_msg_t *children_recvmsg (struct children *ctx);
 
