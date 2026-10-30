@@ -369,6 +369,19 @@ static int mod_main (flux_t *h, int argc, char **argv)
         goto done;
     }
 
+    /* Handle several messages per reactor loop iteration to amortize
+     * reactor overhead, as every response to a local client passes
+     * through this module's handle.
+     */
+    int batch = 32;
+    if (flux_opt_set (h,
+                      FLUX_OPT_RECV_BATCH_COUNT,
+                      &batch,
+                      sizeof (batch)) < 0) {
+        flux_log_error (h, "error setting recv batch count");
+        goto done;
+    }
+
     /* Create router
      */
     if (!(ctx.router = router_create (h))) {
