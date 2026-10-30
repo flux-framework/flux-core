@@ -123,6 +123,9 @@ int flux_jobtap_dependency_add (flux_plugin_t *p,
  *   Once all outstanding job dependencies have been removed, then the job
  *   will proceed out of the DEPEND state.
  *
+ *  Removing a dependency that was already removed succeeds with no
+ *   effect.
+ *
  *  Returns 0 on success, -1 on failure with errno set:
  *   ENOENT: job 'id' not found or 'description' is not a current dependency
  *   EINVAL: invalid argument

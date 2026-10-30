@@ -2134,10 +2134,20 @@ static int jobtap_emit_dependency_event (struct jobtap *jobtap,
      * is used or queued for add is a no-op. This makes add idempotent on
      * restart or plugin reload.
      */
-    if (add
-        && (grudgeset_used (job->dependencies, description)
-            || job_dependency_is_queued (job, "dependency-add", description)))
-        return 0;
+    if (add) {
+        if (grudgeset_used (job->dependencies, description)
+            || job_dependency_is_queued (job, "dependency-add", description))
+            return 0;
+    }
+    /* Removing a dependency that is removed or queued for removal is a
+     * no-op.
+     */
+    else {
+        if (job_dependency_is_queued (job, "dependency-remove", description)
+            || (grudgeset_used (job->dependencies, description)
+                && !grudgeset_contains (job->dependencies, description)))
+            return 0;
+    }
     return event_job_post_pack (jobtap->ctx->event,
                                 job,
                                 event,
