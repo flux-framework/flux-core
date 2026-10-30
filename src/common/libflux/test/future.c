@@ -1101,6 +1101,140 @@ void test_multiple_fulfill_asynchronous (void)
     flux_reactor_destroy (r);
 }
 
+static int batch_calls;
+static void batch_continuation (flux_future_t *f, void *arg)
+{
+    int *destroy_on = arg;
+    batch_calls++;
+    if (destroy_on && batch_calls == *destroy_on) {
+        flux_future_destroy (f);
+        return;
+    }
+    flux_future_reset (f);
+}
+
+static void batch_noreset_continuation (flux_future_t *f, void *arg)
+{
+    batch_calls++;
+}
+
+/* Queued results are delivered to a 'then' continuation one per reactor
+ * loop by default, or up to FLUX_OPT_RECV_BATCH_COUNT per loop when the
+ * future's handle has that option set.
+ */
+void test_then_batch (void)
+{
+    flux_t *h;
+    flux_reactor_t *r;
+    flux_future_t *f;
+    int batch;
+    int destroy_on;
+
+    if (!(h = flux_open ("loop://", 0)))
+        BAIL_OUT ("flux_open loop:// failed");
+    r = flux_get_reactor (h);
+
+    /* default batch=1: one result per reactor loop
+     */
+    if (!(f = flux_future_create (NULL, NULL)))
+        BAIL_OUT ("flux_future_create failed");
+    flux_future_set_flux (f, h);
+    for (int i = 0; i < 4; i++)
+        flux_future_fulfill (f, "x", NULL);
+    batch_calls = 0;
+    ok (flux_future_then (f, -1., batch_continuation, NULL) == 0,
+        "flux_future_then works");
+    ok (flux_reactor_run (r, FLUX_REACTOR_NOWAIT) >= 0 && batch_calls == 1,
+        "batch=1: one continuation call per reactor loop");
+    ok (flux_reactor_run (r, FLUX_REACTOR_NOWAIT) >= 0 && batch_calls == 2,
+        "batch=1: another on the next loop");
+    flux_future_destroy (f);
+
+    /* batch=32: all queued results in one loop
+     */
+    batch = 32;
+    ok (flux_opt_set (h,
+                      FLUX_OPT_RECV_BATCH_COUNT,
+                      &batch,
+                      sizeof (batch)) == 0,
+        "set recv batch count to 32");
+    if (!(f = flux_future_create (NULL, NULL)))
+        BAIL_OUT ("flux_future_create failed");
+    flux_future_set_flux (f, h);
+    for (int i = 0; i < 4; i++)
+        flux_future_fulfill (f, "x", NULL);
+    batch_calls = 0;
+    ok (flux_future_then (f, -1., batch_continuation, NULL) == 0,
+        "flux_future_then works");
+    ok (flux_reactor_run (r, FLUX_REACTOR_NOWAIT) >= 0 && batch_calls == 4,
+        "batch=32: four queued results delivered in one reactor loop");
+    ok (flux_reactor_run (r, FLUX_REACTOR_NOWAIT) >= 0 && batch_calls == 4,
+        "batch=32: nothing more on the next loop");
+    flux_future_destroy (f);
+
+    /* batch=2: results delivered two per loop
+     */
+    batch = 2;
+    ok (flux_opt_set (h,
+                      FLUX_OPT_RECV_BATCH_COUNT,
+                      &batch,
+                      sizeof (batch)) == 0,
+        "set recv batch count to 2");
+    if (!(f = flux_future_create (NULL, NULL)))
+        BAIL_OUT ("flux_future_create failed");
+    flux_future_set_flux (f, h);
+    for (int i = 0; i < 5; i++)
+        flux_future_fulfill (f, "x", NULL);
+    batch_calls = 0;
+    ok (flux_future_then (f, -1., batch_continuation, NULL) == 0,
+        "flux_future_then works");
+    ok (flux_reactor_run (r, FLUX_REACTOR_NOWAIT) >= 0 && batch_calls == 2,
+        "batch=2: two results on the first loop");
+    ok (flux_reactor_run (r, FLUX_REACTOR_NOWAIT) >= 0 && batch_calls == 4,
+        "batch=2: two more on the second loop");
+    ok (flux_reactor_run (r, FLUX_REACTOR_NOWAIT) >= 0 && batch_calls == 5,
+        "batch=2: last one on the third loop");
+    flux_future_destroy (f);
+
+    /* A continuation that does not reset gets only one call.
+     */
+    batch = 32;
+    ok (flux_opt_set (h,
+                      FLUX_OPT_RECV_BATCH_COUNT,
+                      &batch,
+                      sizeof (batch)) == 0,
+        "set recv batch count to 32");
+    if (!(f = flux_future_create (NULL, NULL)))
+        BAIL_OUT ("flux_future_create failed");
+    flux_future_set_flux (f, h);
+    for (int i = 0; i < 4; i++)
+        flux_future_fulfill (f, "x", NULL);
+    batch_calls = 0;
+    ok (flux_future_then (f, -1., batch_noreset_continuation, NULL) == 0,
+        "flux_future_then works");
+    ok (flux_reactor_run (r, FLUX_REACTOR_NOWAIT) >= 0 && batch_calls == 1,
+        "batch=32: continuation without reset is called once");
+    ok (flux_reactor_run (r, FLUX_REACTOR_NOWAIT) >= 0 && batch_calls == 1,
+        "batch=32: and not again on the next loop");
+    flux_future_destroy (f);
+
+    /* A continuation that destroys the future mid-batch is safe.
+     */
+    if (!(f = flux_future_create (NULL, NULL)))
+        BAIL_OUT ("flux_future_create failed");
+    flux_future_set_flux (f, h);
+    for (int i = 0; i < 4; i++)
+        flux_future_fulfill (f, "x", NULL);
+    batch_calls = 0;
+    destroy_on = 2;
+    ok (flux_future_then (f, -1., batch_continuation, &destroy_on) == 0,
+        "flux_future_then works");
+    ok (flux_reactor_run (r, FLUX_REACTOR_NOWAIT) >= 0 && batch_calls == 2,
+        "batch=32: continuation destroyed future on second call, loop ended");
+
+    flux_close (h);
+}
+
 void test_fulfill_with (void)
 {
     flux_future_t *f = NULL;
@@ -1485,6 +1619,7 @@ int main (int argc, char *argv[])
 
     test_multiple_fulfill ();
     test_multiple_fulfill_asynchronous ();
+    test_then_batch ();
 
     test_fulfill_with ();
     test_fulfill_with_async ();
