@@ -27,6 +27,17 @@ int mod_main (flux_t *h, int argc, char **argv)
         flux_log_error (h, "error initializing content cache");
         goto done;
     }
+    /* Handle several messages per reactor loop iteration to amortize
+     * reactor overhead, as this module moves many small messages.
+     */
+    int batch = 32;
+    if (flux_opt_set (h,
+                      FLUX_OPT_RECV_BATCH_COUNT,
+                      &batch,
+                      sizeof (batch)) < 0) {
+        flux_log_error (h, "error setting recv batch count");
+        goto done;
+    }
     if (flux_reactor_run (flux_get_reactor (h), 0) < 0) {
         flux_log_error (h, "reactor exited abnormally");
         goto done;
