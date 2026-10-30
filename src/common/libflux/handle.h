@@ -69,9 +69,11 @@ enum {
 #define FLUX_OPT_RECV_QUEUE_COUNT   "flux::recv_queue_count"
 #define FLUX_OPT_POLLFD_EVENTS      "flux::pollfd_events"
 /* Max messages the reactor dispatcher handles per reactor loop iteration
- * before yielding to other watchers (int, default 1).  Message-intensive
- * services may raise it to amortize per-iteration reactor overhead, at
- * the cost of delaying other watchers by up to that many handler calls.
+ * before yielding to other watchers (int, default 1).  It also bounds how
+ * many queued results a future continuation receives per iteration.
+ * Message-intensive services may raise it to amortize per-iteration
+ * reactor overhead, at the cost of delaying other watchers by up to that
+ * many handler calls.
  */
 #define FLUX_OPT_RECV_BATCH_COUNT   "flux::recv_batch_count"
 
