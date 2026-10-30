@@ -491,9 +491,18 @@ static int event_handle_set_flags (struct job *job,
         errno = EPROTO;
         return -1;
     }
+    /*  Check all flags before setting any, so a bad flag does not leave
+     *  the event partially applied.
+     */
     json_array_foreach (o, index, value) {
         const char *flag = json_string_value (value);
-        if (!flag || job_flag_set (job, flag) < 0) {
+        if (!flag || !job_flag_valid (job, flag)) {
+            errno = EPROTO;
+            return -1;
+        }
+    }
+    json_array_foreach (o, index, value) {
+        if (job_flag_set (job, json_string_value (value)) < 0) {
             errno = EPROTO;
             return -1;
         }
