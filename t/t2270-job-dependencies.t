@@ -165,6 +165,46 @@ test_expect_success 'dependency add/remove in callback does not incorrectly rele
 	flux python dep-remove.py ${id} foo &&
 	flux job wait-event -vt 15 ${id} clean
 '
+dependency_event_count() {
+	flux job eventlog -f json $1 \
+		| jq -s "map(select(.name == \"$2\"
+			and .context.description == \"$3\")) | length"
+}
+test_expect_success 'repeated dependency remove succeeds without an event' '
+	id=$(flux submit \
+		--dependency=test:a \
+		--dependency=test:b \
+		hostname) &&
+	flux job wait-event -t 15 -m description=b ${id} dependency-add &&
+	flux python dep-remove.py ${id} a &&
+	flux python dep-remove.py ${id} a &&
+	test $(dependency_event_count ${id} dependency-remove a) -eq 1
+'
+test_expect_success 'removing a dependency never added fails with ENOENT' '
+	test_must_fail flux python dep-remove.py ${id} notadded 2>notadded.err &&
+	grep "Errno 2" notadded.err &&
+	test $(dependency_event_count ${id} dependency-remove notadded) -eq 0 &&
+	flux python dep-remove.py ${id} b &&
+	flux job wait-event -vt 15 ${id} clean
+'
+test_expect_success 'repeated dependency remove in a callback posts one event' '
+	id=$(flux submit \
+		--dependency=test:bar?remove=2 \
+		--dependency=test:foo \
+		hostname) &&
+	flux job wait-event -t 15 -m description=bar ${id} dependency-remove &&
+	test $(dependency_event_count ${id} dependency-remove bar) -eq 1 &&
+	test_must_fail sh -c "flux dmesg -H | grep \"${id}: error processing\"" &&
+	flux python dep-remove.py ${id} foo &&
+	flux job wait-event -vt 15 ${id} clean
+'
+test_expect_success 'removing a dependency never added in a callback fails' '
+	id=$(flux submit \
+		--setattr=system.dependency-test-absent=notadded \
+		hostname) &&
+	flux job wait-event -vt 15 ${id} clean &&
+	test_must_fail flux job wait-event -t 0.1 ${id} exception
+'
 test_expect_success 'restart: start job with 2 dependencies to test restart' '
 	jobid=$(flux submit \
 		--dependency=test:foo \
@@ -201,6 +241,9 @@ test_expect_success 'restart: reload dependency test plugin' '
 '
 test_expect_success 'restart: job.dependency.test called for jobs on load' '
 	flux python dep-check.py ${jobid} foo
+'
+test_expect_success 'restart: reload does not re-add a removed dependency' '
+	test $(dependency_event_count ${jobid} dependency-add bar) -eq 1
 '
 test_expect_success 'restart: subsequent removal of dependency releases job' '
 	flux python dep-remove.py ${jobid} foo &&
