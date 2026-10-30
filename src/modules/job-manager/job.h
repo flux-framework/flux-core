@@ -157,6 +157,7 @@ int job_apply_resource_updates (struct job *job, json_t *updates);
  */
 zlistx_t *job_priority_queue_create (void);
 int job_priority_queue_insert (zlistx_t *l, struct job *job);
+int job_priority_queue_append (zlistx_t *l, struct job *job);
 int job_priority_queue_delete (zlistx_t *l, struct job *job);
 void job_priority_queue_reorder (zlistx_t *l, struct job *job);
 void job_priority_queue_sort (zlistx_t *l);

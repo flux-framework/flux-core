@@ -371,24 +371,36 @@ static bool queue_name_covers (struct queue_ctx *qctx,
     return queue_root (jq) == target;
 }
 
+/* Add jobs in started queue 'name' to the alloc queue. Active jobs are
+ * visited in hash order, so append them unsorted and sort the alloc queue
+ * once at the end, instead of a sorted insert for each job.
+ */
 static int enqueue_jobs (struct queue_ctx *qctx, const char *name)
 {
     struct job *job = zhashx_first (qctx->ctx->active_jobs);
+    int count = 0;
+    int rc = 0;
+
     while (job) {
         if (queue_name_covers (qctx, name, job->queue)) {
             if (!job->alloc_queued
                 && !job->alloc_pending
                 && job->state == FLUX_JOB_STATE_SCHED
                 && queue_started (qctx, job)) {
-                if (alloc_enqueue_alloc_request (qctx->ctx->alloc, job) < 0)
-                    return -1;
-                if (alloc_queue_recalc_pending (qctx->ctx->alloc) < 0)
-                    return -1;
+                if (alloc_append_alloc_request (qctx->ctx->alloc, job) < 0) {
+                    rc = -1;
+                    break;
+                }
+                count++;
             }
         }
         job = zhashx_next (qctx->ctx->active_jobs);
     }
-    return 0;
+    /* Sort even on error, so the alloc queue is never left unsorted.
+     */
+    if (count > 0 && alloc_queue_reprioritize (qctx->ctx->alloc) < 0)
+        rc = -1;
+    return rc;
 }
 
 static void dequeue_jobs (struct queue_ctx *qctx, const char *name)

@@ -25,6 +25,12 @@ struct alloc *alloc_ctx_create (struct job_manager *ctx);
  */
 int alloc_enqueue_alloc_request (struct alloc *alloc, struct job *job);
 
+/* Like alloc_enqueue_alloc_request(), but add the job to the end of the
+ * queue without sorting. Use this to add many jobs at once, then call
+ * alloc_queue_reprioritize() before returning to the reactor.
+ */
+int alloc_append_alloc_request (struct alloc *alloc, struct job *job);
+
 /* Dequeue job from sched inqueue, e.g. on exception.
  * This function is a no-op if job->alloc_queued is not set.
  */
