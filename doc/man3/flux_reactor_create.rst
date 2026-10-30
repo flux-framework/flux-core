@@ -21,6 +21,8 @@ SYNOPSIS
 
   void flux_reactor_stop_error (flux_reactor_t *r);
 
+  bool flux_reactor_is_stopped (flux_reactor_t *r);
+
 Link with :command:`-lflux-core`.
 
 DESCRIPTION
@@ -66,6 +68,12 @@ If :func:`flux_reactor_stop_error` is called, this will cause
 :func:`flux_reactor_run` to return -1 indicating that an error has occurred.
 The caller should ensure that a valid error code has been assigned to
 :linux:man3:`errno` before calling this function.
+
+:func:`flux_reactor_is_stopped` returns true if :func:`flux_reactor_stop`
+or :func:`flux_reactor_stop_error` has been called since
+:func:`flux_reactor_run` was last entered.  A watcher callback that handles
+several events before returning may check this between events so that a
+stop request takes effect promptly.
 
 :func:`flux_reactor_destroy` releases an internal reference taken at
 :func:`flux_reactor_create` time. Freeing of the underlying resources will
