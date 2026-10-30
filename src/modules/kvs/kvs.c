@@ -2856,6 +2856,17 @@ int mod_main (flux_t *h, int argc, char **argv)
         goto done;
     if (process_args (ctx, argc, argv) < 0)
         goto done;
+    /* Handle several messages per reactor loop iteration to amortize
+     * reactor overhead, as this module moves many small messages.
+     */
+    int batch = 32;
+    if (flux_opt_set (h,
+                      FLUX_OPT_RECV_BATCH_COUNT,
+                      &batch,
+                      sizeof (batch)) < 0) {
+        flux_log_error (h, "error setting recv batch count");
+        goto done;
+    }
     if (ctx->rank == 0) {
         struct kvsroot *root;
         char empty_dir_rootref[BLOBREF_MAX_STRING_SIZE];

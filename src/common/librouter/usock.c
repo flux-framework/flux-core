@@ -82,6 +82,11 @@ struct usock_io {
     struct iobuf iobuf;
 };
 
+/* Max messages to receive or send per connection watcher callback before
+ * yielding to other reactor watchers.  Amortizes reactor loop overhead.
+ */
+static const int recv_batch_count = 32;
+
 struct usock_conn {
     struct flux_msg_cred cred;
     pid_t pid;
@@ -216,23 +221,34 @@ static void conn_read_cb (flux_reactor_t *r,
         goto error;
     }
     if ((revents & FLUX_POLLIN)) {
-        flux_msg_t *msg;
+        int count = recv_batch_count;
 
-        if (!(msg = recvfd (conn->in.fd, &conn->in.iobuf))) {
-            if (errno != EWOULDBLOCK && errno != EAGAIN)
-                goto error;
-        }
-        else {
+        /* Receive up to recv_batch_count messages before returning to
+         * the reactor, to amortize per-iteration reactor overhead when a
+         * client sends a burst.  The fd is nonblocking, so a dry socket
+         * ends the batch with EAGAIN.  recv_cb must not destroy conn.
+         * The first message is always received, even if the reactor was
+         * stopped earlier in this iteration, as before batching.
+         */
+        do {
+            flux_msg_t *msg;
+
+            if (!(msg = recvfd (conn->in.fd, &conn->in.iobuf))) {
+                if (errno != EWOULDBLOCK && errno != EAGAIN)
+                    goto error;
+                break;
+            }
             /* Update message credentials based on connected creds.
              */
-            if (auth_init_message (msg, &conn->cred) < 0)
+            if (auth_init_message (msg, &conn->cred) < 0) {
+                flux_msg_destroy (msg);
                 goto error;
-
+            }
             if (conn->recv_cb)
                 conn->recv_cb (conn, msg, conn->recv_arg);
             flux_msg_destroy (msg);
             conn->txcount++;
-        }
+        } while (--count > 0 && !flux_reactor_is_stopped (r));
     }
     return;
 error:
@@ -261,8 +277,14 @@ static void conn_write_cb (flux_reactor_t *r,
     }
 
     if ((revents & FLUX_POLLOUT)) {
-        const flux_msg_t *msg = zlist_head (conn->outqueue);
-        if (msg) {
+        int count = recv_batch_count;
+        const flux_msg_t *msg;
+
+        /* Send up to recv_batch_count queued messages before returning
+         * to the reactor.  A full socket buffer ends the batch with
+         * EAGAIN and the watcher fires again when it drains.
+         */
+        while (count-- > 0 && (msg = zlist_head (conn->outqueue))) {
             if (sendfd (conn->out.fd, msg, &conn->out.iobuf) < 0) {
                 if (errno == EPIPE) {
                     /* Remote peer has closed connection.
@@ -278,13 +300,12 @@ static void conn_write_cb (flux_reactor_t *r,
                 }
                 else if (errno != EWOULDBLOCK && errno != EAGAIN)
                     goto error;
+                break;
             }
-            else {
-                (void) conn_outqueue_drop (conn);
-                if (zlist_size (conn->outqueue) == 0)
-                    flux_watcher_stop (conn->out.w);
-                conn->rxcount++;
-            }
+            (void) conn_outqueue_drop (conn);
+            if (zlist_size (conn->outqueue) == 0)
+                flux_watcher_stop (conn->out.w);
+            conn->rxcount++;
         }
     }
     return;

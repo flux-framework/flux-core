@@ -411,7 +411,6 @@ void test_cloned_dispatch (flux_t *orig)
         "created reactor");
     ok (flux_set_reactor (h, r) == 0,
         "set reactor in cloned handle");
-
     /* event */
     ok ((mh = flux_msg_handler_create (h, FLUX_MATCH_EVENT, cb, NULL)) != NULL,
         "handle created dispatcher on demand");
@@ -453,8 +452,9 @@ void test_cloned_dispatch (flux_t *orig)
 
     /* N.B. libev NOWAIT semantics don't guarantee that all pending
      * events are handled as only one loop is run.  The flux_t handle
-     * ensures that only one message is handled per loop, so we need to
-     * call it twice to handle the expected two messages.
+     * handles only one message per loop by default (see
+     * FLUX_OPT_RECV_BATCH_COUNT), so we need to call it twice to handle
+     * the expected two messages.
      */
     cb_called = 0;
     /* 1 */
@@ -516,6 +516,219 @@ void test_cloned_dispatch (flux_t *orig)
     diag ("destroyed reactor, closed clone");
 }
 
+/* Batch test:
+ * Send N event messages with the recv batch count set to B.  With B=1
+ * each reactor loop handles one message; with B>=N one loop handles all.
+ * Then verify that stopping the reactor from a handler ends the batch.
+ */
+static void stop_cb (flux_t *h,
+                     flux_msg_handler_t *mh,
+                     const flux_msg_t *msg,
+                     void *arg)
+{
+    cb_called++;
+    flux_reactor_stop (flux_get_reactor (h));
+}
+
+static int stop_check_fired;
+static void stop_check_cb (flux_reactor_t *r,
+                           flux_watcher_t *w,
+                           int revents,
+                           void *arg)
+{
+    stop_check_fired++;
+    flux_reactor_stop (r);
+}
+
+static int send_events (flux_t *h, int count)
+{
+    for (int i = 0; i < count; i++) {
+        flux_msg_t *msg;
+        if (!(msg = flux_event_encode ("test", NULL))
+            || flux_send (h, msg, 0) < 0) {
+            flux_msg_destroy (msg);
+            return -1;
+        }
+        flux_msg_destroy (msg);
+    }
+    return 0;
+}
+
+void test_batch (flux_t *h)
+{
+    flux_reactor_t *r = flux_get_reactor (h);
+    flux_msg_handler_t *mh;
+    int batch;
+
+    ok ((mh = flux_msg_handler_create (h, FLUX_MATCH_EVENT, cb, NULL)) != NULL,
+        "created event handler");
+    flux_msg_handler_start (mh);
+
+    batch = 1;
+    ok (flux_opt_set (h,
+                      FLUX_OPT_RECV_BATCH_COUNT,
+                      &batch,
+                      sizeof (batch)) == 0,
+        "set recv batch count to 1");
+    ok (send_events (h, 4) == 0,
+        "sent 4 events");
+    cb_called = 0;
+    ok (flux_reactor_run (r, FLUX_REACTOR_NOWAIT) >= 0,
+        "flux_reactor_run ran");
+    ok (cb_called == 1,
+        "batch=1: one message handled per reactor loop");
+    for (int i = 0; i < 3; i++)
+        (void)flux_reactor_run (r, FLUX_REACTOR_NOWAIT);
+    ok (cb_called == 4,
+        "batch=1: remaining messages handled by subsequent loops");
+
+    batch = 32;
+    ok (flux_opt_set (h,
+                      FLUX_OPT_RECV_BATCH_COUNT,
+                      &batch,
+                      sizeof (batch)) == 0,
+        "set recv batch count to 32");
+    ok (send_events (h, 4) == 0,
+        "sent 4 events");
+    cb_called = 0;
+    ok (flux_reactor_run (r, FLUX_REACTOR_NOWAIT) >= 0,
+        "flux_reactor_run ran");
+    ok (cb_called == 4,
+        "batch=32: all four messages handled in one reactor loop");
+    ok (flux_reactor_run (r, FLUX_REACTOR_NOWAIT) >= 0 && cb_called == 4,
+        "batch=32: nothing left for the next loop");
+
+    batch = 2;
+    ok (flux_opt_set (h,
+                      FLUX_OPT_RECV_BATCH_COUNT,
+                      &batch,
+                      sizeof (batch)) == 0,
+        "set recv batch count to 2");
+    ok (send_events (h, 5) == 0,
+        "sent 5 events");
+    cb_called = 0;
+    ok (flux_reactor_run (r, FLUX_REACTOR_NOWAIT) >= 0 && cb_called == 2,
+        "batch=2: two messages handled on first loop");
+    ok (flux_reactor_run (r, FLUX_REACTOR_NOWAIT) >= 0 && cb_called == 4,
+        "batch=2: two more on second loop");
+    ok (flux_reactor_run (r, FLUX_REACTOR_NOWAIT) >= 0 && cb_called == 5,
+        "batch=2: last one on third loop");
+    flux_msg_handler_destroy (mh);
+
+    /* A handler that stops the reactor ends the batch early.
+     */
+    mh = flux_msg_handler_create (h, FLUX_MATCH_EVENT, stop_cb, NULL);
+    ok (mh != NULL,
+        "created event handler that stops the reactor");
+    flux_msg_handler_start (mh);
+    batch = 32;
+    ok (flux_opt_set (h,
+                      FLUX_OPT_RECV_BATCH_COUNT,
+                      &batch,
+                      sizeof (batch)) == 0,
+        "set recv batch count to 32");
+    ok (send_events (h, 4) == 0,
+        "sent 4 events");
+    cb_called = 0;
+    ok (flux_reactor_run (r, 0) >= 0,
+        "flux_reactor_run ran");
+    ok (cb_called == 1,
+        "batch=32: handler stopped reactor after one message");
+    flux_msg_handler_destroy (mh);
+
+    /* A stop requested by another watcher earlier in the same reactor
+     * iteration does not suppress delivery of the first message, matching
+     * pre-batching behavior.  The handle watcher delivers messages from a
+     * check watcher at default priority, so a check watcher at higher
+     * priority that stops the reactor runs before handle_cb().
+     */
+    ok ((mh = flux_msg_handler_create (h, FLUX_MATCH_EVENT, cb, NULL)) != NULL,
+        "created event handler");
+    flux_msg_handler_start (mh);
+    flux_watcher_t *cw;
+    cw = flux_check_watcher_create (r, stop_check_cb, NULL);
+    ok (cw != NULL,
+        "created check watcher that stops the reactor");
+    flux_watcher_set_priority (cw, 1);
+    flux_watcher_start (cw);
+    ok (send_events (h, 2) == 0,
+        "sent 2 events");
+    cb_called = 0;
+    stop_check_fired = 0;
+    ok (flux_reactor_run (r, 0) >= 0,
+        "flux_reactor_run ran");
+    diag ("stop_check_fired=%d cb_called=%d", stop_check_fired, cb_called);
+    ok (stop_check_fired == 1 && cb_called == 1,
+        "batch=32: reactor stopped before handle_cb, one message delivered");
+    flux_watcher_destroy (cw);
+    flux_msg_handler_destroy (mh);
+
+    /* Drain leftovers so they don't disturb later tests.
+     */
+    ok ((mh = flux_msg_handler_create (h, FLUX_MATCH_EVENT, cb, NULL)) != NULL,
+        "created event handler");
+    flux_msg_handler_start (mh);
+    cb_called = 0;
+    ok (flux_reactor_run (r, FLUX_REACTOR_NOWAIT) >= 0 && cb_called == 4,
+        "remaining 4 messages handled on the next loop");
+    flux_msg_handler_destroy (mh);
+    batch = 1;
+    ok (flux_opt_set (h,
+                      FLUX_OPT_RECV_BATCH_COUNT,
+                      &batch,
+                      sizeof (batch)) == 0,
+        "restored recv batch count to 1");
+}
+
+/* A handler that stops the last running handler also stops the handle
+ * watcher.  Messages still queued at that point must stay queued, as they
+ * do with batch=1, and not be received and discarded as unmatched.
+ */
+static void stopself_cb (flux_t *h,
+                         flux_msg_handler_t *mh,
+                         const flux_msg_t *msg,
+                         void *arg)
+{
+    cb_called++;
+    flux_msg_handler_stop (mh);
+}
+
+void test_batch_handler_stop (flux_t *h, int batch)
+{
+    flux_reactor_t *r = flux_get_reactor (h);
+    flux_msg_handler_t *mh;
+
+    ok (flux_opt_set (h,
+                      FLUX_OPT_RECV_BATCH_COUNT,
+                      &batch,
+                      sizeof (batch)) == 0,
+        "set recv batch count to %d", batch);
+    mh = flux_msg_handler_create (h, FLUX_MATCH_EVENT, stopself_cb, NULL);
+    ok (mh != NULL,
+        "created event handler that stops itself");
+    flux_msg_handler_start (mh);
+    ok (send_events (h, 4) == 0,
+        "sent 4 events");
+    cb_called = 0;
+    ok (flux_reactor_run (r, FLUX_REACTOR_NOWAIT) >= 0 && cb_called == 1,
+        "batch=%d: handler stopped itself after one message", batch);
+    flux_msg_handler_destroy (mh);
+
+    ok ((mh = flux_msg_handler_create (h, FLUX_MATCH_EVENT, cb, NULL)) != NULL,
+        "created event handler");
+    flux_msg_handler_start (mh);
+    cb_called = 0;
+    for (int i = 0; i < 4; i++)
+        (void)flux_reactor_run (r, FLUX_REACTOR_NOWAIT);
+    diag ("batch=%d: %d of 3 remaining messages delivered", batch, cb_called);
+    ok (cb_called == 3,
+        "batch=%d: remaining 3 messages were not discarded", batch);
+    flux_msg_handler_destroy (mh);
+
+    batch = 1;
+    (void)flux_opt_set (h, FLUX_OPT_RECV_BATCH_COUNT, &batch, sizeof (batch));
+}
+
 int main (int argc, char *argv[])
 {
     flux_t *h;
@@ -529,6 +742,9 @@ int main (int argc, char *argv[])
         "handle created reactor on demand");
 
     test_simple_msg_handler (h);
+    test_batch (h);
+    test_batch_handler_stop (h, 1);
+    test_batch_handler_stop (h, 32);
     test_fastpath (h);
     test_cloned_dispatch (h);
     test_method_override (h);

@@ -127,6 +127,12 @@ static void overlay_mcast_child (struct overlay *ov, flux_msg_t *msg);
 static int overlay_sendmsg_child (struct overlay *ov, const flux_msg_t *msg);
 static int overlay_sendmsg_parent (struct overlay *ov, const flux_msg_t *msg);
 static void hello_response_handler (struct overlay *ov, const flux_msg_t *msg);
+/* Max messages to process per watcher callback before yielding to
+ * other reactor watchers.  Amortizes reactor loop overhead.
+ */
+static const int recv_batch_count = 32;
+
+
 static void hello_request_handler (struct overlay *ov, const flux_msg_t *msg);
 static int overlay_control_parent (struct overlay *ov,
                                    enum control_type type,
@@ -405,23 +411,26 @@ error:
     return -1;
 }
 
-static void channel_cb (flux_reactor_t *r,
-                        flux_watcher_t *w,
-                        int revents,
-                        void *arg)
+/* Handle one message from the broker on the overlay channel.
+ * Returns false if no message was available (EAGAIN) or on error.
+ * Either way the batch ends and the watcher fires again on the next
+ * loop.  Errors are not logged: the reachable ones either consume the
+ * offending message or are persistent (e.g. ETERM during shutdown),
+ * and logging per reactor iteration would flood the log.
+ */
+static bool channel_recv_one (struct overlay *ov, flux_t *h)
 {
-    flux_t *h = flux_handle_watcher_get_flux (w);
-    struct overlay *ov = arg;
     flux_msg_t *msg;
     int type;
     const char *uuid;
     uint32_t nodeid;
     struct child *child = NULL;
 
-    if (!(msg = flux_recv (h, FLUX_MATCH_ANY, 0))
-        || flux_msg_get_type (msg, &type) < 0) {
+    if (!(msg = flux_recv (h, FLUX_MATCH_ANY, FLUX_O_NONBLOCK)))
+        return false;
+    if (flux_msg_get_type (msg, &type) < 0) {
         flux_msg_decref (msg);
-        return;
+        return true;
     }
     switch (type) {
         case FLUX_MSGTYPE_REQUEST:
@@ -503,11 +512,27 @@ static void channel_cb (flux_reactor_t *r,
     }
 done:
     flux_msg_decref (msg);
-    return;
+    return true;
 request_error:
     if (flux_respond_error (h, msg, errno, NULL) < 0)
         flux_log_error (ov->h, "error responding to broker request");
     flux_msg_decref (msg);
+    return true;
+}
+
+static void channel_cb (flux_reactor_t *r,
+                        flux_watcher_t *w,
+                        int revents,
+                        void *arg)
+{
+    flux_t *h = flux_handle_watcher_get_flux (w);
+    struct overlay *ov = arg;
+    int count = recv_batch_count;
+
+    do {
+        if (!channel_recv_one (ov, h))
+            break;
+    } while (--count > 0 && !flux_reactor_is_stopped (r));
 }
 
 /* The broker state has changed.
@@ -826,12 +851,15 @@ static int clear_msg_role (flux_msg_t *msg, uint32_t role)
 
 /* Handle a message received from TBON child (downstream).
  */
-static void child_cb (flux_reactor_t *r,
-                      flux_watcher_t *w,
-                      int revents,
-                      void *arg)
+/* Handle one message from a downstream peer.
+ * Returns false if no message was available (EAGAIN) or on error.
+ * Either way the batch ends and the watcher fires again on the next
+ * loop.  Errors are not logged: the reachable ones either consume the
+ * offending message or are persistent (e.g. ETERM during shutdown),
+ * and logging per reactor iteration would flood the log.
+ */
+static bool child_recv_one (struct overlay *ov)
 {
-    struct overlay *ov = arg;
     flux_msg_t *msg;
     int type = -1;
     const char *topic = NULL;
@@ -839,7 +867,7 @@ static void child_cb (flux_reactor_t *r,
     struct child *child;
 
     if (!(msg = children_recvmsg (ov->children)))
-        return;
+        return false;
     if (clear_msg_role (msg, FLUX_ROLE_LOCAL) < 0) {
         logdrop (ov, "downstream", msg, "failed to clear local role");
         goto done;
@@ -942,9 +970,24 @@ static void child_cb (flux_reactor_t *r,
     trace_overlay_msg (ov->h, "rx", child->rank, ov->trace_requests, msg);
     if (flux_send_new (ov->h_channel, &msg, 0) < 0)
         goto done;
-    return;
+    return true;
 done:
     flux_msg_decref (msg);
+    return true;
+}
+
+static void child_cb (flux_reactor_t *r,
+                      flux_watcher_t *w,
+                      int revents,
+                      void *arg)
+{
+    struct overlay *ov = arg;
+    int count = recv_batch_count;
+
+    do {
+        if (!child_recv_one (ov))
+            break;
+    } while (--count > 0 && !flux_reactor_is_stopped (r));
 }
 
 /* Parent endpoint disconnected, so any pending RPCs going that way
@@ -1013,18 +1056,21 @@ static void overlay_event_checkseq (struct overlay *ov, const flux_msg_t *msg)
     ov->event_seq = seq;
 }
 
-static void parent_cb (flux_reactor_t *r,
-                       flux_watcher_t *w,
-                       int revents,
-                       void *arg)
+/* Handle one message from the upstream peer.
+ * Returns false if no message was available (EAGAIN) or on error.
+ * Either way the batch ends and the watcher fires again on the next
+ * loop.  Errors are not logged: the reachable ones either consume the
+ * offending message or are persistent (e.g. ETERM during shutdown),
+ * and logging per reactor iteration would flood the log.
+ */
+static bool parent_recv_one (struct overlay *ov)
 {
-    struct overlay *ov = arg;
     flux_msg_t *msg;
     int type;
     const char *topic = NULL;
 
     if (!(msg = parent_recvmsg (ov->parent)))
-        return;
+        return false;
     if (clear_msg_role (msg, FLUX_ROLE_LOCAL) < 0) {
         logdrop (ov, "upstream", msg, "failed to clear local role");
         goto done;
@@ -1092,9 +1138,24 @@ static void parent_cb (flux_reactor_t *r,
     trace_overlay_msg (ov->h, "rx", ov->parent->rank, ov->trace_requests, msg);
     if (flux_send_new (ov->h_channel, &msg, 0) < 0)
         goto done;
-    return;
+    return true;
 done:
     flux_msg_destroy (msg);
+    return true;
+}
+
+static void parent_cb (flux_reactor_t *r,
+                       flux_watcher_t *w,
+                       int revents,
+                       void *arg)
+{
+    struct overlay *ov = arg;
+    int count = recv_batch_count;
+
+    do {
+        if (!parent_recv_one (ov))
+            break;
+    } while (--count > 0 && !flux_reactor_is_stopped (r));
 }
 
 

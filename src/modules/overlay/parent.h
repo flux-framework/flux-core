@@ -93,6 +93,7 @@ int parent_sendmsg (struct parent *parent, const flux_msg_t *msg);
 
 /* Receive message from parent.
  * Returns message on success, NULL on error with errno set.
+ * Does not block: errno is EAGAIN if no message is available.
  */
 flux_msg_t *parent_recvmsg (struct parent *parent);
 

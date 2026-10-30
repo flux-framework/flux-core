@@ -29,6 +29,12 @@
 #include "trace.h"
 #include "modhash.h"
 
+/* Max messages to process per module watcher callback before yielding
+ * to other reactor watchers.  Amortizes reactor loop overhead.
+ */
+static const int recv_batch_count = 32;
+
+
 struct modhash {
     zhash_t *zh_byuuid;
     flux_msg_handler_t **handlers;
@@ -277,17 +283,25 @@ static void disconnect_send_cb (const flux_msg_t *msg, void *arg)
     broker_request_sendmsg_new (ctx, &cpy);
 }
 
-/* Handle messages on the service socket of a module.
+/* Handle one message on the service socket of a module.
+ * Returns false if no message was available (EAGAIN) or on error.
+ * Either way the batch ends and the watcher fires again on the next
+ * loop.  Errors are not logged: the reachable ones either consume the
+ * offending message or are persistent (e.g. ETERM during shutdown),
+ * and logging per reactor iteration would flood the log.
+ * N.B. requests that could result in module destruction (e.g. module.status)
+ * are routed to the broker's own services via the interthread queue, not
+ * called directly from here, so 'p' remains valid across the batch loop
+ * in module_cb().
  */
-static void module_cb (module_t *p, void *arg)
+static bool module_recv_one (module_t *p, broker_ctx_t *ctx)
 {
-    broker_ctx_t *ctx = arg;
     flux_msg_t *msg = module_recvmsg (p);
     int type;
     int count;
 
     if (!msg)
-        goto done;
+        return false;
     trace_module_msg (ctx->h,
                       "tx",
                       module_get_name (p),
@@ -346,6 +360,21 @@ static void module_cb (module_t *p, void *arg)
     }
 done:
     flux_msg_destroy (msg);
+    return true;
+}
+
+/* Handle messages on the service socket of a module.
+ */
+static void module_cb (module_t *p, void *arg)
+{
+    broker_ctx_t *ctx = arg;
+    flux_reactor_t *r = flux_get_reactor (ctx->h);
+    int count = recv_batch_count;
+
+    do {
+        if (!module_recv_one (p, ctx))
+            break;
+    } while (--count > 0 && !flux_reactor_is_stopped (r));
 }
 
 static void module_status_cb (module_t *p, int prev_status, void *arg)

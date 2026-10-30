@@ -200,6 +200,18 @@ int mod_main (flux_t *h, int argc, char **argv)
     ctx.h = h;
     ctx.owner = getuid ();
 
+    /* Handle several messages per reactor loop iteration to amortize
+     * reactor overhead, as this module moves many small messages.
+     */
+    int batch = 32;
+    if (flux_opt_set (h,
+                      FLUX_OPT_RECV_BATCH_COUNT,
+                      &batch,
+                      sizeof (batch)) < 0) {
+        flux_log_error (h, "error setting recv batch count");
+        goto done;
+    }
+
     if (!(ctx.active_jobs = job_hash_create ())
         || !(ctx.inactive_jobs = job_hash_create ())) {
         flux_log_error (h, "error creating jobs hash");

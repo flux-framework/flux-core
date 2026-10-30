@@ -393,7 +393,7 @@ flux_msg_t *children_recvmsg (struct children *ctx)
         errno = EINVAL;
         return NULL;
     }
-    return zmqutil_msg_recv (ctx->bind_zsock);
+    return zmqutil_msg_recv_ex (ctx->bind_zsock, true);
 }
 
 bool children_is_bound (struct children *ctx)

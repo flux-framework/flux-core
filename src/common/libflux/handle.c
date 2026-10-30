@@ -58,7 +58,14 @@ struct flux_handle {
     bool            comms_error_in_progress;
     bool            destroy_in_progress;
     struct rpc_track *tracker;
+    int             recv_batch_count;
 };
+
+/* Default number of messages the reactor dispatcher handles per handle
+ * watcher callback before yielding to other watchers.  See handle_cb()
+ * in msg_handler.c.  Override per handle with FLUX_OPT_RECV_BATCH_COUNT.
+ */
+static const int default_recv_batch_count = 1;
 
 struct builtin_connector {
     const char *scheme;
@@ -557,6 +564,7 @@ flux_t *flux_handle_create (void *impl,
     h->ops = ops;
     h->impl = impl;
     h->pollfd = -1;
+    h->recv_batch_count = default_recv_batch_count;
     if (!(h->tagpool = tagpool_create ()))
         goto error;
     if (!(flags & FLUX_O_NOREQUEUE)) {
@@ -724,6 +732,14 @@ int flux_opt_get (flux_t *h, const char *option, void *val, size_t len)
         return -1;
     }
     h = lookup_clone_ancestor (h);
+    if (streq (option, FLUX_OPT_RECV_BATCH_COUNT)) {
+        if (!val || len != sizeof (int)) {
+            errno = EINVAL;
+            return -1;
+        }
+        *(int *)val = h->recv_batch_count;
+        return 0;
+    }
     if (!h->ops->getopt) {
         errno = EINVAL;
         return -1;
@@ -738,6 +754,14 @@ int flux_opt_set (flux_t *h, const char *option, const void *val, size_t len)
         return -1;
     }
     h = lookup_clone_ancestor (h);
+    if (streq (option, FLUX_OPT_RECV_BATCH_COUNT)) {
+        if (!val || len != sizeof (int) || *(const int *)val < 1) {
+            errno = EINVAL;
+            return -1;
+        }
+        h->recv_batch_count = *(const int *)val;
+        return 0;
+    }
     if (!h->ops->setopt) {
         errno = EINVAL;
         return -1;

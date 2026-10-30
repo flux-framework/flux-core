@@ -13,6 +13,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 
 #include "src/common/libflux/message.h"
 
@@ -30,6 +31,9 @@ int zmqutil_msg_send_ex (void *dest, const flux_msg_t *msg, bool nonblock);
  * Returns message on success, NULL on failure with errno set.
  */
 flux_msg_t *zmqutil_msg_recv (void *dest);
+/* If nonblock is true, fail with EAGAIN instead of blocking.
+ */
+flux_msg_t *zmqutil_msg_recv_ex (void *dest, bool nonblock);
 
 #ifdef __cplusplus
 }

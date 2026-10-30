@@ -273,6 +273,18 @@ int mod_main (flux_t *h, int argc, char **argv)
         flux_log_error (h, "initialization error");
         goto done;
     }
+    /* Handle several messages per reactor loop iteration to amortize
+     * reactor overhead, as this module consumes one journal response
+     * per job on startup.
+     */
+    int batch = 32;
+    if (flux_opt_set (h,
+                      FLUX_OPT_RECV_BATCH_COUNT,
+                      &batch,
+                      sizeof (batch)) < 0) {
+        flux_log_error (h, "error setting recv batch count");
+        goto done;
+    }
     if (flux_reactor_run (flux_get_reactor (h), 0) < 0)
         goto done;
     rc = 0;

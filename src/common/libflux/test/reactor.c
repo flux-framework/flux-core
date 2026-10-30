@@ -800,6 +800,42 @@ static void reactor_destroy_early (void)
     flux_watcher_destroy (w);
 }
 
+static void stop_timer_cb (flux_reactor_t *r,
+                           flux_watcher_t *w,
+                           int revents,
+                           void *arg)
+{
+    bool *stopped_before = arg;
+    *stopped_before = flux_reactor_is_stopped (r);
+    flux_reactor_stop (r);
+}
+
+static void test_is_stopped (flux_reactor_t *r)
+{
+    flux_watcher_t *w;
+    bool stopped_before = true;
+
+    ok (!flux_reactor_is_stopped (NULL),
+        "flux_reactor_is_stopped r=NULL returns false");
+    ok (!flux_reactor_is_stopped (r),
+        "flux_reactor_is_stopped returns false before run");
+    w = flux_timer_watcher_create (r, 0., 0., stop_timer_cb, &stopped_before);
+    ok (w != NULL,
+        "created timer watcher");
+    flux_watcher_start (w);
+    ok (flux_reactor_run (r, 0) >= 0,
+        "flux_reactor_run ran");
+    ok (!stopped_before,
+        "flux_reactor_is_stopped returned false inside callback before stop");
+    ok (flux_reactor_is_stopped (r),
+        "flux_reactor_is_stopped returns true after stop");
+    flux_watcher_destroy (w);
+    ok (flux_reactor_run (r, 0) == 0,
+        "flux_reactor_run ran to completion (no watchers)");
+    ok (!flux_reactor_is_stopped (r),
+        "flux_reactor_is_stopped is reset by flux_reactor_run");
+}
+
 static void test_reactor_flags (flux_reactor_t *r)
 {
     errno = 0;
@@ -911,6 +947,7 @@ int main (int argc, char *argv[])
     test_handle (reactor);
     test_unref (reactor);
     test_reactor_flags (reactor);
+    test_is_stopped (reactor);
     test_priority (reactor);
 
     flux_reactor_destroy (reactor);

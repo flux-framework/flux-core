@@ -811,6 +811,13 @@ static void now_timer_cb (flux_reactor_t *r,
 }
 
 /* check - if results are ready, call the continuation
+ * If the continuation calls flux_future_reset() and another result is
+ * already queued, post_fulfill() restarts the check watcher.  Rather than
+ * wait for the next reactor loop to deliver it, call the continuation
+ * again now, up to the handle's FLUX_OPT_RECV_BATCH_COUNT (default 1).
+ * This lets a streaming RPC consumer keep up with a dispatcher that
+ * delivers several responses per loop.  Without a handle, one result
+ * is delivered per loop as before.
  */
 static void check_cb (flux_reactor_t *r,
                       flux_watcher_t *w,
@@ -818,14 +825,27 @@ static void check_cb (flux_reactor_t *r,
                       void *arg)
 {
     flux_future_t *f = arg;
+    int count = 1;
 
     assert (f->then != NULL);
 
-    flux_watcher_stop (f->then->timer);
-    then_context_stop (f->then);
-    if (f->then->continuation)
+    if (f->h) {
+        (void)flux_opt_get (f->h,
+                            FLUX_OPT_RECV_BATCH_COUNT,
+                            &count,
+                            sizeof (count));
+    }
+    flux_future_incref (f); // hold future across continuation calls
+    do {
+        flux_watcher_stop (f->then->timer);
+        then_context_stop (f->then);
+        if (!f->then->continuation)
+            break;
         f->then->continuation (f, f->then->continuation_arg);
-    // N.B. callback might destroy future
+        if (f->refcount == 1) // continuation destroyed the future
+            break;
+    } while (--count > 0 && flux_watcher_is_active (f->then->check));
+    flux_future_decref (f);
 }
 
 

@@ -224,6 +224,52 @@ void test_basic (void)
     ok (flux_opt_get (h, "nonexistent", NULL, 0) < 0 && errno == EINVAL,
         "flux_opt_get fails with EINVAL on unknown option");
 
+    /* Test FLUX_OPT_RECV_BATCH_COUNT, handled in the handle layer.
+     */
+    int batch = -1;
+    ok (flux_opt_get (h,
+                      FLUX_OPT_RECV_BATCH_COUNT,
+                      &batch,
+                      sizeof (batch)) == 0
+        && batch == 1,
+        "flux_opt_get recv_batch_count returns default of 1");
+    batch = 32;
+    ok (flux_opt_set (h,
+                      FLUX_OPT_RECV_BATCH_COUNT,
+                      &batch,
+                      sizeof (batch)) == 0,
+        "flux_opt_set recv_batch_count=32 works");
+    batch = -1;
+    ok (flux_opt_get (h,
+                      FLUX_OPT_RECV_BATCH_COUNT,
+                      &batch,
+                      sizeof (batch)) == 0
+        && batch == 32,
+        "flux_opt_get recv_batch_count returns 32");
+    batch = 0;
+    errno = 0;
+    ok (flux_opt_set (h,
+                      FLUX_OPT_RECV_BATCH_COUNT,
+                      &batch,
+                      sizeof (batch)) < 0
+        && errno == EINVAL,
+        "flux_opt_set recv_batch_count=0 fails with EINVAL");
+    batch = 1;
+    errno = 0;
+    ok (flux_opt_set (h,
+                      FLUX_OPT_RECV_BATCH_COUNT,
+                      &batch,
+                      sizeof (batch) + 1) < 0
+        && errno == EINVAL,
+        "flux_opt_set recv_batch_count size=wrong fails with EINVAL");
+    errno = 0;
+    ok (flux_opt_set (h,
+                      FLUX_OPT_RECV_BATCH_COUNT,
+                      NULL,
+                      sizeof (batch)) < 0
+        && errno == EINVAL,
+        "flux_opt_set recv_batch_count val=NULL fails with EINVAL");
+
     /* Test flux_aux_get, flux_aux_set
      */
     s = flux_aux_get (h, "handletest::thing1");
