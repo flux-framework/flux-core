@@ -235,6 +235,44 @@ job.state.depend
   This enables idempotent operation during job-manager or plugin restart.
   Removing a description that was never added fails with ``ENOENT``.
 
+  Query an outstanding dependency with::
+
+    int flux_jobtap_dependency_check (flux_plugin_t *p,
+                                      flux_jobid_t id,
+                                      const char *description);
+
+  Returns 1 if the exact description is outstanding, 0 if absent or previously
+  removed, or -1 on error with ``errno`` set. A dependency is outstanding only
+  while it blocks a job in ``NEW`` or ``DEPEND`` state. An active job that left
+  ``DEPEND`` state, for example due to an exception, returns 0 for any
+  description. Any non-NULL description is accepted, without the length
+  restriction imposed on new dependencies. The query accepts active jobs, or
+  ``FLUX_JOBTAP_CURRENT_JOB`` within a job callback. An inactive or unavailable
+  job, including CURRENT_JOB outside a job callback, yields ``ENOENT``. A NULL
+  description or plugin without a valid jobtap context yields ``EINVAL``.
+
+  For example, a plugin loaded after an upgrade can remove a known obsolete
+  dependency in its ``job.new`` callback, which is called on plugin load and
+  instance restart::
+
+    int rc = flux_jobtap_dependency_check (p, id, "obsolete-dependency");
+    if (rc < 0)
+        return -1;
+    if (rc == 1
+        && flux_jobtap_dependency_remove (p, id, "obsolete-dependency") < 0)
+        return -1;
+
+  The query accounts for queued adds and removes, including changes requested
+  earlier in the same callback. It returns 1 for an existing or queued
+  dependency unless its removal is queued. Thus, adding and then removing a
+  dependency in one callback makes it check as absent. The query does not
+  reserve a dependency for subsequent removal.
+
+  A result of 0 does not distinguish a never-used dependency description from a
+  removed one and does not imply that the description can be added again.
+  Dependency state is restored by replaying the eventlog across instance
+  restarts.
+
   .. note::
     See :ref:`event_processing` for important information about when state
     transitions occur synchronously when removing dependencies.
