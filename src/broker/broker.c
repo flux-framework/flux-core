@@ -86,6 +86,12 @@ static void h_internal_watcher (flux_reactor_t *r,
                                 flux_watcher_t *w,
                                 int revents,
                                 void *arg);
+
+/* Max messages to process per handle watcher callback before yielding
+ * to other reactor watchers.  Amortizes reactor loop overhead.
+ */
+static const int recv_batch_count = 32;
+
 static void overlay_cb (flux_reactor_t *r,
                         flux_watcher_t *w,
                         int revents,
@@ -1770,24 +1776,25 @@ static flux_msg_handler_t **broker_add_services (broker_ctx_t *ctx,
  ** reactor callbacks
  **/
 
-/* Handle messages on interthread://overlay
+/* Handle one message on interthread://overlay.
+ * Returns false if no message was available (EAGAIN) or on error.
+ * Either way the batch ends and the watcher fires again on the next
+ * loop.  Errors are not logged: the reachable ones either consume the
+ * offending message or are persistent (e.g. ETERM during shutdown),
+ * and logging per reactor iteration would flood the log.
  */
-static void overlay_cb (flux_reactor_t *r,
-                        flux_watcher_t *w,
-                        int revents,
-                        void *arg)
+static bool overlay_recv_one (broker_ctx_t *ctx, flux_t *h)
 {
-    flux_t *h = flux_handle_watcher_get_flux (w);
-    broker_ctx_t *ctx = arg;
     flux_msg_t *msg;
     int type;
     const char *topic;
 
-    if (!(msg = flux_recv (h, FLUX_MATCH_ANY, 0))
-        || flux_msg_get_type (msg, &type) < 0
+    if (!(msg = flux_recv (h, FLUX_MATCH_ANY, FLUX_O_NONBLOCK)))
+        return false;
+    if (flux_msg_get_type (msg, &type) < 0
         || flux_msg_get_topic (msg, &topic) < 0) {
         flux_msg_decref (msg);
-        return;
+        return true;
     }
     switch (type) {
         case FLUX_MSGTYPE_REQUEST:
@@ -1815,7 +1822,7 @@ static void overlay_cb (flux_reactor_t *r,
     }
     flux_msg_decref (msg);
     msg = NULL;
-    return;
+    return true;
 drop:
     /* Suppress logging if a response could not be sent due to ENOSYS,
      * which happens if sending module unloads before finishing all RPCs.
@@ -1827,6 +1834,24 @@ drop:
                         topic);
     }
     flux_msg_decref (msg);
+    return true;
+}
+
+/* Handle messages on interthread://overlay
+ */
+static void overlay_cb (flux_reactor_t *r,
+                        flux_watcher_t *w,
+                        int revents,
+                        void *arg)
+{
+    flux_t *h = flux_handle_watcher_get_flux (w);
+    broker_ctx_t *ctx = arg;
+    int count = recv_batch_count;
+
+    do {
+        if (!overlay_recv_one (ctx, h))
+            break;
+    } while (--count > 0 && !flux_reactor_is_stopped (r));
 }
 
 static bool signal_is_deadly (int signum)
@@ -1991,21 +2016,22 @@ int broker_response_sendmsg_new (broker_ctx_t *ctx, flux_msg_t **msg)
     return flux_send_new (ctx->h_overlay, msg, 0);
 }
 
-/* Handle messages received from the "router end" of the back to back
+/* Handle one message received on ctx->h, i.e. the broker's own
  * interthread handles.  Hand the message off to routing logic.
+ * Returns false if no message was available (EAGAIN) or on error.
+ * Either way the batch ends and the watcher fires again on the next
+ * loop.  Errors are not logged: the reachable ones either consume the
+ * offending message or are persistent (e.g. ETERM during shutdown),
+ * and logging per reactor iteration would flood the log.
  */
-static void h_internal_watcher (flux_reactor_t *r,
-                                flux_watcher_t *w,
-                                int revents,
-                                void *arg)
+static bool h_internal_recv_one (broker_ctx_t *ctx, flux_t *h)
 {
-    flux_t *h = flux_handle_watcher_get_flux (w);
-    broker_ctx_t *ctx = arg;
     flux_msg_t *msg;
     int type;
 
-    if (!(msg = flux_recv (h, FLUX_MATCH_ANY, 0))
-        || flux_msg_get_type (msg, &type) < 0)
+    if (!(msg = flux_recv (h, FLUX_MATCH_ANY, FLUX_O_NONBLOCK)))
+        return false;
+    if (flux_msg_get_type (msg, &type) < 0)
         goto error;
     switch (type) {
         case FLUX_MSGTYPE_REQUEST:
@@ -2031,9 +2057,25 @@ static void h_internal_watcher (flux_reactor_t *r,
         default:
             goto error;
     }
-    return;
+    return true;
 error:
     flux_msg_destroy (msg);
+    return true;
+}
+
+static void h_internal_watcher (flux_reactor_t *r,
+                                flux_watcher_t *w,
+                                int revents,
+                                void *arg)
+{
+    flux_t *h = flux_handle_watcher_get_flux (w);
+    broker_ctx_t *ctx = arg;
+    int count = recv_batch_count;
+
+    do {
+        if (!h_internal_recv_one (ctx, h))
+            break;
+    } while (--count > 0 && !flux_reactor_is_stopped (r));
 }
 
 void broker_panic (broker_ctx_t *ctx, const char *fmt, ...)
