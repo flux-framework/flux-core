@@ -2130,9 +2130,13 @@ static int jobtap_emit_dependency_event (struct jobtap *jobtap,
         errno = EINVAL;
         return -1;
     }
-    /* Avoid duplicate dependency-add events on restart
+    /* A description may be used only once, so adding a description that
+     * is used or queued for add is a no-op. This makes add idempotent on
+     * restart or plugin reload.
      */
-    if (add && grudgeset_contains (job->dependencies, description))
+    if (add
+        && (grudgeset_used (job->dependencies, description)
+            || job_dependency_is_queued (job, "dependency-add", description)))
         return 0;
     return event_job_post_pack (jobtap->ctx->event,
                                 job,

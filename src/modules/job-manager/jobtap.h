@@ -103,14 +103,15 @@ int flux_jobtap_reject_job (flux_plugin_t *p,
  *
  *  This function is only valid from the job.state.depend callback.
  *
- *  A job dependency may only be added to a job once.
+ *  A job dependency may only be added to a job once. Adding a
+ *   description that was already used succeeds with no effect, even if
+ *   the dependency was removed.
  *
  *  The description may not be empty and may be at most 256 characters
  *   long.
  *
  *  Returns 0 on success, or -1 on error with errno set:
  *   - ENOENT: job 'id' not found
- *   - EEXIST: dependency 'description' has already been used
  *   - EINVAL: invalid argument
  *
  */
