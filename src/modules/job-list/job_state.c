@@ -125,21 +125,21 @@ static void job_destroy_wrapper (void **data)
     job_destroy (*job);
 }
 
-/* Sort the inactive list by t_inactive after the backlog has been appended
- * unsorted.  zlistx_sort() swaps the contents of nodes rather than the nodes
+/* Sort a job list after the backlog has been appended to it unsorted.
+ * zlistx_sort() swaps the contents of nodes rather than the nodes
  * themselves, so it invalidates stored handles; re-acquire each job's
  * list_handle via zlistx_cursor() while walking the now-sorted list (see also
  * job_priority_queue_sort() in the job-manager).
  */
-static void job_state_sort_inactive (struct job_state_ctx *jsctx)
+static void job_list_sort (zlistx_t *l)
 {
     struct job *job;
 
-    zlistx_sort (jsctx->inactive);
-    job = zlistx_first (jsctx->inactive);
+    zlistx_sort (l);
+    job = zlistx_first (l);
     while (job) {
-        job->list_handle = zlistx_cursor (jsctx->inactive);
-        job = zlistx_next (jsctx->inactive);
+        job->list_handle = zlistx_cursor (l);
+        job = zlistx_next (l);
     }
 }
 
@@ -190,46 +190,63 @@ static void update_job_state (struct job_state_ctx *jsctx,
     job->states_mask |= job->state;
 }
 
+/* Insert a job to its destination list `l`.
+ *
+ * While the journal backlog is being replayed at startup, jobs arrive in
+ * job-manager hash order, so a sorted insert or reorder scans about half
+ * the list each time, which is quadratic over the backlog. Instead, append
+ * jobs unsorted and skip reordering until the backlog completes. Then
+ * job_state_sort_lists() sorts each list once. The lists are not read
+ * until then.
+ */
+static int job_list_insert (struct job_state_ctx *jsctx,
+                            zlistx_t *l,
+                            struct job *job,
+                            bool low_value)
+{
+    if (jsctx->initialized)
+        job->list_handle = zlistx_insert (l, job, low_value);
+    else // replaying backlog: append now, sort later
+        job->list_handle = zlistx_add_end (l, job);
+    if (!job->list_handle) {
+        errno = ENOMEM;
+        return -1;
+    }
+    return 0;
+}
+
+static void job_list_reorder (struct job_state_ctx *jsctx,
+                              zlistx_t *l,
+                              struct job *job,
+                              bool low_value)
+{
+    if (jsctx->initialized)
+        zlistx_reorder (l, job->list_handle, low_value);
+}
+
+static void job_state_sort_lists (struct job_state_ctx *jsctx)
+{
+    job_list_sort (jsctx->pending);
+    job_list_sort (jsctx->running);
+    job_list_sort (jsctx->inactive);
+}
+
 static int job_insert_list (struct job_state_ctx *jsctx,
                             struct job *job,
                             flux_job_state_t newstate)
 {
     if (newstate == FLUX_JOB_STATE_DEPEND
         || newstate == FLUX_JOB_STATE_PRIORITY
-        || newstate == FLUX_JOB_STATE_SCHED) {
-        if (!(job->list_handle = zlistx_insert (jsctx->pending,
-                                                job,
-                                                search_direction (job))))
-            goto enomem;
-    }
+        || newstate == FLUX_JOB_STATE_SCHED)
+        return job_list_insert (jsctx,
+                                jsctx->pending,
+                                job,
+                                search_direction (job));
     else if (newstate == FLUX_JOB_STATE_RUN
-             || newstate == FLUX_JOB_STATE_CLEANUP) {
-        if (!(job->list_handle = zlistx_insert (jsctx->running, job, true)))
-            goto enomem;
-    }
-    else { /* newstate == FLUX_JOB_STATE_INACTIVE */
-        /* While replaying the journal backlog at startup, jobs arrive in
-         * job-manager hash order (unsorted by t_inactive), so a sorted
-         * insert scans ~half the growing list each time, i.e. O(N^2) over
-         * the backlog.  Append unsorted instead (O(1)); the inactive list
-         * is sorted once when the backlog completes (see
-         * job_state_sort_inactive()).  The list is not read until then.
-         */
-        if (!jsctx->initialized) {
-            if (!(job->list_handle = zlistx_add_end (jsctx->inactive, job)))
-                goto enomem;
-        }
-        else if (!(job->list_handle = zlistx_insert (jsctx->inactive,
-                                                     job,
-                                                     true)))
-            goto enomem;
-    }
-
-    return 0;
-
-enomem:
-    errno = ENOMEM;
-    return -1;
+             || newstate == FLUX_JOB_STATE_CLEANUP)
+        return job_list_insert (jsctx, jsctx->running, job, true);
+    else /* newstate == FLUX_JOB_STATE_INACTIVE */
+        return job_list_insert (jsctx, jsctx->inactive, job, true);
 }
 
 /* remove job from one list and move it to another based on the
@@ -290,9 +307,7 @@ static void update_job_state_and_list (struct job_state_ctx *jsctx,
         job_change_list (jsctx, job, oldlist, newstate);
     else if (oldlist == jsctx->pending
              && newstate == FLUX_JOB_STATE_SCHED)
-        zlistx_reorder (jsctx->pending,
-                        job->list_handle,
-                        search_direction (job));
+        job_list_reorder (jsctx, jsctx->pending, job, search_direction (job));
 
     idsync_check_waiting_id (jsctx->ctx->isctx, job);
 }
@@ -592,9 +607,7 @@ static int journal_priority_event (struct job_state_ctx *jsctx,
 
     if (job->state & FLUX_JOB_STATE_PENDING
         && job->priority != orig_priority)
-        zlistx_reorder (jsctx->pending,
-                        job->list_handle,
-                        search_direction (job));
+        job_list_reorder (jsctx, jsctx->pending, job, search_direction (job));
 
     return job_transition_state (jsctx,
                                  job,
@@ -1130,10 +1143,10 @@ static void job_events_journal_continuation (flux_future_t *f, void *arg)
                 goto error;
             }
         }
-        /* Inactive jobs were appended unsorted during backlog replay; put
-         * them in t_inactive order now, before any list query is serviced.
+        /* Jobs were appended unsorted during backlog replay. Sort the
+         * lists now, before any list query is serviced.
          */
-        job_state_sort_inactive (jsctx);
+        job_state_sort_lists (jsctx);
         jsctx->initialized = true;
         requeue_deferred_requests (jsctx->ctx);
         flux_future_reset (f);

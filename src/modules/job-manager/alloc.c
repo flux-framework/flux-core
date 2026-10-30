@@ -521,16 +521,33 @@ int alloc_send_free_request (struct alloc *alloc,
 }
 
 /* called from event_job_action() FLUX_JOB_STATE_SCHED */
+static bool alloc_can_enqueue (struct alloc *alloc, struct job *job)
+{
+    return !job->alloc_bypass
+        && !job->alloc_queued
+        && !job->alloc_pending
+        && job->priority != FLUX_JOB_PRIORITY_MIN
+        && queue_started (alloc->ctx->queue, job);
+}
+
 int alloc_enqueue_alloc_request (struct alloc *alloc, struct job *job)
 {
     if (job->state != FLUX_JOB_STATE_SCHED)
         return -1;
-    if (!job->alloc_bypass
-        && !job->alloc_queued
-        && !job->alloc_pending
-        && job->priority != FLUX_JOB_PRIORITY_MIN
-        && queue_started (alloc->ctx->queue, job)) {
+    if (alloc_can_enqueue (alloc, job)) {
         if (job_priority_queue_insert (alloc->queue, job) < 0)
+            return -1;
+        job->alloc_queued = 1;
+    }
+    return 0;
+}
+
+int alloc_append_alloc_request (struct alloc *alloc, struct job *job)
+{
+    if (job->state != FLUX_JOB_STATE_SCHED)
+        return -1;
+    if (alloc_can_enqueue (alloc, job)) {
+        if (job_priority_queue_append (alloc->queue, job) < 0)
             return -1;
         job->alloc_queued = 1;
     }

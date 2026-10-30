@@ -734,6 +734,22 @@ int job_priority_queue_insert (zlistx_t *l, struct job *job)
     return 0;
 }
 
+/* Add job to the end of the list without sorting. The caller must sort
+ * the list with job_priority_queue_sort() before it is used.
+ */
+int job_priority_queue_append (zlistx_t *l, struct job *job)
+{
+    if (job->handle) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (!(job->handle = zlistx_add_end (l, job))) {
+        errno = ENOMEM;
+        return -1;
+    }
+    return 0;
+}
+
 int job_priority_queue_delete (zlistx_t *l, struct job *job)
 {
     if (!job->handle) {
