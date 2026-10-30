@@ -8,6 +8,7 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
+import functools
 import json
 import os
 import pwd
@@ -134,6 +135,9 @@ def statustoemoji(stateid, resultid):
     return emoji
 
 
+# Cache lookups, since a job listing may contain many jobs for each user
+# and each lookup may query a remote directory service.
+@functools.lru_cache(maxsize=4096)
 def get_username(userid):
     try:
         return pwd.getpwuid(userid).pw_name
