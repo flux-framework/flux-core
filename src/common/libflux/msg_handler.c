@@ -427,27 +427,28 @@ done:
     return rc;
 }
 
-static void handle_cb (flux_reactor_t *r,
-                       flux_watcher_t *hw,
-                       int revents,
-                       void *arg)
+/* Receive and dispatch one message.
+ * Returns 1 if a message was handled, 0 if none was available,
+ * or -1 on fatal error (reactor is stopped with error).
+ */
+static int handle_one (struct dispatch *d)
 {
-    struct dispatch *d = arg;
     flux_msg_t *msg = NULL;
     int rc = -1;
     int type;
     bool match;
     const char *topic;
 
-    if (revents & FLUX_POLLERR)
-        goto done;
     if (!(msg = flux_recv (d->h, FLUX_MATCH_ANY, FLUX_O_NONBLOCK))) {
-        if (errno == EAGAIN && errno == EWOULDBLOCK)
-            rc = 0; /* ignore spurious wakeup */
+        /* ENOSYS: the connector has no recv op (e.g. usock_service) and
+         * messages arrive only via flux_requeue(), so the queue is empty.
+         */
+        if (errno == EAGAIN || errno == EWOULDBLOCK || errno == ENOSYS)
+            rc = 0;
         goto done;
     }
     if (flux_msg_get_type (msg, &type) < 0) {
-        rc = 0; /* ignore mangled message */
+        rc = 1; /* ignore mangled message */
         goto done;
     }
     if (flux_msg_get_topic (msg, &topic) < 0)
@@ -506,11 +507,53 @@ static void handle_cb (flux_reactor_t *r,
             }
         }
     }
-    rc = 0;
+    rc = 1;
+done:
+    flux_msg_destroy (msg);
+    return rc;
+}
+
+/* Handle watcher callback.  Dispatch up to FLUX_OPT_RECV_BATCH_COUNT
+ * messages before returning to the reactor, so that the per-iteration
+ * overhead of the reactor loop is amortized over several messages.
+ * Stop early if the handle runs dry, if a handler stops the reactor,
+ * if a handler destroys the handle (dispatch_destroy() clears d->h),
+ * or if a handler stops the last running handler, which stops the
+ * handle watcher: remaining messages must then stay queued for a
+ * handler started later, as with batch=1.
+ * N.B. the first message is always handled, even if another watcher
+ * stopped the reactor earlier in this iteration, matching the behavior
+ * before batching was introduced.
+ */
+static void handle_cb (flux_reactor_t *r,
+                       flux_watcher_t *hw,
+                       int revents,
+                       void *arg)
+{
+    struct dispatch *d = arg;
+    int batch_count = 1;
+    int rc = 0;
+
+    if (revents & FLUX_POLLERR) {
+        rc = -1;
+        goto done;
+    }
+    (void)flux_opt_get (d->h,
+                        FLUX_OPT_RECV_BATCH_COUNT,
+                        &batch_count,
+                        sizeof (batch_count));
+    dispatch_usecount_incr (d);
+    do {
+        if ((rc = handle_one (d)) <= 0)
+            break;
+    } while (--batch_count > 0
+             && d->h // d->w is NULL after dispatch_destroy()
+             && flux_watcher_is_active (d->w)
+             && !flux_reactor_is_stopped (r));
+    dispatch_usecount_decr (d);
 done:
     if (rc < 0)
         flux_reactor_stop_error (r);
-    flux_msg_destroy (msg);
 }
 
 void flux_msg_handler_start (flux_msg_handler_t *mh)
