@@ -322,6 +322,55 @@ static int test_job_flags (flux_plugin_t *p,
     return 0;
 }
 
+static int test_dependency_check (flux_plugin_t *p, bool current)
+{
+    flux_plugin_t *detached = flux_plugin_create ();
+    char long_description[1024];
+    int rc = -1;
+    struct {
+        flux_plugin_t *plugin;
+        flux_jobid_t id;
+        const char *description;
+        int result;
+        int errnum;
+    } cases[] = {
+        { NULL, FLUX_JOBTAP_CURRENT_JOB, "unused", -1, EINVAL },
+        { detached, FLUX_JOBTAP_CURRENT_JOB, "unused", -1, EINVAL },
+        { p, FLUX_JOBTAP_CURRENT_JOB, NULL, -1, EINVAL },
+        { p, 1234, "unused", -1, ENOENT },
+        { p, FLUX_JOBTAP_CURRENT_JOB, "unused",
+          current ? 0 : -1, current ? 0 : ENOENT },
+        { p, FLUX_JOBTAP_CURRENT_JOB, "",
+          current ? 0 : -1, current ? 0 : ENOENT },
+        { p, FLUX_JOBTAP_CURRENT_JOB, long_description,
+          current ? 0 : -1, current ? 0 : ENOENT },
+    };
+
+    if (!detached)
+        return -1;
+    memset (long_description, 'x', sizeof (long_description) - 1);
+    long_description[sizeof (long_description) - 1] = '\0';
+    for (size_t i = 0; i < sizeof (cases) / sizeof (cases[0]); i++) {
+        int result;
+
+        errno = 0;
+        result = flux_jobtap_dependency_check (cases[i].plugin,
+                                               cases[i].id,
+                                               cases[i].description);
+        if (result != cases[i].result
+            || (result == -1 && errno != cases[i].errnum)) {
+            flux_log (flux_jobtap_get_flux (p), LOG_ERR,
+                      "dependency_check case %zu: result=%d errno=%d",
+                      i, result, errno);
+            goto out;
+        }
+    }
+    rc = 0;
+out:
+    flux_plugin_destroy (detached);
+    return rc;
+}
+
 static int test_job_lookup (flux_plugin_t *p,
                             const char *topic,
                             flux_plugin_arg_t *args)
@@ -329,6 +378,11 @@ static int test_job_lookup (flux_plugin_t *p,
     flux_jobid_t id;
     flux_jobid_t lookupid = FLUX_JOBID_ANY;
     flux_plugin_arg_t *oarg;
+
+    if (test_dependency_check (p, true) < 0)
+        return flux_jobtap_raise_exception (p, FLUX_JOBTAP_CURRENT_JOB,
+                                            "test", 0,
+                                            "dependency_check API test failed");
 
     if (flux_plugin_arg_unpack (args,
                                 FLUX_PLUGIN_ARG_IN,
@@ -627,6 +681,8 @@ static const struct flux_plugin_handler tab[] = {
 
 int flux_plugin_init (flux_plugin_t *p)
 {
+    if (test_dependency_check (p, false) < 0)
+        return -1;
     return flux_plugin_register (p, "api-test", tab);
 }
 
