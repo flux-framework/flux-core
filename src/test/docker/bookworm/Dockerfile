@@ -92,30 +92,12 @@ RUN apt-get update \
 RUN locale-gen en_US.UTF-8
 
 # NOTE: luaposix installed by rocks due to Ubuntu bug: #1752082 https://bugs.launchpad.net/ubuntu/+source/lua-posix/+bug/1752082
-RUN luarocks install luaposix
+# Pin luaposix: release 38 requires the luarocks-build-luke backend and
+# drops the legacy top-level posix.exec/stat/setrlimit API that flux uses.
+RUN luarocks install luaposix 37.0-1
 
 # Install catch by hand for now:
 COPY scripts/fetch-and-build-catch.sh /fetch-and-build-catch.sh
 RUN /fetch-and-build-catch.sh
-
-# Install openpmix, prrte
-RUN mkdir prrte \
- && cd prrte \
- && git clone https://github.com/openpmix/openpmix.git \
- && git clone https://github.com/openpmix/prrte.git \
- && ls -l \
- && set -x \
- && cd openpmix \
- && git checkout fefaed568f33bf86f28afb6e45237f1ec5e4de93 \
- && ./autogen.pl \
- && ./configure --prefix=/usr --disable-static && make -j 4 install \
- && ldconfig \
- && cd .. \
- && cd prrte \
- && git checkout 477894f4720d822b15cab56eee7665107832921c \
- && ./autogen.pl \
- && ./configure --prefix=/usr && make -j 4 install \
- && cd ../.. \
- && rm -rf prrte
 
 ENV LANG=C.UTF-8
