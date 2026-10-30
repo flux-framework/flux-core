@@ -109,7 +109,9 @@ static int dependency_test_cb (flux_plugin_t *p,
                         name);
         return -1;
     }
-    if (remove) {
+    /* Remove the dependency 'remove' times, to test repeated removal.
+     */
+    for (int i = 0; i < remove; i++) {
         if (flux_jobtap_dependency_remove (p, id, name) < 0)
             return flux_jobtap_reject_job (p, args,
                                            "dependency_remove: %s",
