@@ -503,6 +503,19 @@ int restart_from_kvs (struct job_manager *ctx)
     flux_error_t error;
     struct job_loader loader;
 
+    /* Restore checkpointed state, including queue state, before loading
+     * jobs. Otherwise jobs in stopped queues are added to the alloc queue
+     * and moved within it when they are reprioritized below, which is
+     * quadratic in the number of pending jobs.
+     */
+    if (restart_restore_state (ctx) < 0) {
+        if (errno != ENOENT) {
+            flux_log_error (ctx->h, "restart: %s", checkpoint_key);
+            return -1;
+        }
+        flux_log (ctx->h, LOG_INFO, "restart: %s not found", checkpoint_key);
+    }
+
     /* Load any active jobs present in the KVS at startup. The job-loader
      * pipelines the per-job KVS lookups: depthfirst_map walks the job
      * directory in jobid order and feeds each job to job_loader_add, which
@@ -611,15 +624,6 @@ int restart_from_kvs (struct job_manager *ctx)
     zlistx_destroy (&active_jobs);
     flux_log (ctx->h, LOG_INFO, "restart: %d running jobs", ctx->running_jobs);
 
-    /* Restore misc state.
-     */
-    if (restart_restore_state (ctx) < 0) {
-        if (errno != ENOENT) {
-            flux_log_error (ctx->h, "restart: %s", checkpoint_key);
-            return -1;
-        }
-        flux_log (ctx->h, LOG_INFO, "restart: %s not found", checkpoint_key);
-    }
     flux_log (ctx->h,
               LOG_DEBUG,
               "restart: max_jobid=%s",
