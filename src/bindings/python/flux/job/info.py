@@ -8,6 +8,7 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
+import functools
 import json
 import os
 import pwd
@@ -134,6 +135,9 @@ def statustoemoji(stateid, resultid):
     return emoji
 
 
+# Cache lookups, since a job listing may contain many jobs for each user
+# and each lookup may query a remote directory service.
+@functools.lru_cache(maxsize=4096)
 def get_username(userid):
     try:
         return pwd.getpwuid(userid).pw_name
@@ -172,6 +176,13 @@ class EmptyObject:
         return "".__format__(spec)
 
 
+# Creating a namedtuple class is expensive, and jobs in a listing tend to
+# share a small number of annotation key sets, so cache the classes by key.
+@functools.lru_cache(maxsize=1024)
+def _annotations_tuple(keys):
+    return namedtuple("X", keys)
+
+
 # AnnotationsInfo is a wrapper for a namedtuple.  We need this
 # object so that we can we detect when an attribute is missing and
 # ultimately return an empty string (e.g. when an attribute does not
@@ -182,7 +193,7 @@ class EmptyObject:
 class AnnotationsInfo:
     def __init__(self, annotationsDict):
         self.annotationsDict = annotationsDict
-        self.atuple = namedtuple("X", annotationsDict.keys())(
+        self.atuple = _annotations_tuple(tuple(annotationsDict.keys()))(
             *(
                 AnnotationsInfo(v) if isinstance(v, dict) else v
                 for v in annotationsDict.values()
