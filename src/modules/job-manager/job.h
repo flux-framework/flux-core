@@ -128,6 +128,13 @@ int job_event_enqueue (struct job *job, int flags, json_t *entry);
 int job_event_dequeue (struct job *job, int *flagsp, json_t **entryp);
 int job_event_peek (struct job *job, int *flagsp, json_t **entryp);
 bool job_event_is_queued (struct job *job, const char *name);
+
+/* Return true if a dependency event 'name' (dependency-add or
+ * dependency-remove) for 'description' is queued.
+ */
+bool job_dependency_is_queued (struct job *job,
+                               const char *name,
+                               const char *description);
 const char *job_event_queue_print (struct job *job, char *buf, int size);
 
 /*  Validate updates as valid RFC 21 jobspec-update event context.
