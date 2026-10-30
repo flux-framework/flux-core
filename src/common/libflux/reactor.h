@@ -37,6 +37,13 @@ int flux_reactor_run (flux_reactor_t *r, int flags);
 void flux_reactor_stop (flux_reactor_t *r);
 void flux_reactor_stop_error (flux_reactor_t *r);
 
+/* Return true if flux_reactor_stop() or flux_reactor_stop_error() has
+ * been called since flux_reactor_run() was last entered.  A watcher
+ * callback that handles several events before returning may check this
+ * between events so that a stop request takes effect promptly.
+ */
+bool flux_reactor_is_stopped (flux_reactor_t *r);
+
 double flux_reactor_now (flux_reactor_t *r);
 void flux_reactor_now_update (flux_reactor_t *r);
 double flux_reactor_time (void);

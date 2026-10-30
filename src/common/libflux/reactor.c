@@ -24,6 +24,7 @@ struct flux_reactor {
     struct ev_loop *loop;
     int usecount;
     unsigned int errflag:1;
+    unsigned int stopped:1;
 };
 
 static int valid_flags (int flags, int valid)
@@ -88,6 +89,7 @@ int flux_reactor_run (flux_reactor_t *r, int flags)
     if (flags & FLUX_REACTOR_ONCE)
         ev_flags |= EVRUN_ONCE;
     r->errflag = 0;
+    r->stopped = 0;
     count = ev_run (r->loop, ev_flags);
     return (r->errflag ? -1 : count);
 }
@@ -110,13 +112,20 @@ void flux_reactor_now_update (flux_reactor_t *r)
 void flux_reactor_stop (flux_reactor_t *r)
 {
     r->errflag = 0;
+    r->stopped = 1;
     ev_break (r->loop, EVBREAK_ALL);
 }
 
 void flux_reactor_stop_error (flux_reactor_t *r)
 {
     r->errflag = 1;
+    r->stopped = 1;
     ev_break (r->loop, EVBREAK_ALL);
+}
+
+bool flux_reactor_is_stopped (flux_reactor_t *r)
+{
+    return r ? r->stopped : false;
 }
 
 void *reactor_get_loop (flux_reactor_t *r)
