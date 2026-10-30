@@ -828,6 +828,12 @@ int event_job_process_entry (struct event *event,
         }
     }
 
+    /*  Apply the event before recording it, so an event that fails to
+     *  apply is not added to the eventlog or sent to the journal.
+     */
+    if (event_job_update (job, entry) < 0) // modifies job->state
+        return -1;
+
     if (!(flags & EVENT_NO_COMMIT)) {
         if (json_array_append (job->eventlog, entry) < 0) {
             errno = ENOMEM;
@@ -839,8 +845,6 @@ int event_job_process_entry (struct event *event,
                                job->id,
                                name,
                                entry) < 0)
-        return -1;
-    if (event_job_update (job, entry) < 0) // modifies job->state
         return -1;
     if (event_job_cache (event, job, name) < 0)
         return -1;
