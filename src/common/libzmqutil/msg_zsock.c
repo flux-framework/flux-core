@@ -110,8 +110,9 @@ int zmqutil_msg_send (void *sock, const flux_msg_t *msg)
     return zmqutil_msg_send_ex (sock, msg, false);
 }
 
-flux_msg_t *zmqutil_msg_recv (void *sock)
+flux_msg_t *zmqutil_msg_recv_ex (void *sock, bool nonblock)
 {
+    int flags = nonblock ? ZMQ_DONTWAIT : 0;
     struct msg_iovec *iov = NULL;
     int iovlen = 0;
     int iovcnt = 0;
@@ -140,7 +141,11 @@ flux_msg_t *zmqutil_msg_recv (void *sock)
         if (!(msgdata = malloc (sizeof (zmq_msg_t))))
             goto error;
         zmq_msg_init (msgdata);
-        if (zmq_recvmsg (sock, msgdata, 0) < 0) {
+        /* N.B. once the first frame of a multipart message is received,
+         * zmq guarantees the remaining frames are available, so DONTWAIT
+         * applies effectively only to the first frame.
+         */
+        if (zmq_recvmsg (sock, msgdata, flags) < 0) {
             int save_errno = errno;
             zmq_msg_close (msgdata);
             free (msgdata);
@@ -175,6 +180,11 @@ error:
         errno = save_errno;
     }
     return rv;
+}
+
+flux_msg_t *zmqutil_msg_recv (void *sock)
+{
+    return zmqutil_msg_recv_ex (sock, false);
 }
 
 /*
