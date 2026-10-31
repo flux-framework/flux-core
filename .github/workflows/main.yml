@@ -82,6 +82,8 @@ jobs:
     needs: [python-lint]
     name: flux-sched check
     runs-on: ubuntu-latest
+    env:
+      CHECK_IMAGE: bookworm
     steps:
     - uses: actions/checkout@v7.0.1
       with:
@@ -89,33 +91,39 @@ jobs:
         fetch-depth: 0
     - run: git fetch --tags || true
     - run: >
-        src/test/docker/docker-run-checks.sh --install-only \
-          --tag=fluxrm/flux-core:bookworm
+        src/test/docker/docker-run-checks.sh --image=$CHECK_IMAGE \
+          --install-only --tag=fluxrm/flux-core:$CHECK_IMAGE
     - run: >
         cd .. && git clone https://github.com/flux-framework/flux-sched &&
         cd flux-sched &&
-        src/test/docker/docker-run-checks.sh -j 4 -i bookworm -- CXXFLAGS=-Wno-error=maybe-uninitialized
+        src/test/docker/docker-run-checks.sh -j 4 --image=$CHECK_IMAGE
+        -- CXXFLAGS=-Wno-error=maybe-uninitialized
 
   check-accounting:
     needs: [python-lint]
     name: flux-accounting check
     runs-on: ubuntu-latest
+    env:
+      CHECK_IMAGE: el10
     steps:
     - uses: actions/checkout@v7.0.1
       with:
         ref: ${{ github.event.pull_request.head.sha }}
         fetch-depth: 0
     - run: >
-        src/test/docker/docker-run-checks.sh --image=el8 --install-only \
-          --tag=fluxrm/flux-core:el8
+        src/test/docker/docker-run-checks.sh --image=$CHECK_IMAGE \
+          --install-only --tag=fluxrm/flux-core:$CHECK_IMAGE
     - run: >
         cd .. && git clone https://github.com/flux-framework/flux-accounting &&
-        cd flux-accounting && src/test/docker/docker-run-checks.sh -j 4
+        cd flux-accounting &&
+        src/test/docker/docker-run-checks.sh -j 4 --image=$CHECK_IMAGE
 
   check-pmix:
     needs: [python-lint]
     name: flux-pmix check
     runs-on: ubuntu-latest
+    env:
+      CHECK_IMAGE: el8
     steps:
     - uses: actions/checkout@v7.0.1
       with:
@@ -123,14 +131,14 @@ jobs:
         fetch-depth: 0
     - run: >
         src/test/docker/docker-run-checks.sh
-        --image=el8
+        --image=$CHECK_IMAGE
         --install-only
-        --tag=fluxrm/flux-core:el8
+        --tag=fluxrm/flux-core:$CHECK_IMAGE
     - run: >
         cd .. &&
         git clone https://github.com/flux-framework/flux-pmix &&
         cd flux-pmix &&
-        src/test/docker/docker-run-checks.sh -j 4 -i el8
+        src/test/docker/docker-run-checks.sh -j 4 --image=$CHECK_IMAGE
         --build-arg OMPI_BRANCH=v5.0.0rc12
         --build-arg OPENPMIX_BRANCH=v4.2.3
 
@@ -138,6 +146,8 @@ jobs:
     needs: [python-lint]
     name: flux-pam check
     runs-on: ubuntu-latest
+    env:
+      CHECK_IMAGE: el8
     steps:
     - uses: actions/checkout@v7.0.1
       with:
@@ -145,14 +155,14 @@ jobs:
         fetch-depth: 0
     - run: >
         src/test/docker/docker-run-checks.sh
-        --image=el8
+        --image=$CHECK_IMAGE
         --install-only
-        --tag=fluxrm/flux-core:el8
+        --tag=fluxrm/flux-core:$CHECK_IMAGE
     - run: >
         cd .. &&
         git clone https://github.com/flux-framework/flux-pam &&
         cd flux-pam &&
-        src/test/docker/docker-run-checks.sh -j 4 -i el8
+        src/test/docker/docker-run-checks.sh -j 4 --image=$CHECK_IMAGE
 
   build-macos:
     needs: [python-lint]
