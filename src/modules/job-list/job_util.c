@@ -274,7 +274,7 @@ json_t *job_to_json (struct job *job, json_t *attrs, flux_error_t *errp)
     json_t *value;
     json_t *o;
 
-    memset (errp, 0, sizeof (*errp));
+    err_init (errp);
 
     if (!(o = json_object ()))
         goto error_nomem;
