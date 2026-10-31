@@ -536,6 +536,15 @@ MISCELLANEOUS
    will append these directories to its default search path instead of
    overriding as with :envvar:`FLUX_MODPROBE_PATH`.
 
+.. envvar:: FLUX_MODPROBE_DISABLE
+
+   A comma-separated list of module or service names that
+   :man1:`flux-modprobe` should treat as disabled, as if ``disabled =
+   true`` had been set in the module configuration.  Disabling a
+   service name disables all modules that provide that service.  Any
+   module or task that lists a disabled name in its ``needs`` is
+   disabled as well.
+
 .. envvar:: FLUX_RC_EXTRA
 
    If set to a colon-separated list of directories, the installed
