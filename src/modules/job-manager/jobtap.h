@@ -131,6 +131,23 @@ int flux_jobtap_dependency_remove (flux_plugin_t *p,
                                    flux_jobid_t id,
                                    const char *description);
 
+/*  Check whether description is an outstanding dependency of job id.
+ *  A dependency is outstanding only while it blocks a job in NEW or DEPEND
+ *  state, so a result of 1 means it can be removed. Accepts active and
+ *  retained inactive jobs, or FLUX_JOBTAP_CURRENT_JOB within a job callback.
+ *  Any non-NULL description is matched exactly. Only processed dependency
+ *  events are reflected, not queued adds/removes. This query does not
+ *  reserve the dependency for a subsequent removal.
+ *
+ *  Returns 1 if outstanding, 0 if absent or the job has left DEPEND state,
+ *  or -1 with errno set:
+ *   ENOENT: job not found, or no current job for FLUX_JOBTAP_CURRENT_JOB
+ *   EINVAL: NULL description or plugin without a valid jobtap context
+ */
+int flux_jobtap_dependency_check (flux_plugin_t *p,
+                                  flux_jobid_t id,
+                                  const char *description);
+
 
 /*  Set plugin-specific data to an individual job by name.
  *   The optional destructor, free_fn, will be called when `name` is
