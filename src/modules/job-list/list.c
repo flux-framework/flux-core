@@ -468,8 +468,14 @@ void check_id_valid_continuation (flux_future_t *f, void *arg)
          * lookup was done */
         struct job *job;
         if (!(job = zhashx_lookup (jsctx->index, &isd->id))
-            || job->state == FLUX_JOB_STATE_NEW) {
-            /* Must wait for job-list to see state change */
+            || job->state == FLUX_JOB_STATE_NEW
+            || (isd->state
+                && !(isd->state & job->states_mask)
+                && job->state != FLUX_JOB_STATE_INACTIVE)) {
+            /* Must wait for job-list to see state change.  As in
+             * idsync_check_waiting_id(), an inactive job always gets a
+             * response even if the requested state was never reached.
+             */
             if (idsync_wait_valid (jsctx->ctx->isctx, isd) < 0)
                 flux_log_error (jsctx->h, "%s: idsync_wait_valid", __FUNCTION__);
             return;
