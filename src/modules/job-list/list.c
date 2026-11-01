@@ -452,8 +452,11 @@ void check_id_valid_continuation (flux_future_t *f, void *arg)
 {
     struct idsync_data *isd = arg;
     struct job_state_ctx *jsctx = flux_future_aux_get (f, "job_state_ctx");
+    flux_error_t error;
 
     assert (jsctx);
+
+    err_init (&error);
 
     if (flux_future_get (f, NULL) < 0) {
         if (flux_respond_error (jsctx->h, isd->msg, errno, NULL) < 0)
@@ -465,8 +468,14 @@ void check_id_valid_continuation (flux_future_t *f, void *arg)
          * lookup was done */
         struct job *job;
         if (!(job = zhashx_lookup (jsctx->index, &isd->id))
-            || job->state == FLUX_JOB_STATE_NEW) {
-            /* Must wait for job-list to see state change */
+            || job->state == FLUX_JOB_STATE_NEW
+            || (isd->state
+                && !(isd->state & job->states_mask)
+                && job->state != FLUX_JOB_STATE_INACTIVE)) {
+            /* Must wait for job-list to see state change.  As in
+             * idsync_check_waiting_id(), an inactive job always gets a
+             * response even if the requested state was never reached.
+             */
             if (idsync_wait_valid (jsctx->ctx->isctx, isd) < 0)
                 flux_log_error (jsctx->h, "%s: idsync_wait_valid", __FUNCTION__);
             return;
@@ -481,13 +490,19 @@ void check_id_valid_continuation (flux_future_t *f, void *arg)
                 goto cleanup;
             }
             if (!(o = get_job_by_id (jsctx,
-                                     NULL,
+                                     &error,
                                      isd->msg,
                                      isd->id,
                                      isd->attrs,
                                      isd->state,
                                      NULL))) {
-                flux_log_error (jsctx->h, "%s: get_job_by_id", __FUNCTION__);
+                if (flux_respond_error (jsctx->h,
+                                        isd->msg,
+                                        errno,
+                                        error.text[0] ? error.text : NULL) < 0)
+                    flux_log_error (jsctx->h,
+                                    "%s: flux_respond_error",
+                                    __FUNCTION__);
                 goto cleanup;
             }
             if (flux_respond_pack (jsctx->h, isd->msg, "{s:O}", "job", o) < 0) {
