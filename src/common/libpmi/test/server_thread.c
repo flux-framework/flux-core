@@ -123,18 +123,26 @@ static void s_buf_cb (flux_reactor_t *r,
             BAIL_OUT ("cbuf_read_line failed: %s", strerror (errno));
         int rc = pmi_simple_server_request (ctx->pmi, cli->buf, cli, cli->rank);
         if (rc < 0)
-            goto error;
+            goto proto;
         if (rc == 1) {
             flux_watcher_stop (w); // normal exit
             break;
         }
     }
     return;
+proto:
+    /* Protocol error: drop this client so it sees EOF, like a real server.
+     */
+    diag ("rank %d: protocol error, closing connection", cli->rank);
+    flux_watcher_stop (w);
+    close (cli->sfd);
+    cli->sfd = -1;
+    return;
 error:
     flux_reactor_stop_error (r);
 }
 
-static int s_barrier_enter (void *arg)
+static int s_barrier_enter (void *arg, const char *group)
 {
     struct pmi_server_context *ctx = arg;
 
@@ -142,9 +150,9 @@ static int s_barrier_enter (void *arg)
     if (ctx->rig_barrier_entry_failure)
         return -1;
     if (ctx->rig_barrier_exit_failure)
-        pmi_simple_server_barrier_complete (ctx->pmi, PMI_FAIL);
+        pmi_simple_server_barrier_complete (ctx->pmi, group, PMI_FAIL);
     else
-        pmi_simple_server_barrier_complete (ctx->pmi, 0);
+        pmi_simple_server_barrier_complete (ctx->pmi, group, 0);
     return 0;
 }
 
@@ -240,13 +248,19 @@ struct pmi_server_context *pmi_server_create (int *cfd, int size)
             BAIL_OUT ("could not create circular buffer for client %d", i);
     }
 
+    struct idset *local_ranks;
+    if (!(local_ranks = idset_create (0, IDSET_FLAG_AUTOGROW))
+        || idset_range_set (local_ranks, 0, size - 1) < 0)
+        BAIL_OUT ("could not create local_ranks idset");
     ctx->pmi = pmi_simple_server_create (server_ops,
                                          42,            // appnum
                                          ctx->size,     // size
                                          ctx->size,     // local procs
+                                         local_ranks,   // local global ranks
                                          "bleepgorp",   // kvsname
                                          PMI_SIMPLE_SERVER_TRACE,
                                          ctx);
+    idset_destroy (local_ranks);
     if (!ctx->pmi)
         BAIL_OUT ("pmi_simple_server_create failed");
 

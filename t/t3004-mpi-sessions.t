@@ -10,16 +10,17 @@ the process manager offers PMI-1.2, falling back to whole-job barriers
 otherwise.  MPICH 4.x builds an internal MPI_COMM_WORLD behind the
 Sessions API and always uses whole-job barriers.
 
-The Flux PMI server offers PMI-1.1, so this test checks that a Sessions
-program bootstraps over the fallback path and that no group barrier
-appears on the wire.
+This test runs a Sessions program against the server pinned to PMI-1.1
+with pmi-simple.version=1.1, then against the default PMI-1.2 server,
+and traces the wire to check what the subset communicator used: only
+whole-job barriers against 1.1, and on MPICH >= 5 a tagged group
+barrier against 1.2.
 
 Skipped unless FLUX_TEST_MPI is set, the MPI is MPICH, and MPI-4
 Sessions are available.
 
-N.B. Two MPICH details affect whether MPICH >= 5 would use the group
-barrier at all, and the wire assertion below is only meaningful when
-both are accounted for:
+N.B. Two MPICH details affect whether MPICH >= 5 uses the group barrier
+at all, and the wire assertion guards against both:
  - MPICH 5.0.x configure only enables PMI_Barrier_group when linking a
    third party libpmi, so a build with its own embedded libpmi needs
    CPPFLAGS=-DHAVE_PMI_BARRIER_GROUP=1 (see scripts/fetch-and-build-mpich.sh).
@@ -52,6 +53,15 @@ if ! ${SESSIONS} --probe; then
     test_done
 fi
 
+# MPICH >= 5.0 has PMI_Barrier_group and true Sessions (see above).
+MPICH_MAJOR=$(${VERSION} | sed -n 's/^MPICH Version:[ \t]*\([0-9]*\).*/\1/p')
+if test "${MPICH_MAJOR:-0}" -ge 5; then
+    test_set_prereq GROUP_BARRIER
+else
+    echo "# MPICH ${MPICH_MAJOR}.x: the group barrier is exercised only" \
+         "with MPICH >= 5"
+fi
+
 # work around https://github.com/open-mpi/ompi/issues/7701 and similar in mpich
 export HWLOC_COMPONENTS=-gl
 export MPIR_CVAR_PMI_DISABLE_GROUP=0
@@ -72,10 +82,11 @@ test_expect_success 'MPI Sessions job runs at max size' '
 	run_timeout 60 flux run -n${MAX_MPI_SIZE} $OPTS ${SESSIONS}
 '
 # Trace the PMI wire protocol (-o verbose=2) and check what the subset
-# communicator's business card exchange actually sent.
-test_expect_success 'MPI Sessions job runs with PMI tracing' '
+# communicator's business card exchange actually sent, first against a
+# server pinned to PMI-1.1 and then against the default PMI-1.2 server.
+test_expect_success 'MPI Sessions job runs with PMI tracing (1.1 server)' '
 	run_timeout 60 flux run -n4 -N2 -ocpu-affinity=off -overbose=2 \
-	    ${SESSIONS} 2>trace.err
+	    -o pmi-simple.version=1.1 ${SESSIONS} 2>trace.err
 '
 test_expect_success 'server replied pmi_subversion=1' '
 	grep "cmd=response_to_init.*pmi_subversion=1" trace.err
@@ -83,6 +94,22 @@ test_expect_success 'server replied pmi_subversion=1' '
 test_expect_success 'client used only whole-job barriers' '
 	grep "cmd=barrier_in" trace.err &&
 	test_must_fail grep "cmd=barrier_in group=" trace.err
+'
+test_expect_success 'MPI Sessions job runs with PMI tracing (1.2 server)' '
+	run_timeout 60 flux run -n4 -N2 -ocpu-affinity=off -overbose=2 \
+	    ${SESSIONS} 2>trace12.err
+'
+test_expect_success 'server replied pmi_subversion=2' '
+	grep "cmd=response_to_init.*pmi_subversion=2" trace12.err
+'
+test_expect_success GROUP_BARRIER 'subset communicator used a group barrier' '
+	grep "cmd=barrier_in group=" trace12.err &&
+	grep "cmd=barrier_out tag=" trace12.err
+'
+# On MPICH 4.x a group barrier would mean the version check is wrong.
+test_expect_success !GROUP_BARRIER 'MPICH 4.x client used only 1.1 barriers' '
+	grep "cmd=barrier_in" trace12.err &&
+	test_must_fail grep "cmd=barrier_in group=" trace12.err
 '
 
 test_done
