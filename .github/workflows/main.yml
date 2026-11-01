@@ -21,7 +21,7 @@ jobs:
     steps:
     - uses: actions/checkout@v7.0.1
     - name: Check Spelling
-      uses: crate-ci/typos@v1.50.3
+      uses: crate-ci/typos@v1.51.1
 
   coccinelle:
     name: coccinelle
@@ -68,7 +68,7 @@ jobs:
     name: python linting
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/setup-python@v7.0.0
+    - uses: actions/setup-python@v7.1.0
     - uses: actions/checkout@v7.0.1
       with:
         ref: ${{ github.event.pull_request.head.sha }}
@@ -238,7 +238,7 @@ jobs:
     - name: setup python
       env: ${{matrix.env}}
       if: matrix.coverage
-      uses: actions/setup-python@v7.0.0
+      uses: actions/setup-python@v7.1.0
       with:
         # Use python3.12 to ensure compatibility with coverage tool:
         python-version: '3.12'
