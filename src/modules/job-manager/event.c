@@ -39,6 +39,7 @@
 #include <jansson.h>
 #include <flux/core.h>
 #include <time.h>
+#include <string.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libeventlog/eventlog.h"
@@ -491,6 +492,16 @@ static int event_handle_set_flags (struct job *job,
         errno = EPROTO;
         return -1;
     }
+    /*  Check all flags before setting any, so a bad flag does not leave
+     *  the event partially applied.
+     */
+    json_array_foreach (o, index, value) {
+        const char *flag = json_string_value (value);
+        if (!flag || !job_flag_valid (job, flag)) {
+            errno = EPROTO;
+            return -1;
+        }
+    }
     json_array_foreach (o, index, value) {
         if (job_flag_set (job, json_string_value (value)) < 0) {
             errno = EPROTO;
@@ -818,6 +829,12 @@ int event_job_process_entry (struct event *event,
         }
     }
 
+    /*  Apply the event before recording it, so an event that fails to
+     *  apply is not added to the eventlog or sent to the journal.
+     */
+    if (event_job_update (job, entry) < 0) // modifies job->state
+        return -1;
+
     if (!(flags & EVENT_NO_COMMIT)) {
         if (json_array_append (job->eventlog, entry) < 0) {
             errno = ENOMEM;
@@ -829,8 +846,6 @@ int event_job_process_entry (struct event *event,
                                job->id,
                                name,
                                entry) < 0)
-        return -1;
-    if (event_job_update (job, entry) < 0) // modifies job->state
         return -1;
     if (event_job_cache (event, job, name) < 0)
         return -1;
@@ -867,26 +882,46 @@ int event_job_process_entry (struct event *event,
     return event_job_action (event, job);
 }
 
+/* Process the events queued for job. Return an error only if the first
+ * event fails, since the caller posted or released that event. The posters
+ * of later events already got success, so log their errors here. A failed
+ * event does not stop the events queued after it.
+ */
 static int event_job_post_deferred (struct event *event, struct job *job)
 {
     int flags;
     json_t *entry;
+    bool first = true;
+    int rc = 0;
+    int errnum = 0;
 
     job_incref (job); // in case event_job_process_entry() decrefs job
     while (job_event_peek (job, &flags, &entry) == 0
         && !job->eventlog_readonly) {
         if (event_job_process_entry (event, job, flags, entry) < 0) {
-            int saved_errno = errno;
-            while (job_event_dequeue (job, NULL, NULL) == 0)
-                ;
-            errno = saved_errno;
-            job_decref (job);
-            return -1;
+            if (first) {
+                errnum = errno;
+                rc = -1;
+            }
+            else {
+                int saved_errno = errno;
+                const char *name = "unknown";
+                (void)eventlog_entry_parse (entry, NULL, &name, NULL);
+                flux_log (event->ctx->h,
+                          LOG_ERR,
+                          "%s: error processing %s event: %s",
+                          idf58 (job->id),
+                          name,
+                          strerror (saved_errno));
+            }
         }
         job_event_dequeue (job, NULL, NULL);
+        first = false;
     }
     job_decref (job);
-    return 0;
+    if (rc < 0)
+        errno = errnum;
+    return rc;
 }
 
 /* Since event_job_process_entry() might call event_job_post_*() to post

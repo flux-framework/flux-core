@@ -511,6 +511,31 @@ test_expect_success 'job-manager: job.create posts events before validation' '
 	test $n_test -lt $n_create
 '
 
+jm_eventlog() {
+	flux python -c "import flux, sys; \
+print(flux.Flux().rpc(\"job-manager.getattr\", \
+    {\"id\": int(sys.argv[1]), \"attrs\": [\"eventlog\"]}).get_str())" \
+	$(flux job id $1)
+}
+test_expect_success 'job-manager: an event that fails to apply is not recorded' '
+	flux jobtap load --remove=all ${PLUGINPATH}/bad-event.so &&
+	jobid=$(flux submit --urgency=hold hostname) &&
+	flux job wait-event -t 15 $jobid test-event &&
+	jm_eventlog $jobid >bad-event-jm.out &&
+	grep test-event bad-event-jm.out &&
+	test_must_fail grep set-flags bad-event-jm.out &&
+	flux cancel $jobid
+'
+test_expect_success 'job-manager: an event that fails does not drop later events' '
+	jobid=$(flux submit hostname) &&
+	flux job wait-event -t 15 $jobid clean &&
+	flux job eventlog $jobid >bad-event.out &&
+	grep test-event bad-event.out &&
+	test_must_fail grep set-flags bad-event.out &&
+	flux dmesg -H | grep "error processing set-flags event" &&
+	flux jobtap remove bad-event.so
+'
+
 test_expect_success 'job-manager: job.create can reject a job' '
 	flux jobtap load --remove=all ${PLUGINPATH}/create-reject.so &&
 	test_must_fail flux submit hostname 2>submit.err &&
