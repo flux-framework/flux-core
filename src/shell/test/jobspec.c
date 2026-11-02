@@ -14,7 +14,7 @@
 #include <jansson.h>
 
 #include "jobspec.h"
-#include "rcalc.h"
+#include "slotmap.h"
 
 #include "src/common/libtap/tap.h"
 
@@ -227,17 +227,25 @@ struct input bad_input[] = {
     { NULL, NULL, NULL },
 };
 
+static struct slotmap *slotmap_from_string (const char *s)
+{
+    json_t *R = json_loads (s, 0, NULL);
+    struct slotmap *sm = slotmap_create (R, NULL);
+    json_decref (R);
+    return sm;
+}
+
 int main (int argc, char **argv)
 {
     plan (NO_PLAN);
     struct jobspec *js;
     struct output *expect;
-    rcalc_t *rs;
+    struct slotmap *rs;
     json_error_t error;
     int i;
 
     for (i = 0; good_input[i].desc; i++) {
-        rs = rcalc_create (good_input[i].r);
+        rs = slotmap_from_string (good_input[i].r);
         js = jobspec_parse (good_input[i].j, rs, &error);
         ok (js != NULL, "good.%d (%s) works", i, good_input[i].desc);
         if (!js) {
@@ -290,18 +298,18 @@ int main (int argc, char **argv)
             }
             jobspec_destroy (js);
         }
-        rcalc_destroy (rs);
+        slotmap_destroy (rs);
     }
 
     for (i = 0; bad_input[i].desc; i++) {
-        rs = rcalc_create (bad_input[i].r);
+        rs = slotmap_from_string (bad_input[i].r);
         js = jobspec_parse (bad_input[i].j, rs, &error);
         ok (js == NULL, "bad.%d (%s) fails", i, bad_input[i].desc);
         if (!js)
             diag ("%s", error.text);
         else
             jobspec_destroy (js);
-        rcalc_destroy (rs);
+        slotmap_destroy (rs);
     }
 
     done_testing ();

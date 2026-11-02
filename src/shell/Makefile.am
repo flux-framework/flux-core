@@ -34,8 +34,8 @@ libshell_la_SOURCES = \
 	plugstack.h \
 	jobspec.c \
 	jobspec.h \
-	rcalc.c \
-	rcalc.h
+	slotmap.c \
+	slotmap.h
 
 libmpir_la_SOURCES = \
 	mpir/rangelist.c \

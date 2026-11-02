@@ -21,7 +21,7 @@
 #include <stdint.h>
 
 #include "jobspec.h"
-#include "rcalc.h"
+#include "slotmap.h"
 
 struct shell_info {
     flux_jobid_t jobid;
@@ -31,8 +31,8 @@ struct shell_info {
     bool constrained_resources;
     json_t *R;
     struct jobspec *jobspec;
-    rcalc_t *rcalc;
-    struct rcalc_rankinfo rankinfo;
+    struct slotmap *slotmap;
+    struct slotmap_rankinfo rankinfo;
     struct taskmap *taskmap;
     struct idset *taskids;
     struct hostlist *hostlist;
@@ -52,6 +52,11 @@ void shell_info_destroy (struct shell_info *info);
  *  Reference to `map` is stolen on success.
  */
 int shell_info_set_taskmap (struct shell_info *info, struct taskmap *map);
+
+/*  Return true if resources of unused slots should be removed after
+ *  tasks are mapped, due to a jobspec v1 quirk (#7174).
+ */
+bool shell_info_need_normalize (struct shell_info *info);
 
 #endif /* !_SHELL_INFO_H */
 

@@ -247,7 +247,7 @@ TESTSCRIPTS = \
 	t2421-sdexec-bg.t \
 	t2500-job-attach.t \
 	t2501-job-status.t \
-	t2600-job-shell-rcalc.t \
+	t2600-job-shell-slotmap.t \
 	t2602-job-shell.t \
 	t2603-job-shell-initrc.t \
 	t2604-job-shell-affinity.t \
@@ -556,7 +556,7 @@ check_PROGRAMS = \
 	ingest/submitbench \
 	sched-simple/jj-reader \
 	sched-simple/jjc-reader \
-	shell/rcalc \
+	shell/slotmap \
 	shell/mpir \
 	debug/stall \
 	util/jobspec1-validate \
@@ -848,11 +848,11 @@ request_req_la_CPPFLAGS = $(test_cppflags)
 request_req_la_LDFLAGS = $(fluxmod_ldflags) -module -rpath /nowher
 request_req_la_LIBADD = $(test_ldadd)
 
-shell_rcalc_SOURCES = shell/rcalc.c
-shell_rcalc_CPPFLAGS = $(test_cppflags)
-shell_rcalc_LDADD = $(top_builddir)/src/shell/libshell.la \
+shell_slotmap_SOURCES = shell/slotmap.c
+shell_slotmap_CPPFLAGS = $(test_cppflags)
+shell_slotmap_LDADD = $(top_builddir)/src/shell/libshell.la \
 	$(test_ldadd)
-shell_rcalc_LDFLAGS = $(test_ldflags)
+shell_slotmap_LDFLAGS = $(test_ldflags)
 
 shell_mpir_SOURCES = shell/mpir.c
 shell_mpir_CPPFLAGS = $(test_cppflags)

@@ -14,12 +14,13 @@
 #include <flux/core.h>
 #include <jansson.h>
 
-#include "rcalc.h"
+#include "slotmap.h"
 
 struct jobspec {
     json_t *jobspec;
     int version;                // jobspec version
     int task_count;             // number of tasks in job
+    int per_slot;               // tasks per slot (0=total count used)
     int slot_count;             // number of task slots
     int cores_per_slot;         // number of cores per task slot
     int gpus_per_slot;          // number of gpus per task slot
@@ -32,9 +33,12 @@ struct jobspec {
     json_t *options;            // attributes.system.shell.options, if any
     const char *per_resource;   // per-resource option, if set
     int per_resource_count;     // per-resource count if per_resource non-NULL
+    const char *slot_label;     // tasks slot label, if set
 };
 
-struct jobspec *jobspec_parse (const char *jobspec, rcalc_t *r, json_error_t *error);
+struct jobspec *jobspec_parse (const char *jobspec,
+                               struct slotmap *sm,
+                               json_error_t *error);
 void jobspec_destroy (struct jobspec *job);
 
 #endif /* !_SHELL_JOBSPEC_H */

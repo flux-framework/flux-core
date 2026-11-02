@@ -16,7 +16,7 @@
 #include "ccan/str/str.h"
 
 #include "jobspec.h"
-#include "rcalc.h"
+#include "slotmap.h"
 
 static void set_error (json_error_t *error, const char *fmt, ...)
 {
@@ -169,7 +169,7 @@ static int get_per_resource_option (const struct jobspec *jobspec,
 }
 
 struct jobspec *jobspec_parse (const char *jobspec,
-                               rcalc_t *r,
+                               struct slotmap *sm,
                                json_error_t *error)
 {
     struct jobspec *job;
@@ -198,12 +198,13 @@ struct jobspec *jobspec_parse (const char *jobspec,
     if (json_unpack_ex (job->jobspec,
                         error,
                         0,
-                        "{s:i s:o s:[{s:o s:o}] s:{s?{s?s s?O s?{s?O}}}}",
+                        "{s:i s:o s:[{s:o s:o s?s}] s:{s?{s?s s?O s?{s?O}}}}",
                         "version", &job->version,
                         "resources", &resources,
                         "tasks",
                             "command", &job->command,
                             "count", &count,
+                            "slot", &job->slot_label,
                         "attributes",
                             "system",
                                 "cwd", &job->cwd,
@@ -224,17 +225,17 @@ struct jobspec *jobspec_parse (const char *jobspec,
         goto error;
     }
 
-    if (r != NULL && rcalc_total_slots (r) > 0) {
-        job->slot_count = rcalc_total_slots (r);
-        job->cores_per_slot = rcalc_total_cores (r) / job->slot_count;
-        job->gpus_per_slot = rcalc_total_gpus (r) / job->slot_count;
+    if (sm != NULL && slotmap_total_slots (sm) > 0) {
+        job->slot_count = slotmap_total_slots (sm);
+        job->cores_per_slot = slotmap_total_cores (sm) / job->slot_count;
+        job->gpus_per_slot = slotmap_total_gpus (sm) / job->slot_count;
         /* Check whether nodes were explicitly specified in jobspec
          */
         if (json_unpack_ex (resources, error, 0, "[{s:s}]", "type", &type) < 0) {
             goto error;
         }
         if (streq (type, "node")) {
-            job->node_count = rcalc_total_nodes (r);
+            job->node_count = slotmap_total_nodes (sm);
             job->slots_per_node = job->slot_count / job->node_count;
         }
         else {
@@ -251,15 +252,15 @@ struct jobspec *jobspec_parse (const char *jobspec,
             goto error;
         }
         if (is_node_specified) {
-            job->node_count = rcalc_total_nodes (r);
+            job->node_count = slotmap_total_nodes (sm);
             job->slots_per_node = job->slot_count;
             job->slot_count *= job->node_count;
         } else {
             job->node_count = -1;
             job->slots_per_node = -1;
         }
-        job->cores_per_slot = rcalc_total_cores (r) / job->slot_count;
-        job->gpus_per_slot = rcalc_total_gpus (r) / job->slot_count;
+        job->cores_per_slot = slotmap_total_cores (sm) / job->slot_count;
+        job->gpus_per_slot = slotmap_total_gpus (sm) / job->slot_count;
     }
     /* Set job->node_exclusive
      */
@@ -282,6 +283,7 @@ struct jobspec *jobspec_parse (const char *jobspec,
             goto error;
         }
         job->task_count = job->slot_count;
+        job->per_slot = per_slot;
     }
     /* Check command
      */
