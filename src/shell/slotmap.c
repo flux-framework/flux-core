@@ -20,8 +20,9 @@
  * The slots of a rank are numbered in group order. Tasks are assigned to
  * the "active" slots of a rank: the slots selected by the label passed to
  * slotmap_distribute(), or all slots of the rank if none were selected.
- * The tasks of a rank are dealt to its active slots round-robin, so the
- * task count of each slot is derived from the task count of the rank.
+ * The k-th task of a rank (in task id order) is assigned to active slot
+ * k % nactive, so the task counts and task ids of each slot are derived
+ * from the task count and task ids of the rank.
  */
 
 #if HAVE_CONFIG_H
@@ -76,6 +77,7 @@ struct rankinfo {
 };
 
 struct slotmap {
+    struct taskmap *map;        /* copy of the slotmap_update_map() map */
     int nranks;
     int ncores;
     int ngpus;
@@ -117,6 +119,8 @@ static void slots_clear (struct slotmap *sm)
     for (int i = 0; i < sm->nranks; i++)
         rank_clear_groups (&sm->ranks[i]);
     sm->has_slots = false;
+    taskmap_destroy (sm->map);
+    sm->map = NULL;
 }
 
 void slotmap_destroy (struct slotmap *sm)
@@ -131,6 +135,7 @@ void slotmap_destroy (struct slotmap *sm)
             }
             free (sm->ranks);
         }
+        taskmap_destroy (sm->map);
         json_decref (sm->labels);
         free (sm);
         errno = saved_errno;
@@ -1090,6 +1095,8 @@ int slotmap_distribute (struct slotmap *sm,
     for (int i = 0; i < sm->nranks; i++)
         sm->ranks[i].ntasks = result[i];
     sm->ntasks = ntasks;
+    taskmap_destroy (sm->map);
+    sm->map = NULL;
     rc = 0;
 out:
     free (cap);
@@ -1097,18 +1104,37 @@ out:
     return rc;
 }
 
+/* Return a copy of `map`.
+ */
+static struct taskmap *taskmap_copy (const struct taskmap *map)
+{
+    struct taskmap *copy;
+    char *s;
+
+    if (!(s = taskmap_encode (map, 0)))
+        return NULL;
+    copy = taskmap_decode (s, NULL);
+    free (s);
+    return copy;
+}
+
 int slotmap_update_map (struct slotmap *sm, const struct taskmap *map)
 {
+    struct taskmap *copy;
+
     if (!sm || !map) {
         errno = EINVAL;
         return -1;
     }
+    if (!(copy = taskmap_copy (map)))
+        return -1;
     for (int i = 0; i < sm->nranks; i++) {
         int ntasks = taskmap_ntasks (map, i);
         /* taskmap_ntasks() fails with ENOENT for a node with no tasks
          */
         if (ntasks < 0) {
             if (errno != ENOENT) {
+                taskmap_destroy (copy);
                 errno = EINVAL;
                 return -1;
             }
@@ -1117,6 +1143,8 @@ int slotmap_update_map (struct slotmap *sm, const struct taskmap *map)
         sm->ranks[i].ntasks = ntasks;
     }
     sm->ntasks = taskmap_total_ntasks (map);
+    taskmap_destroy (sm->map);
+    sm->map = copy;
     return 0;
 }
 
@@ -1277,6 +1305,40 @@ static json_t *slot_json (struct group *g, int i, int ntasks)
     return o;
 }
 
+/* Return the task ids assigned to active slot `p` of `ri`, which has
+ * `nactive` active slots, as an RFC 22 idset string. The k-th task of
+ * the rank in task id order is assigned to active slot k % nactive.
+ */
+static char *active_slot_taskids (struct slotmap *sm,
+                                  struct rankinfo *ri,
+                                  int nactive,
+                                  int p)
+{
+    const struct idset *taskids;
+    struct idset *ids;
+    unsigned int id;
+    char *s;
+    int k = 0;
+
+    if (!sm->map
+        || ri->ntasks == 0
+        || !(taskids = taskmap_taskids (sm->map, ri->nodeid)))
+        return strdup ("");
+    if (!(ids = idset_create (0, IDSET_FLAG_AUTOGROW)))
+        return NULL;
+    for (id = idset_first (taskids);
+         id != IDSET_INVALID_ID;
+         id = idset_next (taskids, id)) {
+        if (k++ % nactive == p && idset_set (ids, id) < 0) {
+            idset_destroy (ids);
+            return NULL;
+        }
+    }
+    s = idset_encode (ids, IDSET_FLAG_RANGE);
+    idset_destroy (ids);
+    return s;
+}
+
 json_t *slotmap_slots_json (struct slotmap *sm, int nodeid)
 {
     struct rankinfo *ri;
@@ -1297,13 +1359,29 @@ json_t *slotmap_slots_json (struct slotmap *sm, int nodeid)
         struct group *g = &ri->groups[j];
         bool active = all || g->active;
         for (int i = 0; i < g->count; i++) {
-            int ntasks = active ? active_slot_ntasks (ri, nactive, p++) : 0;
-            json_t *o;
-            if (!(o = slot_json (g, i, ntasks))
-                || json_array_append_new (a, o) < 0) {
+            char *taskids = NULL;
+            int ntasks = 0;
+            json_t *o = NULL;
+
+            if (active) {
+                ntasks = active_slot_ntasks (ri, nactive, p);
+                taskids = active_slot_taskids (sm, ri, nactive, p);
+                p++;
+            }
+            else
+                taskids = strdup ("");
+            if (!taskids
+                || !(o = slot_json (g, i, ntasks))
+                || json_object_set_new (o,
+                                        "taskids",
+                                        json_string (taskids)) < 0) {
                 json_decref (o);
+                free (taskids);
                 goto nomem;
             }
+            free (taskids);
+            if (json_array_append_new (a, o) < 0)
+                goto nomem;
         }
     }
     return a;
@@ -1311,6 +1389,86 @@ nomem:
     json_decref (a);
     errno = ENOMEM;
     return NULL;
+}
+
+/* Return the group and slot index within the group of active slot `p`
+ * of `ri`, and in `id` the position of the slot among all slots of `ri`.
+ */
+static struct group *active_slot (struct rankinfo *ri,
+                                  bool all,
+                                  int p,
+                                  int *i,
+                                  int *id)
+{
+    int n = 0;
+
+    for (int j = 0; j < ri->ngroups; j++) {
+        struct group *g = &ri->groups[j];
+        if (all || g->active) {
+            if (p < g->count) {
+                *i = p;
+                *id = n + p;
+                return g;
+            }
+            p -= g->count;
+        }
+        n += g->count;
+    }
+    return NULL;
+}
+
+json_t *slotmap_task_slot_json (struct slotmap *sm, int taskid)
+{
+    const struct idset *taskids;
+    struct rankinfo *ri;
+    struct group *g;
+    unsigned int id;
+    json_t *o = NULL;
+    bool all;
+    int nodeid;
+    int nactive;
+    int k = 0;
+    int p;
+    int i;
+    int id_slot;
+
+    if (!sm || taskid < 0) {
+        errno = EINVAL;
+        return NULL;
+    }
+    if (!sm->map
+        || (nodeid = taskmap_nodeid (sm->map, taskid)) < 0
+        || nodeid >= sm->nranks
+        || !(taskids = taskmap_taskids (sm->map, nodeid))) {
+        errno = ENOENT;
+        return NULL;
+    }
+    ri = &sm->ranks[nodeid];
+    if ((nactive = rank_nactive (ri, &all)) == 0) {
+        errno = ENOENT;
+        return NULL;
+    }
+
+    /* Find the position k of the task among the tasks of its rank. The
+     * task is assigned to active slot p = k % nactive, and is task k /
+     * nactive of the tasks sharing the slot.
+     */
+    for (id = idset_first (taskids);
+         id != IDSET_INVALID_ID && id != taskid;
+         id = idset_next (taskids, id))
+        k++;
+    p = k % nactive;
+    if (!(g = active_slot (ri, all, p, &i, &id_slot))
+        || !(o = slot_json (g, i, active_slot_ntasks (ri, nactive, p)))
+        || json_object_set_new (o, "id", json_integer (id_slot)) < 0
+        || json_object_set_new (o,
+                                "task_index",
+                                json_integer (k / nactive)) < 0) {
+        json_decref (o);
+        errno = ENOMEM;
+        return NULL;
+    }
+    return o;
 }
 
 /*

@@ -102,8 +102,10 @@ int slotmap_distribute (struct slotmap *sm,
                         int ntasks,
                         flux_error_t *errp);
 
-/* Update task counts from `map`. The tasks of each rank are divided
- * evenly among the slots used by the last slotmap_distribute().
+/* Update task counts from `map` and assign task ids to the slots used
+ * by the last slotmap_distribute(). The tasks of each rank are assigned
+ * to its slots in task id order, round-robin if there are more tasks
+ * than slots.
  */
 int slotmap_update_map (struct slotmap *sm, const struct taskmap *map);
 
@@ -127,9 +129,19 @@ char *slotmap_cores (struct slotmap *sm, int nodeid);
 char *slotmap_gpus (struct slotmap *sm, int nodeid);
 
 /* Return an array of slot objects for `nodeid`, each with keys "label",
- * "ntasks", "cores", and "gpus". Caller must json_decref() the result.
+ * "ntasks", "taskids", "cores", and "gpus". Caller must json_decref()
+ * the result.
  */
 json_t *slotmap_slots_json (struct slotmap *sm, int nodeid);
+
+/* Return a slot object for task `taskid` with keys "id", "label",
+ * "ntasks", "task_index", "cores", and "gpus", where "id" is the index of
+ * the slot in the slotmap_slots_json() array of the task's rank, and
+ * "task_index" is the position of the task among the "ntasks" tasks
+ * assigned to the slot. Task ids are assigned by slotmap_update_map().
+ * Caller must json_decref() the result.
+ */
+json_t *slotmap_task_slot_json (struct slotmap *sm, int taskid);
 
 #endif /* !SHELL_SLOTMAP_H */
 
