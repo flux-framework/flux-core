@@ -494,7 +494,7 @@ in :func:`mod_main` and are forwarded to ``__init__``:
 
    $ flux module load my-sched.py queue-depth=8 log-level=debug
 
-The base class automatically handles four built-in arguments:
+The base class automatically handles five built-in arguments:
 
 queue-depth=N|unlimited
     Maximum number of concurrent outstanding alloc requests (default 8, or
@@ -514,6 +514,13 @@ pool-class=URI
     set ``PYTHONPATH`` as needed.  Equivalent to setting
     :attr:`~Scheduler.pool_class` on the subclass, but applied at load time
     without subclassing.  See `Pool class hook (pool_class)`_.
+
+slots
+    Add RFC 20 task slots to each allocated R by setting the ``slots``
+    pool option.  :class:`~flux.resource.Rv1Pool.Rv1Pool` assigns one slot
+    entry per execution target, keyed by the jobspec slot label, that holds
+    all resources allocated on the target.  The job shell uses these slots
+    to place tasks.
 
 Any argument not consumed by the subclass or the base class is rejected
 with an error at load time, so a typo like ``log_level=debug`` (underscore
