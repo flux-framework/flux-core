@@ -75,6 +75,31 @@ static flux_future_t *lookup_jobspec (flux_t *h, flux_jobid_t jobid)
     return f;
 }
 
+/*  Return 0 if no two jobspec tasks are bound to the same slot label with
+ *  slots in `sm`, otherwise log an error and return -1.
+ *
+ *  The meaning of multiple tasks sharing a slot label, i.e. MPMD across
+ *  shared slots, is not yet defined, so reject it rather than run only the
+ *  first task, which a future definition could contradict.
+ */
+static int check_shared_labels (struct shell_info *info, struct slotmap *sm)
+{
+    const char **labels = info->jobspec->labels;
+
+    for (int i = 0; labels && labels[i]; i++) {
+        for (int j = 0; j < i; j++) {
+            if (streq (labels[i], labels[j])
+                && slotmap_count_slots (sm, labels[i]) > 0) {
+                shell_log_error ("multiple tasks bound to slot label %s"
+                                 " are not supported",
+                                 labels[i]);
+                return -1;
+            }
+        }
+    }
+    return 0;
+}
+
 /*  Create slots in `sm` from the jobspec if R has no slots or the
  *  per-resource shell option is set, and return the number of tasks to
  *  distribute over the slots in `ntasksp`. Set `labelsp` to the slot labels
@@ -111,6 +136,8 @@ static int shell_info_create_slots (struct shell_info *info,
          *  chose which labels to assign. If no slots have any of the labels,
          *  slotmap_distribute() uses all slots.
          */
+        if (check_shared_labels (info, sm) < 0)
+            return -1;
         labels = jobspec->labels;
         if (jobspec->per_slot) {
             int nslots = slotmap_count_slots_labels (sm, labels);
