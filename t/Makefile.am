@@ -274,6 +274,7 @@ TESTSCRIPTS = \
 	t2623-job-shell-oom.t \
 	t2624-job-shell-coprocess.t \
 	t2625-job-shell-jobdict.t \
+	t2627-job-shell-slots.t \
 	t2710-python-cli-submit.t \
 	t2711-python-cli-run.t \
 	t2713-python-cli-bulksubmit.t \
@@ -594,6 +595,7 @@ check_LTLIBRARIES = \
 	shell/plugins/log.la \
 	shell/plugins/test-event.la \
 	shell/plugins/jobspec-info.la \
+	shell/plugins/slot-info.la \
 	shell/plugins/taskmap-reverse.la \
 	shell/plugins/fork.la \
 	shell/plugins/finish.la \
@@ -1021,6 +1023,13 @@ shell_plugins_jobspec_info_la_LDFLAGS = \
 	$(fluxplugin_ldflags) -module -rpath /nowhere
 shell_plugins_jobspec_info_la_LIBADD = \
 	$(top_builddir)/src/common/libtap/libtap.la \
+	$(top_builddir)/src/common/libflux-core.la
+
+shell_plugins_slot_info_la_SOURCES = shell/plugins/slot-info.c
+shell_plugins_slot_info_la_CPPFLAGS = $(test_cppflags)
+shell_plugins_slot_info_la_LDFLAGS = \
+	$(fluxplugin_ldflags) -module -rpath /nowhere
+shell_plugins_slot_info_la_LIBADD = \
 	$(top_builddir)/src/common/libflux-core.la
 
 shell_plugins_taskmap_reverse_la_SOURCES = shell/plugins/taskmap-reverse.c
