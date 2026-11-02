@@ -216,6 +216,156 @@ static char *cpuset_to_string (hwloc_cpuset_t cpuset)
     return result;
 }
 
+/*  Return the cpusets of the `ntasks` tasks sharing a slot with cores
+ *   `cores`, distributed over the slot cores with distribute_tasks(), as
+ *   tasks are over all shell cores when R has no slots. Since
+ *   distribute_tasks() restricts the topology, use a copy.
+ */
+static hwloc_cpuset_t *distribute_slot (struct shell_affinity *sa,
+                                        const char *cores,
+                                        int ntasks)
+{
+    hwloc_topology_t topo;
+    hwloc_cpuset_t cpuset;
+    hwloc_cpuset_t *result = NULL;
+
+    if (!(cpuset = shell_affinity_get_cpuset (sa, cores)))
+        return NULL;
+    /* hwloc_distrib() gives one task all of the slot cores, so skip the
+     * topology copy.
+     */
+    if (ntasks == 1) {
+        if (!(result = calloc (1, sizeof (*result)))) {
+            hwloc_bitmap_free (cpuset);
+            return NULL;
+        }
+        result[0] = cpuset;
+        return result;
+    }
+    if (hwloc_topology_dup (&topo, sa->topo) < 0)
+        shell_log_errno ("hwloc_topology_dup");
+    else {
+        result = distribute_tasks (topo, cpuset, ntasks);
+        hwloc_topology_destroy (topo);
+    }
+    hwloc_bitmap_free (cpuset);
+    return result;
+}
+
+/*  The cpusets of the tasks sharing a slot, as computed by
+ *   distribute_slot(). Slots with the same cores and number of tasks
+ *   have the same cpusets, so these are computed once and cached.
+ */
+struct slot_cpusets {
+    const char *cores;
+    int ntasks;
+    hwloc_cpuset_t *cpusets;
+};
+
+struct slot_cache {
+    struct slot_cpusets *entries;
+    int count;
+};
+
+static void slot_cache_clear (struct slot_cache *cache)
+{
+    for (int i = 0; i < cache->count; i++)
+        cpuset_array_destroy (cache->entries[i].cpusets,
+                              cache->entries[i].ntasks);
+    free (cache->entries);
+}
+
+/*  Return the cpusets of the `ntasks` tasks sharing a slot with cores
+ *   `cores`, from `cache` if possible. `cache` has room for one entry
+ *   per local task, which is the most distinct slots there can be.
+ */
+static hwloc_cpuset_t *slot_cache_get (struct shell_affinity *sa,
+                                       struct slot_cache *cache,
+                                       const char *cores,
+                                       int ntasks)
+{
+    struct slot_cpusets *c;
+
+    for (int i = 0; i < cache->count; i++) {
+        c = &cache->entries[i];
+        if (streq (c->cores, cores) && c->ntasks == ntasks)
+            return c->cpusets;
+    }
+    c = &cache->entries[cache->count];
+    if (!(c->cpusets = distribute_slot (sa, cores, ntasks))) {
+        shell_log_error ("failed to distribute %d tasks over slot cores %s",
+                         ntasks,
+                         cores);
+        return NULL;
+    }
+    c->cores = cores;
+    c->ntasks = ntasks;
+    cache->count++;
+    return c->cpusets;
+}
+
+/*  Return a per-task cpuset array that binds each task to the cores of
+ *   its RFC 20 slot. Tasks that share a slot are distributed over the slot
+ *   cores, as tasks are over all cores of the shell when R has no slots.
+ */
+static hwloc_cpuset_t *slot_cpusets (flux_shell_t *shell,
+                                     struct shell_affinity *sa)
+{
+    hwloc_cpuset_t *cpusets;
+    struct slot_cache cache = { 0 };
+    flux_shell_task_t *task;
+
+    cpusets = calloc (sa->ntasks, sizeof (*cpusets));
+    cache.entries = calloc (sa->ntasks, sizeof (*cache.entries));
+    if (!cpusets || !cache.entries)
+        goto error;
+    for (task = flux_shell_task_first (shell);
+         task != NULL;
+         task = flux_shell_task_next (shell)) {
+        int localid;
+        const char *cores;
+        int ntasks;
+        int task_index;
+        hwloc_cpuset_t *shared;
+
+        /* The task is task `task_index` of the `ntasks` tasks sharing a
+         * slot with cores `cores`.
+         */
+        if (flux_shell_task_info_unpack (task,
+                                         "{s:i s:{s:s s:i s:i}}",
+                                         "localid", &localid,
+                                         "slot",
+                                           "cores", &cores,
+                                           "ntasks", &ntasks,
+                                           "task_index", &task_index) < 0
+            || localid < 0
+            || localid >= sa->ntasks
+            || task_index < 0
+            || task_index >= ntasks) {
+            shell_log_error ("failed to get task slot");
+            goto error;
+        }
+        if (!(shared = slot_cache_get (sa, &cache, cores, ntasks))
+            || !(cpusets[localid] = hwloc_bitmap_dup (shared[task_index])))
+            goto error;
+    }
+    slot_cache_clear (&cache);
+    return cpusets;
+error:
+    slot_cache_clear (&cache);
+    cpuset_array_destroy (cpusets, sa->ntasks);
+    return NULL;
+}
+
+bool shell_has_slots (flux_shell_t *shell)
+{
+    json_t *slots = NULL;
+
+    if (flux_shell_rank_info_unpack (shell, -1, "{s?o}", "slots", &slots) < 0)
+        return false;
+    return slots != NULL;
+}
+
 static void print_pertask_cpusets (flux_shell_t *shell,
                                    struct shell_affinity *sa)
 {
@@ -450,14 +600,20 @@ static int affinity_init (flux_plugin_t *p,
     if (!dry_run && wrap_hwloc_set_cpubind (sa->topo, sa->cpuset, 0) < 0)
         return shell_log_errno ("hwloc_set_cpubind");
 
-    /*  If cpu-affinity=per-task, then distribute ntasks over whatever
-     *   resources to which the shell is now bound (from above)
+    /*  If cpu-affinity=per-task, then bind each task to the cores of
+     *   its slot if the scheduler assigned slots in R. Otherwise,
+     *   distribute ntasks over whatever resources to which the shell
+     *   is now bound (from above).
      *  Set a 'task.exec' callback to actually make the per-task binding.
      */
     if (streq (option, "per-task")) {
-        if (!(sa->pertask = distribute_tasks (sa->topo,
-                                              sa->cpuset,
-                                              sa->ntasks)))
+        if (shell_has_slots (shell)) {
+            if (!(sa->pertask = slot_cpusets (shell, sa)))
+                return shell_log_errno ("failed to bind tasks to slots");
+        }
+        else if (!(sa->pertask = distribute_tasks (sa->topo,
+                                                   sa->cpuset,
+                                                   sa->ntasks)))
             shell_log_errno ("distribute_tasks failed");
     }
     else if (strstarts (option, "map:")) {

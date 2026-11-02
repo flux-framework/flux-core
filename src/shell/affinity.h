@@ -11,7 +11,9 @@
 #ifndef _SHELL_AFFINITY_H
 #define _SHELL_AFFINITY_H
 
+#include <stdbool.h>
 #include <hwloc.h>
+#include <flux/shell.h>
 
 /*  Parse a list of hwloc bitmap strings from `setlist` in list, bitmask,
  *  or taskset form and return an allocated hwloc_cpuset_t array of size
@@ -29,6 +31,11 @@ hwloc_cpuset_t *cpuset_array_create (int size);
  *  or parse_cpuset_list().
  */
 void cpuset_array_destroy (hwloc_cpuset_t *set, int size);
+
+/* Return true if the scheduler assigned RFC 20 task slots in R, in which
+ * case each task has a "slot" key in its task info.
+ */
+bool shell_has_slots (flux_shell_t *shell);
 
 #endif /* !_SHELL_AFFINITY_H */
 
