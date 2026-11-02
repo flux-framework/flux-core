@@ -36,7 +36,8 @@ static const char *prop_interface = SDEXEC_PROPERTIES_IFACE;
 flux_future_t *sdexec_property_get_all (flux_t *h,
                                         const char *service,
                                         uint32_t rank,
-                                        const char *path)
+                                        const char *path,
+                                        const char *interface)
 {
     flux_future_t *f;
     char topic[256];
@@ -45,6 +46,8 @@ flux_future_t *sdexec_property_get_all (flux_t *h,
         errno = EINVAL;
         return NULL;
     }
+    if (!interface)
+        interface = serv_interface;
     snprintf (topic, sizeof (topic), "%s.call", service);
     if (!(f = flux_rpc_pack (h,
                              topic,
@@ -56,7 +59,7 @@ flux_future_t *sdexec_property_get_all (flux_t *h,
                              "interface", prop_interface,
                              "member", "GetAll",
                              "signature", "s",
-                             "params", serv_interface)))
+                             "params", interface)))
         return NULL;
     return f;
 }
