@@ -257,8 +257,11 @@ struct resourcecount *resourcecount_decode (const char *s)
         goto error_inval;
     }
     switch (ep[1]) {
-        case '*':
         case '^':
+            if (count->min < 2) {
+                goto error_inval;
+            }
+        case '*':
             if (count->operand < 2) {
                 goto error_inval;
             }
