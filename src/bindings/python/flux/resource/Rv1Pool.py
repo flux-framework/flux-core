@@ -82,6 +82,7 @@ class ResourceRequest:
         duration (float): Walltime in seconds; 0.0 means unlimited.
         constraint: RFC 31 constraint expression (dict) or None.
         exclusive (bool): Whole-node exclusive allocation.
+        slot_label (str): Label of the jobspec slot, or ``"task"`` if unset.
         jobspec (dict): The raw jobspec dict from which this request was parsed.
             Available for reading site-specific hints from
             ``attributes.system`` that the standard parser does not extract,
@@ -102,6 +103,7 @@ class ResourceRequest:
         "constraint",
         "exclusive",
         "jobspec",
+        "slot_label",
     )
 
     def __init__(
@@ -114,6 +116,7 @@ class ResourceRequest:
         constraint,
         exclusive,
         jobspec=None,
+        slot_label="task",
     ):
         self.node_count = node_count
         self.slot_count = slot_count
@@ -123,6 +126,7 @@ class ResourceRequest:
         self.constraint = constraint
         self.exclusive = exclusive
         self.jobspec = jobspec
+        self.slot_label = slot_label
 
     @property
     def nnodes(self):
@@ -175,6 +179,7 @@ class ResourceRequest:
             "slot_size": None,  # None until a core vertex is found
             "gpu_per_slot": 0,
             "exclusive": False,
+            "slot_label": "task",
         }
 
         def walk(res_list, nodefactor, depth=0):
@@ -199,6 +204,7 @@ class ResourceRequest:
                     # then record known types and recurse.
                     if rtype == "slot":
                         state["nslots"] = count
+                        state["slot_label"] = vertex.get("label", "task")
                         if vertex.get("exclusive", False):
                             state["exclusive"] = True
                     elif rtype == "core":
@@ -244,6 +250,7 @@ class ResourceRequest:
             constraint,
             state["exclusive"],
             jobspec,
+            slot_label=state["slot_label"],
         )
 
     @property
@@ -275,12 +282,15 @@ class Rv1Pool(Rv1Set, ResourcePoolImplementation):
 
     #: Pool options recognised by this implementation.  The scheduler logs
     #: a warning for any key in ``pool_kwargs`` not listed here.
-    known_options: frozenset = frozenset()
+    #:
+    #: ``slots``: if True, add RFC 20 task slots to allocated R.
+    known_options: frozenset = frozenset({"slots"})
 
-    def __init__(self, R, log=None, **kwargs) -> None:
+    def __init__(self, R, log=None, slots=False, **kwargs) -> None:
         """Construct from an R JSON string, dict, or ``None`` (empty)."""
         if log is not None:
             self.log = log
+        self._emit_slots = bool(slots)
         if R is not None and not isinstance(R, (str, Mapping)):
             raise TypeError(f"Rv1Pool: expected str or Mapping, got {type(R)!r}")
 
@@ -351,6 +361,7 @@ class Rv1Pool(Rv1Set, ResourcePoolImplementation):
         if log is not None:
             new.log = log
         new.generation = generation
+        new._emit_slots = getattr(source, "_emit_slots", False)
         # Allow subclasses to initialize their attributes from source
         if source is not None:
             new._init_from_state(source)
@@ -673,6 +684,9 @@ class Rv1Pool(Rv1Set, ResourcePoolImplementation):
             }
             info["allocated_cores"] |= alloc_cores
             info["allocated_gpus"] |= alloc_gpus
+        slots = None
+        if self._emit_slots:
+            slots = self._assign_slots(ranks, request, actual_nslots)
 
         if request.duration > 0.0:
             end_time = time.time() + request.duration
@@ -693,6 +707,7 @@ class Rv1Pool(Rv1Set, ResourcePoolImplementation):
             source=self,
         )
         result._nslots = actual_nslots
+        result._slots = slots
         self._job_state[jobid] = (end_time, result)
         self._bump()
         self.log(syslog.LOG_DEBUG, f"alloc: {JobID(jobid).f58}: {result.dumps()}")
@@ -801,6 +816,41 @@ class Rv1Pool(Rv1Set, ResourcePoolImplementation):
             if rank in self._ranks:
                 self._ranks[rank]["allocated_cores"] |= oinfo["cores"]
                 self._ranks[rank]["allocated_gpus"] |= oinfo["gpus"]
+
+    def _assign_slots(self, ranks: dict, request, nslots: int):
+        """Return RFC 20 task slots for allocated *ranks*, or None.
+
+        Each rank gets a single slot entry, keyed by the jobspec slot label,
+        that holds all allocated resources on the rank.  The slot count per
+        rank is the number of slots that fit in the rank's cores.  If these
+        counts do not sum to *nslots* (e.g. exclusive or custom selection),
+        spread *nslots* evenly over the ranks instead.  If there are fewer
+        slots than ranks, no slots are assigned.
+        """
+        label = request.slot_label
+        order = sorted(ranks)
+        if not order or nslots < len(order):
+            return None
+        slot_size = request.slot_size
+        counts = {
+            rank: len(ranks[rank]["cores"]) // slot_size if slot_size > 0 else 0
+            for rank in order
+        }
+        if sum(counts.values()) != nslots or min(counts.values()) <= 0:
+            base, extra = divmod(nslots, len(order))
+            counts = {
+                rank: base + (1 if i < extra else 0) for i, rank in enumerate(order)
+            }
+        return {
+            rank: {
+                label: {
+                    "count": counts[rank],
+                    "cores": ranks[rank]["cores"],
+                    "gpus": ranks[rank]["gpus"],
+                }
+            }
+            for rank in order
+        }
 
     def _sort_candidates(self, candidates: list) -> list:
         """Sort *candidates* for node selection order.
