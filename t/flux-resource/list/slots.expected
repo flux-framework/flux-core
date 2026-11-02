@@ -1,0 +1,6 @@
+     STATE PROPERTIES NNODES   NCORES    NGPUS
+      free batch          83      332        0
+      free debug           5       20        0
+ allocated                 0        0        0
+      down batch          10       40        0
+      down debug           3       12        0
