@@ -160,6 +160,7 @@ flux_shell_LDFLAGS = \
 
 TESTS = \
 	test_jobspec.t \
+	test_slotmap.t \
 	test_plugstack.t \
 	test_mustache.t \
 	jobdict/test_exchange_tree.t \
@@ -198,6 +199,14 @@ test_jobspec_t_LDADD = \
 	$(builddir)/libshell.la \
 	$(test_ldadd)
 test_jobspec_t_LDFLAGS = \
+	$(test_ldflags)
+
+test_slotmap_t_SOURCES = test/slotmap.c
+test_slotmap_t_CPPFLAGS = $(test_cppflags)
+test_slotmap_t_LDADD = \
+	$(builddir)/libshell.la \
+	$(test_ldadd)
+test_slotmap_t_LDFLAGS = \
 	$(test_ldflags)
 
 test_plugstack_t_SOURCES = plugstack.c test/plugstack.c
