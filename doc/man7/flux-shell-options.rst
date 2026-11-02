@@ -272,6 +272,10 @@ CPU AFFINITY
 
     For a 4-task job on a node with 8 cores, each task receives 2 cores.
 
+    If the scheduler assigned RFC 20 task slots in *R*, each task is
+    instead bound to the cores of its slot. Tasks that share a slot
+    divide the slot's cores evenly.
+
   **map:LIST**
     Explicitly specify CPU binding for each task using a semicolon-delimited
     list. Each entry can use :linux:man7:`hwloc` list, bitmask, or taskset
@@ -339,6 +343,11 @@ GPU AFFINITY
     .. code-block:: console
 
       $ flux run -n 4 -o gpu-affinity=per-task myapp
+
+    If the scheduler assigned RFC 20 task slots in *R*, each task is
+    instead assigned the GPUs of its slot. Tasks that share a slot share
+    its GPUs, and tasks in a slot with no GPUs get
+    ``CUDA_VISIBLE_DEVICES=-1``.
 
   **map:LIST**
     Explicitly specify GPU assignment for each task using a semicolon-delimited
