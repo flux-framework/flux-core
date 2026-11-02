@@ -711,6 +711,16 @@ static json_t *flux_shell_get_rank_info_object (flux_shell_t *shell, int rank)
     if (o == NULL)
         return NULL;
 
+    /* Add RFC 20 slots if they were provided in R
+     */
+    if (slotmap_has_slots (shell->info->slotmap)) {
+        json_t *slots = slotmap_slots_json (shell->info->slotmap, rank);
+        if (!slots || json_object_set_new (o, "slots", slots) < 0) {
+            json_decref (o);
+            return NULL;
+        }
+    }
+
     if (flux_shell_aux_set (shell, key, o, (flux_free_f) json_decref) < 0) {
         json_decref (o);
         return NULL;

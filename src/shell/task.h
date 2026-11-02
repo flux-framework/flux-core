@@ -50,6 +50,9 @@ struct shell_task {
     void *io_cb_arg;
 
     struct aux_item *aux;
+
+    /* RFC 20 slot assigned to this task, if slots were provided in R */
+    json_t *slot;
 };
 
 void shell_task_destroy (struct shell_task *task);

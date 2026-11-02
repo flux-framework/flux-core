@@ -64,6 +64,7 @@ void shell_task_destroy (struct shell_task *task)
     if (task) {
         int saved_errno = errno;
         aux_destroy (&task->aux);
+        json_decref (task->slot);
         flux_cmd_destroy (task->cmd);
         flux_subprocess_destroy (task->proc);
         zhashx_destroy (&task->subscribers);
@@ -102,6 +103,9 @@ struct shell_task *shell_task_create (flux_shell_t *shell,
     task->index = index;
     task->rank = taskid;
     task->size = info->total_ntasks;
+    if (slotmap_has_slots (info->slotmap)
+        && !(task->slot = slotmap_task_slot_json (info->slotmap, taskid)))
+        goto error;
     if (!(task->cmd = flux_cmd_create (0, NULL, NULL)))
         goto error;
     /* Set larger stdin buffer to handle bursty input from batching.
@@ -360,7 +364,8 @@ static json_t *get_task_object (flux_shell_task_t *task)
                                      "state", task_state (task))))
         return NULL;
 
-    if ((task->proc && add_process_info_to_json (task->proc, o) < 0)
+    if ((task->slot && json_object_set (o, "slot", task->slot) < 0)
+        || (task->proc && add_process_info_to_json (task->proc, o) < 0)
         || aux_set (&task->aux, key, o, (flux_free_f) json_decref) < 0) {
         json_decref (o);
         return NULL;
