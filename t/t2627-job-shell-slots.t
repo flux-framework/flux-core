@@ -408,6 +408,25 @@ test_expect_success 'or slots: single task with labels from flux-sched or_slot' 
 	EOF
 	test_cmp or-sched.expected or-sched.out
 '
+test_expect_success 'or slots: tasks sharing a slot label with slots fail' '
+	jq ".tasks[1].slot = \"alpha\"" or.json >shared.json &&
+	id=$(flux job submit shared.json) &&
+	test_must_fail flux job attach $id 2>shared.err &&
+	test_debug "cat shared.err" &&
+	grep "multiple tasks bound to slot label alpha are not supported" \
+	    shared.err
+'
+test_expect_success 'or slots: tasks sharing an unassigned slot label work' '
+	jq ".tasks[2].slot = \"beta\"" or.json >shared-unused.json &&
+	or_R "{\"alpha\":{\"count\":2,\"core\":\"0-3\"}}" \
+	    "{\"alpha\":{\"count\":2,\"core\":\"0-3\"}}" >R.or-alpha &&
+	jq ".attributes.system[\"alloc-bypass\"].R = $(cat R.or-alpha)" \
+	    shared-unused.json >shared-unused2.json &&
+	id=$(flux job submit shared-unused2.json) &&
+	flux job attach $id | sort -n >shared-unused.out &&
+	test_debug "cat shared-unused.out" &&
+	test $(grep -c ": alpha " shared-unused.out) -eq 4
+'
 test_expect_success 'single task with a different slot label runs anywhere' '
 	flux run -N2 --setattr=system.alloc-bypass.R="$(cat R.or)" \
 	    ./app.sh one | sort -n >one.out &&
