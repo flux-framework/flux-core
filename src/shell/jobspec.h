@@ -34,12 +34,20 @@ struct jobspec {
     const char *per_resource;   // per-resource option, if set
     int per_resource_count;     // per-resource count if per_resource non-NULL
     const char *slot_label;     // tasks slot label, if set
+    json_t *tasks;              // tasks array (borrowed from jobspec)
+    const char **labels;        // slot labels of tasks, NULL terminated
 };
 
 struct jobspec *jobspec_parse (const char *jobspec,
                                struct slotmap *sm,
                                json_error_t *error);
 void jobspec_destroy (struct jobspec *job);
+
+/* Return the command of the first task bound to slot `label`. If `label`
+ * is NULL, return the command of the first task. Return NULL with errno
+ * set to ENOENT if no task is bound to `label`.
+ */
+json_t *jobspec_task_command (struct jobspec *job, const char *label);
 
 #endif /* !_SHELL_JOBSPEC_H */
 

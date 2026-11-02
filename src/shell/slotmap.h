@@ -66,6 +66,11 @@ int slotmap_count_slots (struct slotmap *sm, const char *label);
  */
 int slotmap_count_slots_labels (struct slotmap *sm, const char **labels);
 
+/* Return the comma separated labels of the slots of `nodeid`. Caller
+ * must free the result.
+ */
+char *slotmap_labels (struct slotmap *sm, int nodeid);
+
 /* Return the nodeid of broker rank `rank`, or -1 with errno set to
  * ENOENT if `rank` is not in R.
  */

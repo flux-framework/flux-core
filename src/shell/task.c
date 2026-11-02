@@ -87,6 +87,25 @@ error:
     return NULL;
 }
 
+/*  Return the command of the first jobspec task bound to the label of the
+ *  slot of `task`. Use the first task's command if R has no slots, or if
+ *  no jobspec task is bound to the label. The latter happens when no slots
+ *  in R match a jobspec task, in which case tasks are distributed over all
+ *  slots.
+ */
+static json_t *task_command (struct shell_info *info,
+                             struct shell_task *task)
+{
+    const char *label = NULL;
+    json_t *command;
+
+    if (task->slot
+        && json_unpack (task->slot, "{s:s}", "label", &label) == 0
+        && (command = jobspec_task_command (info->jobspec, label)))
+        return command;
+    return info->jobspec->command;
+}
+
 struct shell_task *shell_task_create (flux_shell_t *shell,
                                       int index,
                                       int taskid)
@@ -94,6 +113,7 @@ struct shell_task *shell_task_create (flux_shell_t *shell,
     struct shell_info *info = shell->info;
     struct shell_task *task;
     const char *key;
+    json_t *command;
     json_t *entry;
     size_t i;
 
@@ -116,7 +136,8 @@ struct shell_task *shell_task_create (flux_shell_t *shell,
      */
     if (flux_cmd_setopt (task->cmd, "stdin_BUFSIZE", "32M") < 0)
         goto error;
-    json_array_foreach (info->jobspec->command, i, entry) {
+    command = task_command (info, task);
+    json_array_foreach (command, i, entry) {
         if (flux_cmd_argv_append (task->cmd, json_string_value (entry)) < 0)
             goto error;
     }

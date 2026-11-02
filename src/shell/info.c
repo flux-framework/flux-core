@@ -77,17 +77,17 @@ static flux_future_t *lookup_jobspec (flux_t *h, flux_jobid_t jobid)
 
 /*  Create slots in `sm` from the jobspec if R has no slots or the
  *  per-resource shell option is set, and return the number of tasks to
- *  distribute over the slots in `ntasksp`. Set `labelp` to the slot label
+ *  distribute over the slots in `ntasksp`. Set `labelsp` to the slot labels
  *  used to select scheduler assigned slots, or NULL to use all slots.
  */
 static int shell_info_create_slots (struct shell_info *info,
                                     struct slotmap *sm,
                                     int *ntasksp,
-                                    const char **labelp)
+                                    const char ***labelsp)
 {
     struct jobspec *jobspec = info->jobspec;
     int ntasks = jobspec->task_count;
-    const char *label = NULL;
+    const char **labels = NULL;
     flux_error_t error;
 
     if (jobspec->per_resource != NULL) {
@@ -106,12 +106,14 @@ static int shell_info_create_slots (struct shell_info *info,
         ntasks = slotmap_count_slots (sm, NULL) * jobspec->per_resource_count;
     }
     else if (slotmap_has_slots (sm)) {
-        /*  Use RFC 20 slots from R, selected by jobspec slot label. If no
-         *  slots have the label, slotmap_distribute() uses all slots.
+        /*  Use RFC 20 slots from R with the slot labels of the jobspec
+         *  tasks. With multiple tasks, e.g. for "or" slots, the scheduler
+         *  chose which labels to assign. If no slots have any of the labels,
+         *  slotmap_distribute() uses all slots.
          */
-        label = jobspec->slot_label;
+        labels = jobspec->labels;
         if (jobspec->per_slot) {
-            int nslots = slotmap_count_slots (sm, label);
+            int nslots = slotmap_count_slots_labels (sm, labels);
             if (nslots == 0)
                 nslots = slotmap_count_slots (sm, NULL);
             ntasks = nslots * jobspec->per_slot;
@@ -135,49 +137,63 @@ static int shell_info_create_slots (struct shell_info *info,
         }
     }
     *ntasksp = ntasks;
-    *labelp = label;
+    *labelsp = labels;
     return 0;
 }
 
-/*  Return true if every node in `sm` has at least one task, which the
- *  job shell requires.
+/*  Check that every node in `sm` has at least one task, which the job
+ *  shell requires. Log an error and return -1 if not.
  */
-static bool every_node_has_tasks (struct slotmap *sm)
+static int check_every_node_has_tasks (struct shell_info *info,
+                                       struct slotmap *sm,
+                                       int ntasks)
 {
     for (int i = 0; i < slotmap_total_nodes (sm); i++) {
         struct slotmap_rankinfo ri;
-        if (slotmap_get_nth (sm, i, &ri) < 0 || ri.ntasks == 0)
-            return false;
+        char *labels;
+
+        if (slotmap_get_nth (sm, i, &ri) == 0 && ri.ntasks > 0)
+            continue;
+        /*  A node gets no tasks if none of its slots have a slot label of
+         *  a jobspec task, while other nodes do.
+         */
+        if (slotmap_has_slots (sm)
+            && info->jobspec->labels
+            && slotmap_count_slots_labels (sm, info->jobspec->labels) > 0
+            && (labels = slotmap_labels (sm, i))) {
+            shell_log_error ("rank %d: no task in jobspec for slot label %s",
+                             ri.rank,
+                             labels);
+            free (labels);
+        }
+        else
+            shell_log_error ("%d tasks cannot be distributed over %d nodes"
+                             " with at least one task per node",
+                             ntasks,
+                             slotmap_total_nodes (sm));
+        return -1;
     }
-    return true;
+    return 0;
 }
 
 /*  Assign the tasks in jobspec to slots in `sm`.
  */
 static int shell_info_distribute (struct shell_info *info, struct slotmap *sm)
 {
-    const char *label;
+    const char **labels;
     int ntasks;
     flux_error_t error;
 
-    if (shell_info_create_slots (info, sm, &ntasks, &label) < 0)
+    if (shell_info_create_slots (info, sm, &ntasks, &labels) < 0)
         return -1;
-    if (slotmap_distribute (sm,
-                            label ? (const char *[]){ label, NULL } : NULL,
-                            ntasks,
-                            &error) < 0) {
+    if (slotmap_distribute (sm, labels, ntasks, &error) < 0) {
         shell_log_error ("error distributing %d tasks over R: %s",
                          ntasks,
                          error.text);
         return -1;
     }
-    if (!every_node_has_tasks (sm)) {
-        shell_log_error ("%d tasks cannot be distributed over %d nodes"
-                         " with at least one task per node",
-                         ntasks,
-                         slotmap_total_nodes (sm));
+    if (check_every_node_has_tasks (info, sm, ntasks) < 0)
         return -1;
-    }
     return 0;
 }
 

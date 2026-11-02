@@ -29,6 +29,7 @@
 #include "config.h"
 #endif
 
+#include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include <errno.h>
@@ -783,6 +784,29 @@ int slotmap_count_slots_labels (struct slotmap *sm, const char **labels)
         }
     }
     return count;
+}
+
+char *slotmap_labels (struct slotmap *sm, int nodeid)
+{
+    struct rankinfo *ri;
+    char *s = NULL;
+    size_t size = 0;
+    FILE *fp;
+
+    if (!sm || nodeid < 0 || nodeid >= sm->nranks) {
+        errno = EINVAL;
+        return NULL;
+    }
+    ri = &sm->ranks[nodeid];
+    if (!(fp = open_memstream (&s, &size)))
+        return NULL;
+    for (int i = 0; i < ri->ngroups; i++)
+        fprintf (fp, "%s%s", i > 0 ? "," : "", ri->groups[i].label);
+    if (fclose (fp) != 0) {
+        free (s);
+        return NULL;
+    }
+    return s;
 }
 
 int slotmap_total_slots (struct slotmap *sm)
