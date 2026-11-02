@@ -74,7 +74,8 @@ string with the following layout:
    "broker_rank":i,
    "ntasks":i,
    "taskids":s,
-   "resources": { "ncores":i, "cores":s, ... }
+   "resources": { "ncores":i, "cores":s, ... },
+   "slots": [ { "label":s, "ntasks":i, "taskids":s, "cores":s, "gpus":s } ]
 
 where :var:`id` is the shell rank, :var:`name` is the hostname of that shell
 rank, :var:`broker_rank` is the broker rank on which the target shell rank
@@ -82,6 +83,14 @@ of the query is running, :var:`ntasks` is the number of tasks running under
 that shell rank, :var:`taskids` is a list of task id assignments for those
 tasks (an RFC 22 idset string), and :var:`resources` is a dictionary of
 resource name to resource ids assigned to the shell rank.
+
+:var:`slots` is present only if the scheduler assigned RFC 20 task slots
+in :var:`R`. It is a list of the task slots on the shell rank, each with
+its :var:`label`, the number and ids of tasks assigned to it
+(:var:`ntasks` and :var:`taskids`), and RFC 22 idsets of its
+:var:`cores` and :var:`gpus`. A slot with no tasks has an empty
+:var:`taskids`. The list includes every slot assigned to the shell rank,
+even if :var:`resources` was reduced to the slots with tasks.
 
 :func:`flux_shell_info_unpack` and :func:`flux_shell_rank_info_unpack`
 accomplish the same thing with Jansson-style formatting arguments.
