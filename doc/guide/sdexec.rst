@@ -46,9 +46,11 @@ dropped, further separators become hyphens, and job IDs take the plain
 f58 form, e.g. ``/sys/ƒJOBID`` becomes ``sys-fJOBID``.  A label never contains
 a colon, so the first colon in a unit name separates the label from the
 rendered jobid-path, and a unit name maps back to its instance and job
-mechanically.  Clients that do not set a label get a name derived from a
-truncated UUID instead.  A client may override the whole name with the
-``SDEXEC_NAME`` command option, which is then used verbatim.
+mechanically.  A client that does not set a label is given a truncated
+UUID as its label, which is used for the name and reported by
+``sdexec.list``, and is kept in the unit record so it is unchanged after a
+restart.  A client may override the whole name with the ``SDEXEC_NAME``
+command option, which is then used verbatim.
 
 Where a node hosts more than one broker, those brokers share a systemd user
 instance, so the broker rank is included and the name becomes
@@ -118,6 +120,55 @@ FAILED
 After ``StopUnit`` is called, sdexec waits for stdout and stderr to reach EOF,
 then sends ``ENODATA`` to close the exec stream.
 
+Unit Records
+============
+
+Before a unit is started, sdexec writes a *record* for it: a small
+eventlog (RFC 18), named after the unit, in the record directory
+(``sdexec-record-dir`` in :man5:`flux-config-systemd`, defaulting to the
+``XDG_RUNTIME_DIR`` of the user systemd instance that owns the units).  Its
+first event is ``start``, whose context carries what a later instance of
+the module needs to re-adopt the unit after a restart: the label it is
+looked up by, the command line, the background and waitable flags, and the
+stop timer settings.  If the record cannot be written, the exec request
+fails rather than starting a unit whose status could be lost.
+
+The unit is also given an ``ExecStopPost`` command that appends an
+``exit`` event to the record when the main process exits, with a context
+of ``result``, ``code`` and ``status`` taken from systemd.  For example::
+
+  {"timestamp":1763312345.12,"name":"start","context":{"label":"job1","cmdline":["flux-shell","1"],"bg":true,"waitable":true,"stop_timer_sec":30,"stop_timer_signal":10}}
+  {"timestamp":1763312400.98,"name":"exit","context":{"result":"success","code":"exited","status":"0"}}
+
+systemd runs the command in every terminal case (normal exit, signal
+death, administrative stop) with ``SERVICE_RESULT``, ``EXIT_CODE`` and
+``EXIT_STATUS`` in its environment, and runs it as the unit's user, so a
+guest process in the cgroup cannot forge a status.  The command appends
+only to a record that still exists, so a unit whose record sdexec has
+already removed leaves nothing behind.  The timestamps show when an
+uncollected record was created and how long its unit ran.
+
+The exit event is the durable copy of the exit status.  It matters
+because the copy systemd keeps does not always survive: job-exec runs IMP
+units with ``Type=notify``, and the IMP sends ``STOPPING=1`` before it
+exits, so a unit whose main process then exits 0 goes straight to
+*inactive/dead* and is garbage collected along with its status.  (A
+nonzero exit or signal death is retained in the *failed* state until
+reset, and a ``Type=exec`` unit's successful exit is held in
+*active/exited* by ``RemainAfterExit``.)  With the exit event, the status
+survives regardless of what systemd does with the unit.  An exit event
+that cannot be read (for example, one cut short because the command was
+killed) leaves the status unknown, and is treated as lost rather than as
+a clean exit.
+
+sdexec removes a unit's record when it is finished with the
+process: when a foreground or non-waitable unit is reaped, or when a
+waitable one has delivered its status to a ``wait``.  Records are not
+removed at module unload, since their purpose is to outlive the module.  A
+record whose status is never collected persists until a reboot clears the
+runtime directory; it is reported as a zombie by ``sdexec.list`` after
+every restart until an operator cleans it up.
+
 Stop Timer and Kill Escalation
 ===============================
 
@@ -179,7 +230,9 @@ Its handling depends on the process state:
 If the client sending a parked ``wait`` disconnects, the parked request is
 dropped, but the process remains waitable so its status is not lost and a
 subsequent ``wait`` can still collect it.  A waitable process that is never
-waited on is retained until the module is unloaded.
+waited on is retained until the module is unloaded, and its record (see
+`Unit Records`_ above) carries its status across the restart (see
+`Recovery After a Module Restart`_ below).
 
 Inspecting and Signaling Processes
 ==================================
@@ -189,6 +242,55 @@ its pid, command, label, and state (``R`` while the unit is running, ``Z``
 once it has finished but is retained awaiting a ``wait``).  The
 ``sdexec.kill`` RPC signals a process identified by ``pid`` or, if given,
 ``label``.  Both are surfaced by :man1:`flux-sproc` with ``--service sdexec``.
+
+Recovery After a Module Restart
+===============================
+
+Transient units keep running when the sdexec module is unloaded, so a module
+(or broker) restart can leave units behind.  At startup, sdexec sweeps for
+leftovers from its previous incarnation and re-adopts each as an ordinary
+tracked process so that job-exec can reclaim it by label with a ``wait``
+request.  The sweep considers the union of two sets, both filtered by this
+instance's unit name suffix (see `Unit Naming`_ above), which finds this
+units of this sdexec on this rank and no others:
+
+- The units loaded in the user systemd instance.  Each running or failed
+  one is adopted with its live state, monitored by the same per-unit
+  property watch as a unit started normally.  A ``GetAll`` snapshot over
+  every interface supplies both the unit state and the exit status in one
+  reply, taken after the watch is installed so no transition is missed in
+  between.  A unit with no record (started by another tool, or before
+  records existed) is adopted as background and waitable, with its label
+  derived from the unit name, so its status can still be collected.
+- The records in the record directory (see `Unit Records`_ above) whose
+  units are gone, or are still loaded but inactive.  If systemd appended an
+  exit event, the process is adopted
+  already finished, and a later ``wait`` collects the status; a
+  non-waitable one has nobody to collect it, so its exit is logged and the
+  record removed.  If there is no readable exit event, the unit died
+  without running its stop path, and the process is *lost*: it is adopted
+  with a terminal error so that a ``wait`` fails rather than parking
+  forever, and never mistakes the loss for a clean exit.  This happens if
+  the user systemd instance is killed outright.  An orderly restart of
+  the instance stops each unit, which runs its stop path, but an IMP
+  unit that does not exit within the stop timeout of ``user@.service``
+  is killed along with the instance, without one.  Any
+  temporary file left by a record write interrupted by a crash is
+  removed.
+
+The sweep runs in the background, so the module finishes loading even if
+the user bus is slow to come up, but until the sweep completes sdexec
+holds every ``exec``, ``write``, ``kill``, ``wait`` and ``list`` request,
+and answers them in arrival order once it has.  So sdexec always answers
+from an authoritative process table: a *not found* error means the
+process does not exist, never that it has not been swept yet.  There is
+no deadline: a user bus that never answers leaves those requests pending,
+as it would leave them pending without the sweep, and a warning is
+logged if the sweep is still waiting after 30 seconds.
+
+Because the stdio channels died with the previous module instance, no
+output can be retained for a recovered process: the ``wait`` response
+carries the exit status only.
 
 ********************
 sdexec-mapper Module
