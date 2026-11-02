@@ -109,7 +109,9 @@ static int dependency_test_cb (flux_plugin_t *p,
                         name);
         return -1;
     }
-    if (remove) {
+    /* Remove the dependency 'remove' times, to test repeated removal.
+     */
+    for (int i = 0; i < remove; i++) {
         if (flux_jobtap_dependency_remove (p, id, name) < 0)
             return flux_jobtap_reject_job (p, args,
                                            "dependency_remove: %s",
@@ -128,16 +130,18 @@ static int depend_cb (flux_plugin_t *p,
                       void *data)
 {
     const char *description = NULL;
+    const char *absent = NULL;
     flux_jobid_t id;
 
     if (flux_plugin_arg_unpack (args,
                                 FLUX_PLUGIN_ARG_IN,
-                                "{s:I s:{s:{s?{s?s}}}}",
+                                "{s:I s:{s:{s?{s?s s?s}}}}",
                                 "id", &id,
                                 "jobspec",
                                 "attributes",
                                 "system",
-                                "dependency-test", &description) < 0) {
+                                "dependency-test", &description,
+                                "dependency-test-absent", &absent) < 0) {
         flux_jobtap_raise_exception (p, FLUX_JOBTAP_CURRENT_JOB,
                                      "dependency-test", 0,
                                      "failed to unpack dependency-test args");
@@ -150,6 +154,20 @@ static int depend_cb (flux_plugin_t *p,
                                          "dependency-test", 0,
                                          "dependency_add: %s",
                                          strerror (errno));
+            return -1;
+        }
+    }
+    /* Removing a dependency that was never added must fail with ENOENT.
+     */
+    if (absent) {
+        if (flux_jobtap_dependency_remove (p, id, absent) == 0
+            || errno != ENOENT) {
+            flux_jobtap_raise_exception (p,
+                                         FLUX_JOBTAP_CURRENT_JOB,
+                                         "dependency-test", 0,
+                                         "dependency_remove (%s) did not"
+                                         " fail with ENOENT",
+                                         absent);
             return -1;
         }
     }

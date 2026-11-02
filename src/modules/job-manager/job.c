@@ -587,6 +587,29 @@ bool job_event_is_queued (struct job *job, const char *name)
     return false;
 }
 
+bool job_dependency_is_queued (struct job *job,
+                               const char *name,
+                               const char *description)
+{
+    size_t index;
+    json_t *wrap;
+    const char *entry_name;
+    const char *s;
+
+    json_array_foreach (job->event_queue, index, wrap) {
+        if (json_unpack (wrap,
+                         "{s:{s:s s:{s:s}}}",
+                         "entry",
+                           "name", &entry_name,
+                           "context",
+                             "description", &s) == 0
+            && streq (entry_name, name)
+            && streq (s, description))
+            return true;
+    }
+    return false;
+}
+
 const char *job_event_queue_print (struct job *job, char *buf, int size)
 {
     size_t index;
