@@ -1363,10 +1363,8 @@ static int attach_respond (subprocess_server_t *s,
     flux_cmd_t *cmd = flux_subprocess_get_cmd (p);
     json_t *cmd_obj;
 
-    if (!cmd || !(cmd_obj = cmd_tojson (cmd))) {
-        errno = ENOMEM;
+    if (!cmd || !(cmd_obj = cmd_tojson (cmd)))
         return -1;
-    }
     return flux_respond_pack (s->h,
                               msg,
                               "{s:s s:i s:o}",

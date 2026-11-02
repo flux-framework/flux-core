@@ -1025,6 +1025,7 @@ json_t *cmd_tojson (const flux_cmd_t *cmd)
     return o;
 err:
     json_decref (o);
+    errno = ENOMEM;
     return NULL;
 }
 
