@@ -897,6 +897,7 @@ flux_cmd_t * flux_cmd_copy (const flux_cmd_t *src)
     return (cmd);
 err:
     flux_cmd_destroy (cmd);
+    errno = ENOMEM;
     return NULL;
 }
 
