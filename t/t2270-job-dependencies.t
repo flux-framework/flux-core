@@ -268,4 +268,139 @@ test_expect_success 'restart: restart calls job.dependency.* callbacks' '
 	flux python dep-remove.py ${jobid} foo &&
 	flux job wait-event -vt 15 ${jobid} clean
 '
+test_expect_success 'create outstanding dependency query helper' '
+	cat >dep-query.py <<-EOF
+	import errno
+	import sys
+	import flux
+	from flux.job import JobID
+
+	id = JobID(sys.argv[1])
+	description = sys.argv[2]
+	expected = sys.argv[3]
+	try:
+	    result = flux.Flux().rpc("job-manager.dependency-test.query", {
+	        "id": id, "description": description
+	    }).get()["outstanding"]
+	except OSError as exc:
+	    assert expected == "ENOENT" and exc.errno == errno.ENOENT, exc
+	else:
+	    assert expected != "ENOENT", "expected ENOENT"
+	    assert result == int(expected), (description, result, expected)
+	EOF
+'
+
+test_expect_success 'query reports valid and invalid dependencies' '
+	jobid=$(flux submit --dependency=test:keep --dependency=test:gone \
+		--setattr=system.dependency-test=obsolete true) &&
+	flux job wait-event -t 15 -m description=obsolete ${jobid} dependency-add &&
+	flux python dep-query.py ${jobid} keep 1 &&
+	flux python dep-query.py ${jobid} gone 1 &&
+	flux python dep-query.py ${jobid} obsolete 1 &&
+	flux python dep-query.py ${jobid} never-added 0 &&
+	flux python dep-query.py ${jobid} Keep 0 &&
+	flux python dep-query.py ${jobid} kee 0 &&
+	flux python dep-query.py ${jobid} "" 0 &&
+	long_description=$(flux python -c "print(1024 * chr(120))") &&
+	flux python dep-query.py ${jobid} "$long_description" 0 &&
+	test "$(flux jobs -no {dependencies} ${jobid})" = "keep,gone,obsolete"
+'
+
+test_expect_success 'query reports a removed dependency as absent' '
+	flux python dep-remove.py ${jobid} gone &&
+	flux python dep-query.py ${jobid} gone 0 &&
+	flux python dep-query.py ${jobid} keep 1
+'
+# Reload replays job.dependency.test, which re-adds the removed "gone"
+# dependency. The add is ignored.
+test_expect_success 'query survives plugin reload that re-adds a removed dependency' '
+	flux jobtap load --remove=all ${PLUGINPATH}/dependency-test.so &&
+	flux python dep-query.py ${jobid} keep 1 &&
+	flux python dep-query.py ${jobid} gone 0 &&
+	flux python dep-query.py ${jobid} obsolete 1
+'
+test_expect_success 'query survives job-manager replay' '
+	job_manager_restart &&
+	flux python dep-query.py ${jobid} keep 1 &&
+	flux python dep-query.py ${jobid} gone 0 &&
+	flux python dep-query.py ${jobid} obsolete 1
+'
+test_expect_success 'reloaded plugin reconciles an obsolete description-only dependency' '
+	flux jobtap load --remove=all ${PLUGINPATH}/dependency-test.so \
+		reconcile=true &&
+	flux python dep-query.py ${jobid} obsolete 0 &&
+	flux python dep-query.py ${jobid} keep 1
+'
+test_expect_success 'rediscovery of active jobs skips an already absent dependency' '
+	flux jobtap load --remove=all ${PLUGINPATH}/dependency-test.so \
+		reconcile=true &&
+	flux python dep-query.py ${jobid} obsolete 0 &&
+	flux python dep-remove.py ${jobid} keep &&
+	flux job wait-event -t 15 ${jobid} clean &&
+	test_must_fail flux job wait-event ${jobid} exception
+'
+test_expect_success 'query fails with ENOENT for a retained inactive job' '
+	id=$(flux submit --wait-event=clean true) &&
+	flux python dep-query.py ${id} unused ENOENT
+'
+test_expect_success 'query reflects adds and removes queued in the same callback' '
+	flux jobtap load --remove=all ${PLUGINPATH}/dependency-test.so &&
+	id=$(flux submit --dependency=test:keeper \
+		--setattr=system.dependency-test=query-timing true) &&
+	flux job wait-event -t 15 -m description=query-timing \
+		${id} dependency-remove &&
+	flux python dep-query.py ${id} query-timing 0 &&
+	flux python dep-query.py ${id} query-timing-pair 0 &&
+	flux python dep-query.py ${id} keeper 1 &&
+	flux python dep-remove.py ${id} keeper &&
+	flux job wait-event -t 15 ${id} clean &&
+	test_must_fail flux job wait-event $id exception
+'
+test_expect_success 'query fails with ENOENT after a dependent job is canceled' '
+	id=$(flux submit --dependency=test:canceled true) &&
+	flux job wait-event -t 15 -m description=canceled ${id} dependency-add &&
+	flux python dep-query.py ${id} canceled 1 &&
+	flux cancel ${id} &&
+	flux job wait-event -t 15 ${id} clean &&
+	flux python dep-query.py ${id} canceled ENOENT
+'
+
+test_expect_success 'prepare persistent instance dependency query test' '
+	mkdir query-state &&
+	cat >query-config.toml <<-EOF &&
+	[[job-manager.plugins]]
+	load = "${PLUGINPATH}/dependency-test.so"
+	EOF
+	cat >query-submit.sh <<-EOF &&
+	#!/bin/sh
+	id=\$(flux submit --dependency=test:keep --dependency=test:gone \\
+	    --setattr=system.dependency-test=obsolete true) &&
+	flux job wait-event -t 15 -m description=obsolete \${id} dependency-add &&
+	flux python "$PWD/dep-remove.py" \${id} gone &&
+	echo \${id} > "$PWD/query-id"
+	EOF
+	FLUX_DISABLE_JOB_CLEANUP=t flux start -s1 \
+		--config-path=query-config.toml -Sstatedir=$PWD/query-state \
+		sh query-submit.sh
+'
+test_expect_success 'persistent instance restart reconciles dependencies in job.new' '
+	cat >query-config.toml <<-EOF &&
+	[[job-manager.plugins]]
+	load = "${PLUGINPATH}/dependency-test.so"
+	conf = { reconcile = true }
+	EOF
+	cat >query-restart.sh <<-EOF &&
+	#!/bin/sh
+	id=\$(cat "$PWD/query-id") &&
+	flux python "$PWD/dep-query.py" \${id} keep 1 &&
+	flux python "$PWD/dep-query.py" \${id} gone 0 &&
+	flux python "$PWD/dep-query.py" \${id} obsolete 0 &&
+	flux python "$PWD/dep-remove.py" \${id} keep &&
+	flux job wait-event -t 15 \${id} clean &&
+	flux python "$PWD/dep-query.py" \${id} obsolete ENOENT
+	EOF
+	flux start -s1 --config-path=query-config.toml \
+		-Sstatedir=$PWD/query-state sh query-restart.sh
+'
+
 test_done
