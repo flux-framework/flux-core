@@ -15,6 +15,9 @@
 #include <errno.h>
 #include <jansson.h>
 #include <flux/taskmap.h>
+#include <flux/idset.h>
+
+#include "ccan/str/str.h"
 
 #include "slotmap.h"
 
@@ -587,6 +590,324 @@ static void test_update_map (void)
     slotmap_destroy (sm);
 }
 
+/* Create a block taskmap from the current task counts in `sm`
+ */
+static struct taskmap *map_from_slotmap (struct slotmap *sm)
+{
+    struct taskmap *map = taskmap_create ();
+    if (!map)
+        BAIL_OUT ("taskmap_create failed");
+    for (int i = 0; i < slotmap_total_nodes (sm); i++) {
+        struct slotmap_rankinfo ri;
+        if (slotmap_get_nth (sm, i, &ri) < 0)
+            BAIL_OUT ("slotmap_get_nth %d failed", i);
+        if (ri.ntasks > 0 && taskmap_append (map, i, 1, ri.ntasks) < 0)
+            BAIL_OUT ("failed to create taskmap for nodeid %d", i);
+    }
+    return map;
+}
+
+static void update_map (struct slotmap *sm, const char *s)
+{
+    struct taskmap *map;
+    flux_error_t error;
+
+    if (s) {
+        if (!(map = taskmap_decode (s, &error)))
+            BAIL_OUT ("taskmap_decode %s: %s", s, error.text);
+    }
+    else
+        map = map_from_slotmap (sm);
+    ok (slotmap_update_map (sm, map) == 0,
+        "slotmap_update_map %s works",
+        s ? s : "(block)");
+    taskmap_destroy (map);
+}
+
+/* Return true if slot `id` of some rank in slotmap_slots_json() has task
+ * `taskid` and the label and cores of task slot `o`.
+ */
+static bool rank_slot_has_task (struct slotmap *sm,
+                                int id,
+                                int taskid,
+                                json_t *o)
+{
+    bool found = false;
+
+    for (int i = 0; i < slotmap_total_nodes (sm) && !found; i++) {
+        json_t *slots = slotmap_slots_json (sm, i);
+        json_t *slot = json_array_get (slots, id);
+        const char *taskids;
+        struct idset *ids;
+
+        if (slot
+            && json_unpack (slot, "{s:s}", "taskids", &taskids) == 0
+            && (ids = idset_decode (taskids))) {
+            found = idset_test (ids, taskid)
+                    && json_equal (json_object_get (slot, "label"),
+                                   json_object_get (o, "label"))
+                    && json_equal (json_object_get (slot, "cores"),
+                                   json_object_get (o, "cores"));
+            idset_destroy (ids);
+        }
+        json_decref (slots);
+    }
+    return found;
+}
+
+static void check_task (struct slotmap *sm,
+                        int taskid,
+                        const char *label,
+                        int ntasks,
+                        int index,
+                        const char *cores,
+                        const char *gpus)
+{
+    json_t *o = slotmap_task_slot_json (sm, taskid);
+    const char *l = "";
+    const char *c = "";
+    const char *g = "";
+    int n = -1;
+    int i = -1;
+    int id = -1;
+
+    if (!o
+        || json_unpack (o,
+                        "{s:i s:s s:i s:i s:s s:s}",
+                        "id", &id,
+                        "label", &l,
+                        "ntasks", &n,
+                        "task_index", &i,
+                        "cores", &c,
+                        "gpus", &g) < 0) {
+        fail ("task %d: slotmap_task_slot_json failed", taskid);
+        json_decref (o);
+        return;
+    }
+    ok (streq (l, label)
+        && n == ntasks
+        && i == index
+        && streq (c, cores)
+        && streq (g, gpus),
+        "task %d: label=%s ntasks=%d task_index=%d cores=%s gpus=%s",
+        taskid,
+        l,
+        n,
+        i,
+        c,
+        g);
+    ok (rank_slot_has_task (sm, id, taskid, o),
+        "task %d: rank slot %d has the task",
+        taskid,
+        id);
+    json_decref (o);
+}
+
+static void check_slot_taskids (struct slotmap *sm,
+                                int nodeid,
+                                int index,
+                                const char *expected)
+{
+    json_t *slots = slotmap_slots_json (sm, nodeid);
+    const char *taskids = NULL;
+
+    ok (slots != NULL
+        && json_unpack (json_array_get (slots, index),
+                        "{s:s}",
+                        "taskids", &taskids) == 0,
+        "nodeid %d slot %d: unpack taskids works",
+        nodeid,
+        index);
+    is (taskids,
+        expected,
+        "nodeid %d slot %d: taskids=%s",
+        nodeid,
+        index,
+        taskids);
+    json_decref (slots);
+}
+
+static void test_task_slot_invalid (void)
+{
+    flux_error_t error;
+    struct slotmap *sm;
+
+    if (!(sm = create (R_example2, &error)))
+        BAIL_OUT ("slotmap_create failed: %s", error.text);
+
+    errno = 0;
+    ok (slotmap_task_slot_json (NULL, 0) == NULL && errno == EINVAL,
+        "slotmap_task_slot_json sm=NULL fails with EINVAL");
+    errno = 0;
+    ok (slotmap_task_slot_json (sm, -1) == NULL && errno == EINVAL,
+        "slotmap_task_slot_json taskid=-1 fails with EINVAL");
+    errno = 0;
+    ok (slotmap_task_slot_json (sm, 0) == NULL && errno == ENOENT,
+        "slotmap_task_slot_json before slotmap_update_map fails with ENOENT");
+    check_slot_taskids (sm, 0, 0, "");
+
+    if (slotmap_distribute (sm, NULL, 6, &error) < 0)
+        BAIL_OUT ("slotmap_distribute failed: %s", error.text);
+    update_map (sm, NULL);
+    errno = 0;
+    ok (slotmap_task_slot_json (sm, 6) == NULL && errno == ENOENT,
+        "slotmap_task_slot_json with unknown taskid fails with ENOENT");
+
+    slotmap_destroy (sm);
+}
+
+static void test_task_slot_example2 (void)
+{
+    flux_error_t error;
+    struct slotmap *sm;
+
+    if (!(sm = create (R_example2, &error)))
+        BAIL_OUT ("slotmap_create failed: %s", error.text);
+
+    /* All slots: one task per slot
+     */
+    if (slotmap_distribute (sm, NULL, 6, &error) < 0)
+        BAIL_OUT ("slotmap_distribute failed: %s", error.text);
+    update_map (sm, NULL);
+    check_task (sm, 0, "cpu", 1, 0, "0-3", "");
+    check_task (sm, 1, "gpu", 1, 0, "4-7", "0");
+    check_task (sm, 2, "cpu", 1, 0, "0-3", "");
+    check_task (sm, 3, "gpu", 1, 0, "4-7", "0");
+    check_task (sm, 4, "cpu", 1, 0, "0-3", "");
+    check_task (sm, 5, "cpu", 1, 0, "0-3", "");
+    check_slot_taskids (sm, 0, 0, "0");
+    check_slot_taskids (sm, 0, 1, "1");
+    check_slot_taskids (sm, 3, 0, "5");
+
+    /* Only gpu slots: cpu slots get no tasks
+     */
+    if (slotmap_distribute (sm, LABELS ("gpu"), 2, &error) < 0)
+        BAIL_OUT ("slotmap_distribute failed: %s", error.text);
+    update_map (sm, NULL);
+    check_task (sm, 0, "gpu", 1, 0, "4-7", "0");
+    check_task (sm, 1, "gpu", 1, 0, "4-7", "0");
+    check_slot_taskids (sm, 0, 0, "");
+    check_slot_taskids (sm, 0, 1, "0");
+    check_slot_taskids (sm, 2, 0, "");
+
+    /* A taskmap that places a task on a rank with no gpu slots falls
+     * back to the other slots on that rank.
+     */
+    update_map (sm, "[[0,1,1,1],[2,1,1,1]]");
+    check_task (sm, 0, "gpu", 1, 0, "4-7", "0");
+    check_task (sm, 1, "cpu", 1, 0, "0-3", "");
+
+    slotmap_destroy (sm);
+}
+
+static void test_task_slot_taskmap (void)
+{
+    flux_error_t error;
+    struct slotmap *sm;
+
+    if (!(sm = create (R_uneven, &error)))
+        BAIL_OUT ("slotmap_create failed: %s", error.text);
+    if (slotmap_distribute (sm, NULL, 4, &error) < 0)
+        BAIL_OUT ("slotmap_distribute failed: %s", error.text);
+
+    /* Block taskmap
+     */
+    update_map (sm, NULL);
+    check_task (sm, 0, "task", 1, 0, "0-1", "");
+    check_task (sm, 1, "task", 1, 0, "2-3", "");
+    check_task (sm, 2, "task", 1, 0, "4-5", "");
+    check_task (sm, 3, "task", 1, 0, "0-1", "");
+
+    /* Non-contiguous task ids on a rank are assigned in task id order
+     */
+    update_map (sm, "[[0,1,1,1],[1,1,1,1],[0,1,2,1]]");
+    check_task (sm, 0, "task", 1, 0, "0-1", "");
+    check_task (sm, 1, "task", 1, 0, "0-1", "");
+    check_task (sm, 2, "task", 1, 0, "2-3", "");
+    check_task (sm, 3, "task", 1, 0, "4-5", "");
+    check_slot_taskids (sm, 0, 1, "2");
+
+    /* Fewer tasks than slots on a rank leaves trailing slots empty
+     */
+    update_map (sm, "[[0,1,1,1],[1,1,3,1]]");
+    check_task (sm, 0, "task", 1, 0, "0-1", "");
+    check_slot_taskids (sm, 0, 1, "");
+    check_task (sm, 1, "task", 3, 0, "0-1", "");
+    check_task (sm, 2, "task", 3, 1, "0-1", "");
+    check_task (sm, 3, "task", 3, 2, "0-1", "");
+
+    /* Oversubscribed slots are filled round-robin
+     */
+    if (slotmap_distribute (sm, NULL, 6, &error) < 0)
+        BAIL_OUT ("slotmap_distribute failed: %s", error.text);
+    update_map (sm, NULL);
+    check_slot_taskids (sm, 0, 0, "0,3");
+    check_slot_taskids (sm, 0, 1, "1");
+    check_slot_taskids (sm, 0, 2, "2");
+    check_slot_taskids (sm, 1, 0, "4-5");
+    check_task (sm, 0, "task", 2, 0, "0-1", "");
+    check_task (sm, 3, "task", 2, 1, "0-1", "");
+    check_task (sm, 5, "task", 2, 1, "0-1", "");
+
+    /* Task counts from slotmap_distribute() match the assigned task ids
+     * for the block taskmap.
+     */
+    for (int i = 0; i < slotmap_total_nodes (sm); i++) {
+        json_t *slots = slotmap_slots_json (sm, i);
+        size_t index;
+        json_t *o;
+        json_array_foreach (slots, index, o) {
+            const char *taskids;
+            int ntasks;
+            struct idset *ids = NULL;
+            if (json_unpack (o,
+                             "{s:i s:s}",
+                             "ntasks", &ntasks,
+                             "taskids", &taskids) < 0
+                || !(ids = idset_decode (taskids)))
+                BAIL_OUT ("failed to unpack slot");
+            ok (idset_count (ids) == ntasks,
+                "nodeid %d slot %zu: %d taskids for %d tasks",
+                i,
+                index,
+                (int) idset_count (ids),
+                ntasks);
+            idset_destroy (ids);
+        }
+        json_decref (slots);
+    }
+    slotmap_destroy (sm);
+}
+
+static void test_task_slot_noslots (void)
+{
+    flux_error_t error;
+    struct slotmap *sm;
+
+    if (!(sm = create (R_noslots, &error)))
+        BAIL_OUT ("slotmap_create failed: %s", error.text);
+
+    /* Task to slot mapping also works for slots created by the shell
+     */
+    if (slotmap_set_slots_per_resource (sm, NULL, "node", &error) < 0
+        || slotmap_distribute (sm, NULL, 16, &error) < 0)
+        BAIL_OUT ("failed to distribute tasks: %s", error.text);
+    update_map (sm, NULL);
+    check_task (sm, 0, "task", 2, 0, "0-3", "");
+    check_task (sm, 1, "task", 2, 1, "0-3", "");
+    check_task (sm, 15, "task", 2, 1, "0", "");
+
+    /* Replacing slots clears task id assignments
+     */
+    if (slotmap_set_slots_even (sm, NULL, 4, 1, 0, &error) < 0)
+        BAIL_OUT ("slotmap_set_slots_even failed: %s", error.text);
+    errno = 0;
+    ok (slotmap_task_slot_json (sm, 0) == NULL,
+        "slotmap_task_slot_json fails after slots are replaced");
+
+    slotmap_destroy (sm);
+}
+
 int main (int argc, char **argv)
 {
     plan (NO_PLAN);
@@ -598,6 +919,10 @@ int main (int argc, char **argv)
     test_uneven ();
     test_even ();
     test_update_map ();
+    test_task_slot_invalid ();
+    test_task_slot_example2 ();
+    test_task_slot_taskmap ();
+    test_task_slot_noslots ();
 
     done_testing ();
     return 0;
