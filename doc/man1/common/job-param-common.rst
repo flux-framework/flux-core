@@ -2,7 +2,8 @@
 
    Set the number of nodes to assign to the job. Tasks will be distributed
    evenly across the allocated nodes, unless the per-resource options
-   (noted below) are used with *submit*, *run*, or *bulksubmit*. It is
+   (noted below) are used with *submit*, *run*, or *bulksubmit*, or the
+   scheduler assigned task slots to nodes unevenly. It is
    an error to request more nodes than there are tasks. If unspecified,
    the number of nodes will be chosen by the scheduler.
 
