@@ -454,6 +454,46 @@ static void test_slot_order (void)
     slotmap_destroy (sm);
 }
 
+/* Distribute tasks over slots with any of several labels, e.g. for the
+ * labels of RFC 14 "or" slots, where the scheduler chose which labels
+ * to assign and other labels in the jobspec are unused.
+ */
+static void test_labels (void)
+{
+    flux_error_t error;
+    struct slotmap *sm;
+    const char *labels[] = { "gpu", "cpu", "unused", NULL };
+    const char *unused[] = { "foo", "bar", NULL };
+
+    if (!(sm = create (R_example2, &error)))
+        BAIL_OUT ("slotmap_create failed: %s", error.text);
+
+    ok (slotmap_count_slots_labels (sm, labels) == 6,
+        "6 slots with labels gpu, cpu, or unused");
+    ok (slotmap_count_slots_labels (sm, unused) == 0,
+        "0 slots with labels foo or bar");
+    ok (slotmap_count_slots_labels (sm, NULL) == 6,
+        "6 slots with NULL labels");
+
+    ok (slotmap_distribute (sm, labels, 6, &error) == 0,
+        "slotmap_distribute to multiple labels works");
+    check_rank (sm, 0, 2, 2, "0-7", "0");
+    check_rank (sm, 2, 1, 1, "0-3", "");
+    check_slot (sm, 0, 0, "cpu", 1, "0-3", "");
+    check_slot (sm, 0, 1, "gpu", 1, "4-7", "0");
+
+    ok (slotmap_distribute (sm, LABELS ("cpu"), 4, &error) == 0,
+        "slotmap_distribute to one of the labels works");
+    check_slot (sm, 0, 0, "cpu", 1, "0-3", "");
+    check_slot (sm, 0, 1, "gpu", 0, "4-7", "0");
+
+    ok (slotmap_distribute (sm, unused, 6, &error) == 0,
+        "slotmap_distribute with no matching labels uses all slots");
+    check_slot (sm, 0, 1, "gpu", 1, "4-7", "0");
+
+    slotmap_destroy (sm);
+}
+
 static void test_uneven (void)
 {
     flux_error_t error;
@@ -916,6 +956,7 @@ int main (int argc, char **argv)
     test_bad_slots ();
     test_example2 ();
     test_slot_order ();
+    test_labels ();
     test_uneven ();
     test_even ();
     test_update_map ();

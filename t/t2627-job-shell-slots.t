@@ -287,6 +287,133 @@ test_expect_success 'taskmap plugin with slots in R works' '
 	flux job taskmap --to=multiline $id >map-reverse.expected &&
 	test_cmp map-reverse.expected map-reverse.out
 '
+#
+# Multiple tasks bound to slot labels, as for RFC 14 "or" slots, where the
+# scheduler chooses a label for each slot and the other labels are unused
+#
+test_expect_success 'create or slots test script' '
+	cat <<-"EOF" >app.sh &&
+	#!/bin/sh
+	echo $FLUX_TASK_RANK: $1 $(flux getattr rank)
+	EOF
+	chmod +x app.sh
+'
+# Usage: or_jobspec R
+# Create a jobspec with tasks app.sh alpha (slot alpha), app.sh beta (slot
+# beta), and app.sh gamma (slot gamma), using alloc-bypass R.
+or_jobspec() {
+	flux run --dry-run -N2 --setattr=system.alloc-bypass.R="$1" \
+	    ./app.sh alpha | \
+	    jq ".resources[0].with[0].label = \"alpha\" |
+	        .tasks = [
+	          (.tasks[0] | .slot = \"alpha\"),
+	          (.tasks[0] | .slot = \"beta\" | .command[1] = \"beta\"),
+	          (.tasks[0] | .slot = \"gamma\" | .command[1] = \"gamma\")
+	        ] |
+	        .tasks[].count = {\"per_slot\": 1}"
+}
+# Usage: or_R SLOTS0 SLOTS1
+# Create R with 4 cores on ranks 0 and 1 with slots SLOTS0 and SLOTS1
+or_R() {
+	flux R encode -r 0-1 -c 0-3 | \
+	    jq -c --argjson s0 "$1" --argjson s1 "$2" "
+		.execution.R_lite = [
+		    (.execution.R_lite[0] | .rank = \"0\" | .slots = \$s0),
+		    (.execution.R_lite[0] | .rank = \"1\" | .slots = \$s1)]"
+}
+test_expect_success 'or slots: each rank runs the task of its slot label' '
+	or_R "{\"alpha\":{\"count\":2,\"core\":\"0-3\"}}" \
+	    "{\"beta\":{\"count\":2,\"core\":\"0-3\"}}" >R.or &&
+	or_jobspec "$(cat R.or)" >or.json &&
+	id=$(flux job submit or.json) &&
+	flux job attach $id | sort -n >or.out &&
+	cat <<-EOF >or.expected &&
+	0: alpha 0
+	1: alpha 0
+	2: beta 1
+	3: beta 1
+	EOF
+	test_cmp or.expected or.out
+'
+test_expect_success 'or slots: tasks on one rank run the task of their slot' '
+	or_R "{\"alpha\":{\"count\":1,\"core\":\"0-1\"},\
+\"beta\":{\"count\":1,\"core\":\"2-3\"}}" \
+	    "{\"gamma\":{\"count\":2,\"core\":\"0-3\"}}" >R.or-mixed &&
+	or_jobspec "$(cat R.or-mixed)" >or-mixed.json &&
+	id=$(flux job submit or-mixed.json) &&
+	flux job attach $id | sort -n >or-mixed.out &&
+	cat <<-EOF >or-mixed.expected &&
+	0: alpha 0
+	1: beta 0
+	2: gamma 1
+	3: gamma 1
+	EOF
+	test_cmp or-mixed.expected or-mixed.out
+'
+test_expect_success 'or slots: task slot info reports the slot label' '
+	cat <<-EOF >or-info.lua &&
+	plugin.searchpath = "${PLUGINPATH}"
+	plugin.load { file = "slot-info.so" }
+	EOF
+	jq ".attributes.system.shell.options.userrc = \"or-info.lua\"" \
+	    or-mixed.json >or-info.json &&
+	id=$(flux job submit or-info.json) &&
+	flux job attach $id 2>&1 | sed -n "s/^.*slot-info: //p" | \
+	    grep "^task" | sort -n -k2 >or-info.out &&
+	test_debug "cat or-info.out" &&
+	grep "task 0 slot: .*\"label\":\"alpha\"" or-info.out &&
+	grep "task 1 slot: .*\"label\":\"beta\"" or-info.out &&
+	grep "task 2 slot: .*\"label\":\"gamma\"" or-info.out
+'
+test_expect_success 'or slots: cyclic taskmap runs the task of each slot' '
+	jq ".attributes.system.shell.options.taskmap =
+	    {\"scheme\": \"cyclic\", \"value\": \"\"}" \
+	    or-mixed.json >or-cyclic.json &&
+	id=$(flux job submit or-cyclic.json) &&
+	flux job attach $id | sort -n >or-cyclic.out &&
+	cat <<-EOF >or-cyclic.expected &&
+	0: alpha 0
+	1: gamma 1
+	2: beta 0
+	3: gamma 1
+	EOF
+	test_cmp or-cyclic.expected or-cyclic.out
+'
+test_expect_success 'or slots: without slots in R tasks run the first task' '
+	or_jobspec "$(cat R.noslots)" >or-noslots.json &&
+	id=$(flux job submit or-noslots.json) &&
+	flux job attach $id | sort -n >or-noslots.out &&
+	test_debug "cat or-noslots.out" &&
+	test $(grep -c ": alpha " or-noslots.out) -eq 2
+'
+test_expect_success 'or slots: slot label not in tasks fails with an error' '
+	or_R "{\"alpha\":{\"count\":2,\"core\":\"0-3\"}}" \
+	    "{\"delta\":{\"count\":2,\"core\":\"0-3\"}}" >R.or-bad &&
+	or_jobspec "$(cat R.or-bad)" >or-bad.json &&
+	id=$(flux job submit or-bad.json) &&
+	test_must_fail flux job attach $id 2>or-bad.err &&
+	test_debug "cat or-bad.err" &&
+	grep "no task in jobspec for slot label delta" or-bad.err
+'
+test_expect_success 'or slots: single task with labels from flux-sched or_slot' '
+	or_R "{\"small\":{\"count\":2,\"core\":\"0-3\"}}" \
+	    "{\"big\":{\"count\":1,\"core\":\"0-3\"}}" >R.or-sched &&
+	flux run -N2 -n3 --setattr=system.alloc-bypass.R="$(cat R.or-sched)" \
+	    ./app.sh default | sort -n >or-sched.out &&
+	test_debug "cat or-sched.out" &&
+	cat <<-EOF >or-sched.expected &&
+	0: default 0
+	1: default 0
+	2: default 1
+	EOF
+	test_cmp or-sched.expected or-sched.out
+'
+test_expect_success 'single task with a different slot label runs anywhere' '
+	flux run -N2 --setattr=system.alloc-bypass.R="$(cat R.or)" \
+	    ./app.sh one | sort -n >one.out &&
+	test_debug "cat one.out" &&
+	test $(grep -c ": one " one.out) -eq 4
+'
 test_expect_success 'unload alloc-bypass plugin' '
 	flux jobtap remove alloc-bypass.so
 '
