@@ -436,4 +436,37 @@ test_expect_success 'single task with a different slot label runs anywhere' '
 test_expect_success 'unload alloc-bypass plugin' '
 	flux jobtap remove alloc-bypass.so
 '
+test_expect_success 'reload sched-simple with slots option' '
+	flux module reload sched-simple slots
+'
+test_expect_success 'scheduler adds slots to R' '
+	id=$(flux submit -N2 -n4 ./map.sh) &&
+	flux job wait-event -vt 15 $id clean &&
+	flux job info $id R | jq -e ".execution.R_lite[0].slots.task.count == 2"
+'
+test_expect_success 'scheduler slots use jobspec slot label' '
+	flux run --dry-run -n2 ./map.sh | \
+	    jq ".resources[0].label = \"foo\" | .tasks[0].slot = \"foo\"" \
+	    >foo.json &&
+	id=$(flux job submit foo.json) &&
+	flux job wait-event -vt 15 $id clean &&
+	flux job info $id R | jq -e ".execution.R_lite[0].slots.foo.count == 2"
+'
+test_expect_success 'uneven task distribution across nodes works with slots' '
+	id=$(flux submit -N2 -n3 -o verbose -o cpu-affinity=verbose \
+	    ./map.sh) &&
+	flux job attach $id >uneven.out 2>uneven.err &&
+	test_debug "cat uneven.err" &&
+	test "$(flux job taskmap $id)" = "[[0,1,2,1],[1,1,1,1]]" &&
+	grep "adjusted cores" uneven.err
+'
+test_expect_success 'flux job taskmap matches task placement with slots' '
+	id=$(flux submit -N4 --tasks-per-node=2 ./map.sh) &&
+	flux job attach $id | sort -n >$id.output &&
+	flux job taskmap --to=multiline $id >$id.expected &&
+	test_cmp $id.expected $id.output
+'
+test_expect_success 'reload sched-simple without slots option' '
+	flux module reload sched-simple
+'
 test_done
