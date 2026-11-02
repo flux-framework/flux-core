@@ -14,8 +14,10 @@ import time
 import unittest
 
 import subflux  # noqa: F401 - for PYTHONPATH
+from flux.idset import IDset
 from flux.resource import InfeasibleRequest, InsufficientResources
 from flux.resource.Rv1Pool import ResourceRequest, Rv1Pool
+from flux.resource.Rv1Set import Rv1Set
 from flux.resourcecount import ResourceCount
 from pycotap import TAPTestRunner
 
@@ -1643,6 +1645,148 @@ class TestSubclassCopy(unittest.TestCase):
         alloc = pool.alloc(1, req)
         subset = alloc._copy_from_ranks(set(alloc._ranks.keys()))
         self.assertEqual(subset.tag, "tagged")
+
+
+class TestRv1PoolSlots(unittest.TestCase):
+    """RFC 20 task slots in allocated R (slots=True pool option)."""
+
+    @staticmethod
+    def jobspec(label="task"):
+        return {
+            "version": 1,
+            "resources": [
+                {
+                    "type": "slot",
+                    "count": 1,
+                    "label": label,
+                    "with": [{"type": "core", "count": 1}],
+                }
+            ],
+            "tasks": [{"command": ["true"], "slot": label, "count": {"total": 1}}],
+            "attributes": {"system": {"duration": 0}},
+        }
+
+    def alloc(self, pool, request, label="task"):
+        request.slot_label = label
+        return pool.alloc(1, request).to_dict()["execution"]
+
+    def test_slot_label_from_jobspec(self):
+        request = ResourceRequest.from_jobspec(self.jobspec("foo"))
+        self.assertEqual(request.slot_label, "foo")
+
+    def test_slots_disabled_by_default(self):
+        pool = Rv1Pool(R_4x4)
+        execution = self.alloc(pool, rr(nslots=6))
+        for entry in execution["R_lite"]:
+            self.assertNotIn("slots", entry)
+
+    def test_slots_per_rank(self):
+        pool = Rv1Pool(R_4x4, slots=True)
+        execution = self.alloc(pool, rr(nslots=6))
+        self.assertEqual(execution["nslots"], 6)
+        total = 0
+        for entry in execution["R_lite"]:
+            slots = entry["slots"]
+            self.assertEqual(list(slots), ["task"])
+            self.assertEqual(slots["task"]["core"], entry["children"]["core"])
+            total += slots["task"]["count"] * len(IDset(entry["rank"]))
+        self.assertEqual(total, 6)
+
+    def test_slots_label(self):
+        pool = Rv1Pool(R_4x4, slots=True)
+        execution = self.alloc(pool, rr(nslots=1), label="foo")
+        self.assertEqual(list(execution["R_lite"][0]["slots"]), ["foo"])
+
+    def test_slots_node_request(self):
+        pool = Rv1Pool(R_4x4, slots=True)
+        execution = self.alloc(pool, rr(nnodes=2, nslots=4, slot_size=2))
+        self.assertEqual(len(execution["R_lite"]), 1)
+        entry = execution["R_lite"][0]
+        self.assertEqual(entry["rank"], "0-1")
+        self.assertEqual(entry["slots"], {"task": {"count": 2, "core": "0-3"}})
+
+    def test_slots_exclusive(self):
+        pool = Rv1Pool(R_4x4, slots=True)
+        execution = self.alloc(pool, rr(nnodes=2, nslots=2, exclusive=True))
+        entry = execution["R_lite"][0]
+        self.assertEqual(entry["children"]["core"], "0-3")
+        self.assertEqual(entry["slots"], {"task": {"count": 1, "core": "0-3"}})
+
+    def test_slots_gpu(self):
+        pool = Rv1Pool(R_gpu, slots=True)
+        execution = self.alloc(pool, rr(nslots=1, gpu_per_slot=1))
+        entry = execution["R_lite"][0]
+        self.assertEqual(entry["slots"]["task"]["gpu"], entry["children"]["gpu"])
+
+    def test_slots_dropped_by_pool(self):
+        pool = Rv1Pool(R_4x4, slots=True)
+        execution = self.alloc(pool, rr(nslots=3))
+        R = {"version": 1, "execution": execution}
+        self.assertNotIn("slots", Rv1Pool(R).to_dict()["execution"]["R_lite"][0])
+
+    def test_slots_round_trip_rv1set(self):
+        pool = Rv1Pool(R_4x4, slots=True)
+        execution = self.alloc(pool, rr(nslots=3))
+        R = {"version": 1, "execution": execution}
+        rset = Rv1Set(R, keep_slots=True)
+        self.assertEqual(rset.to_dict()["execution"]["R_lite"], execution["R_lite"])
+
+    def test_slots_dropped_by_default(self):
+        pool = Rv1Pool(R_4x4, slots=True)
+        execution = self.alloc(pool, rr(nslots=3))
+        R = {"version": 1, "execution": execution}
+        for entry in Rv1Set(R).to_dict()["execution"]["R_lite"]:
+            self.assertNotIn("slots", entry)
+
+    def test_slots_dropped_by_set_operations(self):
+        pool = Rv1Pool(R_4x4, slots=True)
+        execution = self.alloc(pool, rr(nslots=8))
+        rset = Rv1Set({"version": 1, "execution": execution}, keep_slots=True)
+        other = Rv1Set(R_4x4)
+        for result in (
+            rset.copy(),
+            rset.copy_ranks("0"),
+            rset.union(other),
+            rset.diff(other),
+            rset.intersect(other),
+        ):
+            for entry in result.to_dict()["execution"]["R_lite"]:
+                self.assertNotIn("slots", entry)
+
+    def test_slots_dropped_on_partial(self):
+        R = {
+            "version": 1,
+            "execution": {
+                "R_lite": [
+                    {
+                        "rank": "0",
+                        "children": {"core": "0-1"},
+                        "slots": {"task": {"count": 2, "core": "0-1"}},
+                    },
+                    {"rank": "1", "children": {"core": "0-1"}},
+                ],
+                "starttime": 0,
+                "expiration": 0,
+            },
+        }
+        for entry in Rv1Set(R, keep_slots=True).to_dict()["execution"]["R_lite"]:
+            self.assertNotIn("slots", entry)
+
+    def test_slots_invalid_count(self):
+        R = {
+            "version": 1,
+            "execution": {
+                "R_lite": [
+                    {
+                        "rank": "0",
+                        "children": {"core": "0-1"},
+                        "slots": {"task": {"count": 0, "core": "0-1"}},
+                    }
+                ],
+            },
+        }
+        with self.assertRaises(ValueError):
+            Rv1Set(R, keep_slots=True)
 
 
 if __name__ == "__main__":
