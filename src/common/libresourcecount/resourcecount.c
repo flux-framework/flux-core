@@ -381,29 +381,37 @@ unsigned int resourcecount_next (const struct resourcecount *count, unsigned int
     return next;
 }
 
-unsigned int resourcecount_last (const struct resourcecount *count)
+unsigned int resourcecount_bounded_last (const struct resourcecount *count,
+                                         unsigned int bound)
 {
     unsigned int last = RESOURCECOUNT_INVALID_VALUE;
 
     if (count) {
-        if (count->integer) {
+        if (count->integer && count->integer <= bound) {
             last = count->integer;
-        } else if (count->isrange) {
+        } else if (count->isrange && bound >= count->min) {
+            bound = bound < count->max ? bound : count->max;
             if (count->operator == '+') {
-                last = count->min
-                       + ((count->max - count->min) / count->operand) * count->operand;
+                last = bound - ((bound - count->min) % count->operand);
             } else {
                 unsigned int tmp = count->min;
-                while (tmp != RESOURCECOUNT_INVALID_VALUE) {
+                while (tmp <= bound) {
                     last = tmp;
                     tmp = resourcecount_next (count, tmp);
                 }
             }
         } else if (count->idset) {
-            last = idset_last (count->idset);
+            last = bound < idset_universe_size (count->idset)
+                       ? idset_prev (count->idset, bound + 1)
+                       : idset_last (count->idset);
         }
     }
     return last;
+}
+
+unsigned int resourcecount_last (const struct resourcecount *count)
+{
+    return resourcecount_bounded_last (count, RESOURCECOUNT_MAX);
 }
 
 bool resourcecount_is_integer (const struct resourcecount *count)
