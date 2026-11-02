@@ -51,6 +51,18 @@ test_expect_success 'spectrum mpi sets OMPI_COMM_WORLD_RANK' '
 	test_cmp spectrum.rank.expected spectrum.rank.out
 '
 
+hardlimit=$(ulimit -Hs)
+if test "$hardlimit" = unlimited || test "$hardlimit" -ge 10240; then
+	test_set_prereq STACK_HARDLIMIT
+fi
+test_expect_success STACK_HARDLIMIT 'spectrum mpi sets soft stack limit' '
+	flux run -o mpi=spectrum --dry-run sh -c "ulimit -Ss" > j.spectrum &&
+	jobid=$(flux job submit j.spectrum) &&
+	flux job attach ${jobid} > spectrum.stack.out &&
+	echo 10240 > spectrum.stack.expected &&
+	test_cmp spectrum.stack.expected spectrum.stack.out
+'
+
 export FLUX_SHELL_RC_PATH=$(pwd)/shellrc
 test_expect_success 'create test mpi plugins in $FLUX_SHELL_RC_PATH' '
 	mkdir -p shellrc/mpi &&
