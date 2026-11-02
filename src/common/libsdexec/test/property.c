@@ -102,15 +102,15 @@ void test_inval (void)
         "sdexec_property_get_read type=NULL fails with EINVAL");
 
     errno = 0;
-    ok (sdexec_property_get_all (NULL, "sdexec", 0, "foo") == NULL
+    ok (sdexec_property_get_all (NULL, "sdexec", 0, "foo", NULL) == NULL
         && errno == EINVAL,
         "sdexec_property_get_all h=NULL fails with EINVAL");
     errno = 0;
-    ok (sdexec_property_get_all (h, NULL, 0, "foo") == NULL
+    ok (sdexec_property_get_all (h, NULL, 0, "foo", NULL) == NULL
         && errno == EINVAL,
         "sdexec_property_get_all service=NULL fails with EINVAL");
     errno = 0;
-    ok (sdexec_property_get_all (h, "sdexec", 0, NULL) == NULL
+    ok (sdexec_property_get_all (h, "sdexec", 0, NULL, NULL) == NULL
         && errno == EINVAL,
         "sdexec_property_get_all path=NULL fails with EINVAL");
 
@@ -147,9 +147,49 @@ void test_inval (void)
     flux_close (h);
 }
 
+/* The GetAll request names the D-Bus interface whose properties systemd
+ * should return.  NULL selects the Service interface; "" is passed through
+ * so that systemd returns the properties of every interface the unit
+ * implements (Unit + Service) in one reply.
+ */
+void test_get_all_interface (void)
+{
+    flux_t *h;
+    flux_future_t *f;
+    const flux_msg_t *msg;
+    const char *iface;
+
+    if (!(h = flux_open ("loop://", 0)))
+        BAIL_OUT ("could not create loop flux_t handle for testing");
+
+    f = sdexec_property_get_all (h, "sdexec", 0, "/foo", NULL);
+    ok (f != NULL,
+        "sdexec_property_get_all interface=NULL works");
+    ok ((msg = flux_recv (h, FLUX_MATCH_ANY, 0)) != NULL
+        && flux_request_unpack (msg, NULL, "{s:[s]}", "params", &iface) == 0
+        && streq (iface, "org.freedesktop.systemd1.Service"),
+        "request params select the Service interface");
+    flux_msg_decref (msg);
+    flux_future_destroy (f);
+
+    f = sdexec_property_get_all (h, "sdexec", 0, "/foo", "");
+    ok (f != NULL,
+        "sdexec_property_get_all interface=\"\" works");
+    ok ((msg = flux_recv (h, FLUX_MATCH_ANY, 0)) != NULL
+        && flux_request_unpack (msg, NULL, "{s:[s]}", "params", &iface) == 0
+        && streq (iface, ""),
+        "request params select all interfaces");
+    flux_msg_decref (msg);
+    flux_future_destroy (f);
+
+    flux_close (h);
+}
+
 int main (int ac, char *av[])
 {
     plan (NO_PLAN);
+
+    test_get_all_interface ();
 
     test_dict ();
     test_inval ();
