@@ -323,19 +323,6 @@ program:SubCommand {
               resp.id, n, os.date ("%c", next_wakeup))
  end
 }
---
---  Convert date in Unix seconds (floating point) to a standard
---   datetime string
---
-local function date_string (t)
-    local sec = math.floor (t)
-    local msec = t - sec
-    local tm = posix.localtime (sec)
-    return string.format ("%d-%02d-%02dT%02d:%02d:%02d.%03d",
-            tm.year, tm.month, tm.monthday,
-            tm.hour, tm.min, tm.sec, math.floor (msec * 1000))
-end
-
 local function seconds_to_string (s)
     local f = string.format
     if s > (60*60*24) then
