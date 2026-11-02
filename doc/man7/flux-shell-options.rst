@@ -670,7 +670,9 @@ HWLOC CONFIGURATION
 
   This allows tasks to query the hardware topology without scanning the
   system directly. Also unsets :envvar:`HWLOC_COMPONENTS` which may
-  interfere with :envvar:`HWLOC_XMLFILE`.
+  interfere with :envvar:`HWLOC_XMLFILE`, and sets
+  :envvar:`HWLOC_THISSYSTEM` to 1 if not already set, so that hwloc binding
+  calls in tasks take effect.
 
   .. code-block:: console
 

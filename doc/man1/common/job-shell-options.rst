@@ -42,7 +42,8 @@
      - Write hwloc XML gathered by job to a file and set ``HWLOC_XMLFILE``.
        Note that this option will also unset ``HWLOC_COMPONENTS`` if set, since
        presence of this environment variable may cause hwloc to ignore
-       ``HWLOC_XMLFILE``.
+       ``HWLOC_XMLFILE``. It also sets ``HWLOC_THISSYSTEM=1`` if not already
+       set, so that hwloc binding calls in tasks take effect.
 
    * - :option:`hwloc.restrict`
      - With :option:`hwloc.xmlfile`, restrict the exported topology XML to only
