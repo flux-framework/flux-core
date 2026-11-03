@@ -169,6 +169,7 @@ struct inout test_codec_inputs[] = {
     { "2-8:1;+",        0,          NULL },
     { "2-8:1:*",        0,          NULL },
     { "2-8:1:^",        0,          NULL },
+    { "1-8:2:^",        0,          NULL },
     { "2-8:1:/",        0,          NULL },
     { "2-8:1:++",       0,          NULL },
     { "4.2",            0,          NULL },
@@ -374,6 +375,39 @@ void test_last (void)
         "resourcecount_last (NULL) == RESOURCECOUNT_INVALID_VALUE works");
 }
 
+void test_bounded_last (void)
+{
+    struct resourcecount *count;
+
+    count = resourcecount_decode ("27");
+    ok (resourcecount_bounded_last (count, 100) == 27,
+        "resourcecount_bounded_last '27', 100 -> 27 works");
+    ok (resourcecount_bounded_last (count, 25) == RESOURCECOUNT_INVALID_VALUE,
+        "resourcecount_bounded_last '27', 25 -> RESOURCECOUNT_INVALID_VALUE works");
+    resourcecount_destroy (count);
+
+    count = resourcecount_decode ("2-100:2:*");
+    ok (resourcecount_bounded_last (count, 5) == 4,
+        "resourcecount_bounded_last '2-100:2:*', 5 -> 4 works");
+    ok (resourcecount_bounded_last (count, 50) == 32,
+        "resourcecount_bounded_last '2-100:2:*', 50 -> 32 works");
+    ok (resourcecount_bounded_last (count, 1) == RESOURCECOUNT_INVALID_VALUE,
+        "resourcecount_bounded_last '2-100:2:*', 1 -> RESOURCECOUNT_INVALID_VALUE works");
+    resourcecount_destroy (count);
+
+    count = resourcecount_decode ("4,9,16");
+    ok (resourcecount_bounded_last (count, 8) == 4,
+        "resourcecount_bounded_last '4,9,16', 8 -> 4 works");
+    ok (resourcecount_bounded_last (count, 9) == 9,
+        "resourcecount_bounded_last '4,9,16', 9 -> 9 works");
+    ok (resourcecount_bounded_last (count, 3) == RESOURCECOUNT_INVALID_VALUE,
+        "resourcecount_bounded_last '4,9,16', 3 -> RESOURCECOUNT_INVALID_VALUE works");
+    resourcecount_destroy (count);
+
+    ok (resourcecount_bounded_last (NULL , 2) == RESOURCECOUNT_INVALID_VALUE,
+        "resourcecount_bounded_last (NULL, ...) == RESOURCECOUNT_INVALID_VALUE works");
+}
+
 void test_boolean_accessors (void)
 {
     struct resourcecount *count;
@@ -448,6 +482,7 @@ int main (int argc, char *argv[])
     test_codec ();
     test_iteration ();
     test_last();
+    test_bounded_last();
     test_boolean_accessors ();
     test_overflow();
 
