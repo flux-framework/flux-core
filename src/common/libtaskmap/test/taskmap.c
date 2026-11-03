@@ -12,6 +12,8 @@
 #include "config.h"
 #endif
 #include <errno.h>
+#include <limits.h>
+#include <stdlib.h>
 
 #include <flux/taskmap.h>
 #include "taskmap_private.h"
@@ -319,6 +321,8 @@ static void error_tests ()
         "taskmap_nodeid on unknown taskmap returns EINVAL");
     ok (taskmap_taskids (map, 0) == NULL && errno == EINVAL,
         "taskmap_taskids on unknown taskmap returns EINVAL");
+    ok (taskmap_ntasks (map, 0) < 0 && errno == EINVAL,
+        "taskmap_ntasks on unknown taskmap returns EINVAL");
 
     /* Add one task to taskmap so it is no longer unknown */
     ok (taskmap_append (map, 0, 1, 1) == 0,
@@ -593,6 +597,191 @@ static void test_raw_decode_errors (void)
     }
 }
 
+/*  Expand map one task at a time from its RFC 34 block list and check
+ *  taskmap_nodeid() and taskmap_ntasks() against the result.
+ */
+static void check_lookups (struct taskmap *map, const char *name)
+{
+    json_t *blocks;
+    json_t *entry;
+    size_t index;
+    int *nodes;
+    int *counts;
+    int ntasks = 0;
+    int maxnode = 0;
+    int taskid = 0;
+    int errors = 0;
+
+    if (!(blocks = taskmap_encode_json (map, 0)))
+        BAIL_OUT ("taskmap_encode_json failed");
+    json_array_foreach (blocks, index, entry) {
+        int start, nnodes, ppn, repeat;
+        if (json_unpack (entry, "[iiii]", &start, &nnodes, &ppn, &repeat) < 0)
+            BAIL_OUT ("failed to unpack taskmap block");
+        ntasks += nnodes * ppn * repeat;
+        if (start + nnodes > maxnode)
+            maxnode = start + nnodes;
+    }
+    if (!(nodes = calloc (ntasks, sizeof (int)))
+        || !(counts = calloc (maxnode, sizeof (int))))
+        BAIL_OUT ("out of memory");
+    json_array_foreach (blocks, index, entry) {
+        int start, nnodes, ppn, repeat;
+        (void) json_unpack (entry, "[iiii]", &start, &nnodes, &ppn, &repeat);
+        for (int r = 0; r < repeat; r++) {
+            for (int n = start; n < start + nnodes; n++) {
+                for (int i = 0; i < ppn; i++) {
+                    nodes[taskid++] = n;
+                    counts[n]++;
+                }
+            }
+        }
+    }
+    json_decref (blocks);
+
+    for (int i = 0; i < ntasks; i++) {
+        int n = taskmap_nodeid (map, i);
+        if (n != nodes[i]) {
+            diag ("%s: task %d is on node %d (expected %d)",
+                  name,
+                  i,
+                  n,
+                  nodes[i]);
+            errors++;
+        }
+    }
+    for (int i = 0; i < maxnode; i++) {
+        int n = taskmap_ntasks (map, i);
+        if (counts[i] == 0 ? n != -1 || errno != ENOENT : n != counts[i]) {
+            diag ("%s: node %d has %d tasks (expected %d)",
+                  name,
+                  i,
+                  n,
+                  counts[i]);
+            errors++;
+        }
+    }
+    ok (errors == 0,
+        "%s: nodeid of %d tasks and ntasks of %d nodes are correct",
+        name,
+        ntasks,
+        maxnode);
+    ok (taskmap_nodeid (map, ntasks) < 0 && errno == ENOENT,
+        "%s: taskmap_nodeid (%d) returns ENOENT",
+        name,
+        ntasks);
+    ok (taskmap_nodeid (map, INT_MAX) < 0 && errno == ENOENT,
+        "%s: taskmap_nodeid (INT_MAX) returns ENOENT",
+        name);
+    ok (taskmap_ntasks (map, maxnode) < 0 && errno == ENOENT,
+        "%s: taskmap_ntasks (%d) returns ENOENT",
+        name,
+        maxnode);
+    ok (taskmap_ntasks (map, INT_MAX) < 0 && errno == ENOENT,
+        "%s: taskmap_ntasks (INT_MAX) returns ENOENT",
+        name);
+    free (nodes);
+    free (counts);
+}
+
+static const char *lookup_tests[] = {
+    "[[0,1,1,1]]",
+    "[[0,4,4,1]]",
+    "[[0,4,1,4]]",
+    "[[0,4,2,2]]",
+    "[[0,4,2,1],[4,2,4,1]]",
+    "[[0,6,1,2],[4,2,1,2]]",
+    "[[3,1,4,1],[2,1,4,1],[1,1,4,1],[0,1,4,1]]",
+    "[[0,5,2,1],[6,1,2,1],[5,1,2,1],[7,1,2,1]]",
+    "[[0,2,3,3],[1,3,2,2],[0,1,1,5]]",
+    "[[0,2,2,1],[4,2,2,1]]",
+    "[[2,3,1,4]]",
+    "[[0,8,16,1],[0,4,32,1]]",
+    NULL,
+};
+
+static void lookup_tests_decode (void)
+{
+    for (const char **s = &lookup_tests[0]; *s != NULL; s++) {
+        flux_error_t error;
+        struct taskmap *map = taskmap_decode (*s, &error);
+        if (!map)
+            BAIL_OUT ("taskmap_decode (%s): %s", *s, error.text);
+        check_lookups (map, *s);
+        taskmap_destroy (map);
+    }
+}
+
+/*  Build maps with taskmap_append() so that adjacent blocks merge and
+ *  repeats are created. Use a fixed seed so the test is deterministic.
+ */
+static void lookup_tests_append (void)
+{
+    srand (1);
+    for (int i = 0; i < 200; i++) {
+        struct taskmap *map;
+        char name[32];
+        int nblocks = 1 + rand () % 12;
+        int maxnode = 1 + rand () % 40;
+
+        if (!(map = taskmap_create ()))
+            BAIL_OUT ("taskmap_create failed");
+        for (int b = 0; b < nblocks; b++) {
+            int start = rand () % maxnode;
+            int nnodes = 1 + rand () % 8;
+            int ppn = 1 + rand () % 5;
+            int repeat = 1 + rand () % 6;
+            for (int r = 0; r < repeat; r++) {
+                if (taskmap_append (map, start, nnodes, ppn) < 0)
+                    BAIL_OUT ("taskmap_append failed");
+            }
+        }
+        snprintf (name, sizeof (name), "append map %d", i);
+        check_lookups (map, name);
+        taskmap_destroy (map);
+    }
+}
+
+static void lookup_tests_edge (void)
+{
+    struct taskmap *map;
+    flux_error_t error;
+
+    /*  Nodes 2-3 have no tasks
+     */
+    if (!(map = taskmap_decode ("[[0,2,3,2],[4,2,1,1]]", &error)))
+        BAIL_OUT ("taskmap_decode: %s", error.text);
+    ok (taskmap_nodeid (map, 0) == 0,
+        "taskmap_nodeid returns first node for first task");
+    ok (taskmap_nodeid (map, 13) == 5,
+        "taskmap_nodeid returns last node for last task");
+    ok (taskmap_nodeid (map, 14) < 0 && errno == ENOENT,
+        "taskmap_nodeid returns ENOENT for taskid == total tasks");
+    ok (taskmap_ntasks (map, 0) == 6,
+        "taskmap_ntasks returns 6 for first node");
+    ok (taskmap_ntasks (map, 5) == 1,
+        "taskmap_ntasks returns 1 for last node");
+    ok (taskmap_ntasks (map, 2) < 0 && errno == ENOENT,
+        "taskmap_ntasks returns ENOENT for node with no tasks");
+    ok (taskmap_ntasks (map, 6) < 0 && errno == ENOENT,
+        "taskmap_ntasks returns ENOENT for node beyond map");
+    taskmap_destroy (map);
+
+    /*  Cyclic map with INT_MAX tasks
+     */
+    if (!(map = taskmap_decode ("[[0,2,1,1073741823],[0,1,1,1]]", &error)))
+        BAIL_OUT ("taskmap_decode: %s", error.text);
+    ok (taskmap_nodeid (map, INT_MAX - 2) == 1,
+        "taskmap_nodeid works for last task of a large block");
+    ok (taskmap_nodeid (map, INT_MAX - 1) == 0,
+        "taskmap_nodeid works for last task of a large map");
+    ok (taskmap_nodeid (map, INT_MAX) < 0 && errno == ENOENT,
+        "taskmap_nodeid (INT_MAX) returns ENOENT for a large map");
+    ok (taskmap_ntasks (map, 0) == 1073741824,
+        "taskmap_ntasks works for a large map");
+    taskmap_destroy (map);
+}
+
 int main (int ac, char **av)
 {
     plan (NO_PLAN);
@@ -606,6 +795,9 @@ int main (int ac, char **av)
     test_check ();
     test_deranged ();
     test_raw_decode_errors ();
+    lookup_tests_decode ();
+    lookup_tests_append ();
+    lookup_tests_edge ();
     done_testing ();
 }
 
