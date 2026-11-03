@@ -71,6 +71,15 @@ static int create_xmlfile (flux_shell_t *shell, int do_restrict)
         shell_log_errno ("failed to set HWLOC_XMLFILE in job environment");
         goto error;
     }
+    /*  hwloc assumes a topology loaded from HWLOC_XMLFILE is not from this
+     *  system and makes binding calls no-ops that return success. The XML
+     *  was discovered on this node, so assert that it is. Do not override
+     *  a value set by the user.
+     */
+    if (flux_shell_setenvf (shell, 0, "HWLOC_THISSYSTEM", "1") < 0) {
+        shell_log_errno ("failed to set HWLOC_THISSYSTEM in job environment");
+        goto error;
+    }
     /*  Note: HWLOC_XMLFILE will be ignored if HWLOC_COMPONENTS is also set
      *  in the environment, so unset that variable here.
      */
