@@ -11,7 +11,7 @@
 -- Set environment specific to spectrum_mpi (derived from openmpi)
 --
 
-local posix = require 'posix'
+local resource = require 'posix.sys.resource'
 
 -- Clear all existing PMIX_ and OMPI_ values before setting our own
 shell.env_strip ("^PMIX_", "^OMPI_")
@@ -34,10 +34,13 @@ plugin.register {
         {
          topic = "task.init",
          fn = function ()
-            local setrlimit = require 'posix'.setrlimit
             -- Approximately `ulimit -Ss 10240`
             -- Used to silence IBM MCM warnings
-            setrlimit ("stack", 10485760)
+            local lim = resource.getrlimit (resource.RLIMIT_STACK)
+            if lim then
+                lim.rlim_cur = 10485760
+                resource.setrlimit (resource.RLIMIT_STACK, lim)
+            end
             local rank = task.info.rank
             task.setenv ("OMPI_COMM_WORLD_RANK", rank)
             end

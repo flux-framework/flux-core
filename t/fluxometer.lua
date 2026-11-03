@@ -45,6 +45,7 @@ fluxTest.__index = fluxTest
 --  Load other requirements:
 local getopt = require 'flux.alt_getopt'.get_opts
 local posix = require 'flux.posix'
+local unistd = require 'posix.unistd'
 
 ---
 --  Append path p to PATH environment variable:
@@ -86,7 +87,7 @@ function fluxTest:start_session (t)
 
     -- reexec script under flux-start if necessary:
     --  (does not return)
-    local r, err = posix.exec (unpack (cmd))
+    local r, err = unistd.exec (cmd[1], { select (2, unpack (cmd)) })
     error (err)
 end
 
@@ -137,8 +138,7 @@ function fluxTest.init (...)
     test.start_args = { "-Slog-filename=" .. test.log_file }
 
     local path = fluxTest.fluxbindir .. "/flux"
-    local mode = posix.stat (path, 'mode')
-    if mode and mode:match('^rwx') then
+    if unistd.access (path, 'x') == 0 then
         do_path_prepend (fluxTest.fluxbindir)
         test.flux_path = path
     else

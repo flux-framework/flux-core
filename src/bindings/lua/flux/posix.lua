@@ -19,15 +19,12 @@ if not status then
     os.exit (1)
 end
 
--- Use non-deprecated version of clock_gettime if available:
-local status, time = pcall (require, 'posix.time')
-if time and time.clock_gettime then
-    local _clock_gettime = time.clock_gettime
-    local CLOCK_REALTIME = time.CLOCK_REALTIME
-    rc.clock_gettime = function ()
-        local ts = _clock_gettime (CLOCK_REALTIME)
-        return ts.tv_sec, ts.tv_nsec
-    end
+-- Provide the legacy posix.clock_gettime() interface, removed in
+-- luaposix 38:
+local time = require 'posix.time'
+rc.clock_gettime = function ()
+    local ts = time.clock_gettime (time.CLOCK_REALTIME)
+    return ts.tv_sec, ts.tv_nsec
 end
 
 return rc

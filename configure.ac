@@ -433,6 +433,14 @@ else
   AC_MSG_RESULT([no])
   AC_MSG_FAILURE([Could not find required Lua posix module])
 fi
+AC_MSG_CHECKING([for luaposix submodules])
+if $LUA -l posix.sys.resource -l posix.sys.stat \
+        -l posix.time -l posix.unistd -e ''; then
+  AC_MSG_RESULT([yes])
+else
+  AC_MSG_RESULT([no])
+  AC_MSG_FAILURE([luaposix 33.0 or later is required])
+fi
 X_AC_ZEROMQ
 X_AC_JANSSON
 PKG_CHECK_MODULES([LIBSYSTEMD], [libsystemd >= 0.23],
