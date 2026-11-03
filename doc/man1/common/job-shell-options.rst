@@ -39,11 +39,12 @@
        nonzero exit code.
 
    * - :option:`hwloc.xmlfile`
-     - Write hwloc XML gathered by job to a file and set ``HWLOC_XMLFILE``.
-       Note that this option will also unset ``HWLOC_COMPONENTS`` if set, since
-       presence of this environment variable may cause hwloc to ignore
-       ``HWLOC_XMLFILE``. It also sets ``HWLOC_THISSYSTEM=1`` if not already
-       set, so that hwloc binding calls in tasks take effect.
+     - Write hwloc XML gathered by job to a file and set
+       :envvar:`HWLOC_XMLFILE`. Note that this option will also unset
+       :envvar:`HWLOC_COMPONENTS` if set, since presence of this environment
+       variable may cause hwloc to ignore :envvar:`HWLOC_XMLFILE`. It also
+       sets :envvar:`HWLOC_THISSYSTEM=1` if not already set, so that hwloc
+       binding calls in tasks take effect.
 
    * - :option:`hwloc.restrict`
      - With :option:`hwloc.xmlfile`, restrict the exported topology XML to only
