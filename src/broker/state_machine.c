@@ -606,6 +606,7 @@ static void action_cleanup (struct state_machine *s)
 static void action_finalize (struct state_machine *s)
 {
     flux_watcher_stop (s->shutdown.warn_timer);
+    flux_watcher_stop (s->shutdown.timer);
     sd_timeout_reset (s);
 
     if (runat_is_defined (s->ctx->runat, "rc3")) {
