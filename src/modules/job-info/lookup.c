@@ -666,8 +666,17 @@ int lookup_setup (struct info_ctx *ctx)
 
 void lookup_cleanup (struct info_ctx *ctx)
 {
-    if (ctx->lookups)
+    if (ctx->lookups) {
+        struct lookup_ctx *l;
+
+        while (zlistx_first (ctx->lookups)) {
+            l = zlistx_detach_cur (ctx->lookups);
+            if (flux_respond_error (ctx->h, l->msg, ENOSYS, NULL) < 0)
+                flux_log_error (ctx->h, "%s: flux_respond_error", __FUNCTION__);
+            lookup_ctx_destroy (l);
+        }
         zlistx_destroy (&ctx->lookups);
+    }
 }
 
 /*
