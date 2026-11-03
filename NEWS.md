@@ -1,3 +1,65 @@
+flux-core version 0.91.0 - 2026-11-03
+-------------------------------------
+
+## New Features
+
+ * jobtap: add `flux_jobtap_dependency_check ()` for checking a dependency
+   in a job (#7877)
+ * shell: add support for PMI-1.2 and group barriers (#7862)
+ * shell: factor out PMI kvs for use by other process managers (#7856)
+ * support queue membership by hostlist (#7846)
+ * python: add `parse_timestamp()` (#7853)
+ * python: parse ISO 8601 basic format dates in `parse_datetime` (#7850)
+ * sdexec: kill non-waitable units at module teardown (#7848)
+ * Move counts from libjob into separate libresourcecount (#7841)
+ * sdexec: move the broker rank in unit names (#7845)
+ * flux-top: get queue conf from job manager (#7843)
+
+## Fixes
+
+ * broker: stop shutdown timer on entry to FINALIZE (#7891)
+ * libresourcecount: validate min for '^' operator and add
+   `libresourcecount_bounded_last ()` (#7889)
+ * libsubprocess: check error paths (#7743)
+ * shell: set `HWLOC_THISSYSTEM=1` with `hwloc.xmlfile` (#7890)
+ * job-manager: avoid posting redundant and failing dependency events (#7885)
+ * job-manager: do not drop events when one fails to apply (#7881)
+ * job-list: fix NULL dereference on unlikely error path (#7883)
+ * sched-backfill: handle a permanently blocked head job due to down or
+   drained nodes (#7869)
+ * resource: fix shrink when acquire precedes resource-define (#7851)
+ * shell: get instance owner from the IMP, and   drop `FLUX_*` from IMP
+   config examples (#7849)
+ * add minor guest restrictions (#7844)
+ * sdbus: conform to RFC 52 (#7839)
+ * job-manager: implement config rollback on reload failure  (#7838)
+
+## Performance
+
+ * fix quadradic time slowdowns on restart with many pending jobs (#7874)
+ * let some reactor loops ingest more than one message per iteration (#7875)
+ * python: simple efficiency improvements for `flux jobs` (#7876)
+
+## Build/CI/Testsuite/Documentation
+
+ * support luaposix 38 and require 33.0 or later (#7892)
+ * github: bump the github-actions group across 1 directory with 6 updates
+   (#7886)
+ * ci: run flux-pmix check on el10 with native pmix (#7887)
+ * ci: use one image name for each downstream project check (#7882)
+ * doc: document `FLUX_MODPROBE_DISABLE` (#7879)
+ * docker: drop openpmix and prrte from jammy and bookworm (#7870)
+ * doc: add missing documentation or correct incorrect descriptions (#7867)
+ * doc: fix more minor errors (#7866)
+ * doc: fix minor errors in documentation descriptions (#7864)
+ * doc: fix various minor documentation errors (#7863)
+ * testsuite: cover MPI sessions (#7861)
+ * ci: minor fixes for testenv workflow (#7860)
+ * ci: use macos-15 and pin luaposix to 37.0 in macos builder (#7859)
+ * build(deps-dev): bump black from 26.5.1 to 26.10.1 in /scripts (#7857)
+ * pre-commit: increase vermin version (#7855)
+ * testsuite: add sdexec variadic argument type checker (#7840)
+
 flux-core version 0.90.0 - 2026-10-06
 -------------------------------------
 
