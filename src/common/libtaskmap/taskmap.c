@@ -710,10 +710,24 @@ int taskmap_nodeid (const struct taskmap *map, int taskid)
 
 int taskmap_ntasks (const struct taskmap *map, int nodeid)
 {
-    const struct idset *taskids = taskmap_taskids (map, nodeid);
-    if (!taskids)
+    struct taskmap_block *block;
+    int n = 0;
+
+    if (!map || nodeid < 0 || taskmap_unknown (map)) {
+        errno = EINVAL;
         return -1;
-    return idset_count (taskids);
+    }
+    block = zlistx_first (map->blocklist);
+    while (block) {
+        if (nodeid >= block->start && nodeid <= taskmap_block_end (block))
+            n += block->ppn * block->repeat;
+        block = zlistx_next (map->blocklist);
+    }
+    if (n == 0) {
+        errno = ENOENT;
+        return -1;
+    }
+    return n;
 }
 
 int taskmap_nnodes (const struct taskmap *map)
