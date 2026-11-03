@@ -191,7 +191,9 @@ test_expect_success 'flux-uri mock testing of slurm resolver works' '
 	test_debug "cat squeue2.err" &&
 	grep -i "empty nodelist" squeue2.err
 '
-test_expect_success 'setup fake csm_allocation_query for mock lsf testing' '
+# N.B. Internally the lsf resolver will eventually run 'ps', which hangs
+# under ASAN.  So set NO_ASAN for lsf tests below.
+test_expect_success NO_ASAN 'setup fake csm_allocation_query for mock lsf testing' '
 	cat <<-EOF >csm_allocation_query &&
 	#!/bin/sh
 	test -n "\$LSF_FAIL" && exit 4
@@ -203,7 +205,7 @@ test_expect_success 'setup fake csm_allocation_query for mock lsf testing' '
 	export CSM_ALLOCATION_QUERY=$(pwd)/csm_allocation_query &&
 	export FLUX_SSH=${SHARNESS_TEST_SRCDIR}/scripts/tssh
 '
-test_expect_success 'flux-uri mock testing of lsf resolver works' '
+test_expect_success NO_ASAN 'flux-uri mock testing of lsf resolver works' '
 	echo $FLUX_URI >lsf.exp &&
 	SHELL=/bin/sh flux uri --local lsf:$LSB_JOBID >lsf.out &&
 	test_cmp lsf.exp lsf.out

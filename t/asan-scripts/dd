@@ -1,0 +1,4 @@
+#!/bin/sh
+# Wrapper for dd command to run without ASAN
+dir=$(dirname $0)
+$dir/no-asan.sh dd "$@"
