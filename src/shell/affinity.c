@@ -174,6 +174,7 @@ static hwloc_cpuset_t *distribute_tasks (hwloc_topology_t topo,
     if (cores <= 0 || !(roots = calloc (cores, sizeof (*roots)))) {
         shell_log_error ("failed to allocate %d roots for hwloc distrib",
                          cores);
+        free (cpusetp);
         return NULL;
     }
 
