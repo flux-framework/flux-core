@@ -472,6 +472,7 @@ dist_check_SCRIPTS = \
 	issues/t5892-shutdown-no-epilog.sh \
 	issues/t2492-shell-lost.sh \
 	issues/t6773-multiple-dependency-add.sh \
+	issues/t7884-job-info-lookup-unload.sh \
 	python/__init__.py \
 	python/subflux.py \
 	python/tap \
