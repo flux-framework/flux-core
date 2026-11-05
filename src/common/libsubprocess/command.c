@@ -182,7 +182,7 @@ static char *env_entry_name (char *entry, char *dst, size_t len)
         p = entry + strlen (entry) + 1;
 
     /* Refuse to truncate */
-    if (len-1 < p - entry)
+    if (len == 0 || len-1 < p - entry)
         return NULL;
 
     /* strncat(3): safer than strncpy(3), faster than by-hand: */
@@ -231,6 +231,7 @@ static int argz_fromjson (json_t *o, char **argzp, size_t *argz_lenp)
 {
     size_t index;
     json_t *value;
+    int errnum = EPROTO;
 
     assert (*argzp == NULL && *argz_lenp == 0);
     if (!json_is_array (o))
@@ -239,15 +240,17 @@ static int argz_fromjson (json_t *o, char **argzp, size_t *argz_lenp)
     json_array_foreach (o, index, value) {
         if (!json_is_string (value))
             goto fail;
-        if (argz_add (argzp, argz_lenp, json_string_value (value)))
+        if (argz_add (argzp, argz_lenp, json_string_value (value))) {
+            errnum = ENOMEM;
             goto fail;
+        }
     }
     return 0;
 fail:
     free (*argzp);
     *argzp = NULL;
     *argz_lenp = 0;
-    errno = EINVAL;
+    errno = errnum;
     return -1;
 }
 
@@ -286,7 +289,7 @@ static int envz_fromjson (json_t *o, char **envzp, size_t *envz_lenp)
 {
     const char *var;
     json_t *val;
-    int errnum = EINVAL;
+    int errnum = EPROTO;
 
     assert (*envzp == NULL && *envz_lenp == 0);
     if (!json_is_object (o))
@@ -295,8 +298,10 @@ static int envz_fromjson (json_t *o, char **envzp, size_t *envz_lenp)
     json_object_foreach (o, var, val) {
         if (!json_is_string (val))
             goto fail;
-        if (envz_add (envzp, envz_lenp, var, json_string_value (val)))
+        if (envz_add (envzp, envz_lenp, var, json_string_value (val))) {
+            errnum = ENOMEM;
             goto fail;
+        }
     }
     return 0;
 fail:
@@ -472,7 +477,7 @@ static zlist_t *msgchans_fromjson (json_t *o)
     return l;
 inval:
     zlist_destroy (&l);
-    errno = EINVAL;
+    errno = EPROTO;
     return NULL;
 }
 
@@ -892,6 +897,7 @@ flux_cmd_t * flux_cmd_copy (const flux_cmd_t *src)
     return (cmd);
 err:
     flux_cmd_destroy (cmd);
+    errno = ENOMEM;
     return NULL;
 }
 
@@ -1020,6 +1026,7 @@ json_t *cmd_tojson (const flux_cmd_t *cmd)
     return o;
 err:
     json_decref (o);
+    errno = ENOMEM;
     return NULL;
 }
 
