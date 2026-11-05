@@ -251,6 +251,86 @@ test_expect_success 'sched-backfill: cancel priority test jobs' '
 '
 
 #
+# An aborted schedule() pass must not drop jobs from the queue.
+#
+# The base class aborts a pass at a yield when an event arrives during the
+# pass. Setting the DEBUG_ABORT_PASS debug bit aborts the next pass at its
+# first yield, so this does not depend on timing. Here that yield follows
+# a backfill, after the head job is found to be blocked.
+#
+test_expect_success 'sched-backfill: abort: hold 2 cores with a time limit' '
+	flux submit -n2 --time-limit=3600s hostname >ja_hold.id &&
+	flux job wait-event --timeout=5 $(cat ja_hold.id) alloc
+'
+test_expect_success 'sched-backfill: abort: queue a blocked 4-core head job' '
+	flux submit -n4 hostname >ja_head.id &&
+	wait_annotation $(cat ja_head.id) t_estimate "[0-9]"
+'
+test_expect_success 'sched-backfill: abort: abort the pass after a backfill' '
+	flux module debug --setbit 0x10000000 sched-backfill &&
+	flux submit -n1 --time-limit=60s hostname >ja_short.id &&
+	flux job wait-event --timeout=5 $(cat ja_short.id) alloc &&
+	test_wait_until -i 100 \
+	    "test \"\$(flux module debug sched-backfill)\" = 0x0"
+'
+test_expect_success 'sched-backfill: abort: only the head job is still queued' '
+	test $(flux module stats sched-backfill | jq .pending_jobs) -eq 1
+'
+test_expect_success 'sched-backfill: abort: head job runs when resources free' '
+	flux cancel $(cat ja_hold.id) $(cat ja_short.id) &&
+	flux job wait-event --timeout=5 $(cat ja_head.id) alloc
+'
+test_expect_success 'sched-backfill: abort: cancel abort test jobs' '
+	flux cancel $(cat ja_head.id) &&
+	flux job wait-event --timeout=5 $(cat ja_head.id) free &&
+	wait_free
+'
+
+#
+# A cancel that empties the queue must end a pass in progress.
+#
+# Setting the DEBUG_HOLD_PASS debug bit holds a pass at a yield while
+# events are still handled. Here the pass holds after it allocates the
+# first of two jobs, and the second job is canceled, leaving the queue
+# empty. If the pass is not ended, it resumes and allocates the canceled
+# job.
+#
+test_expect_success 'sched-backfill: hold: hold all 4 cores' '
+	flux submit -n4 hostname >jh_hold.id &&
+	flux job wait-event --timeout=5 $(cat jh_hold.id) alloc
+'
+test_expect_success 'sched-backfill: hold: queue two 1-core jobs' '
+	flux submit -n1 hostname >jh_a.id &&
+	flux submit -n1 hostname >jh_z.id &&
+	test_wait_until -i 100 \
+	    "test \$(flux module stats sched-backfill | jq .pending_jobs) -eq 2"
+'
+test_expect_success 'sched-backfill: hold: hold the pass after the first alloc' '
+	flux module debug --setbit 0x20000000 sched-backfill &&
+	flux cancel $(cat jh_hold.id) &&
+	flux job wait-event --timeout=5 $(cat jh_a.id) alloc
+'
+test_expect_success 'sched-backfill: hold: cancel the other job' '
+	flux cancel $(cat jh_z.id) &&
+	flux job wait-event --timeout=5 $(cat jh_z.id) clean
+'
+test_expect_success 'sched-backfill: hold: resume the pass' '
+	flux module debug --clearbit 0x20000000 sched-backfill
+'
+test_expect_success 'sched-backfill: hold: the canceled job was not allocated' '
+	test_must_fail flux job wait-event --timeout=0.1 $(cat jh_z.id) alloc
+'
+test_expect_success 'sched-backfill: hold: the remaining 3 cores can be allocated' '
+	flux submit -n3 hostname >jh_three.id &&
+	flux job wait-event --timeout=5 $(cat jh_three.id) alloc
+'
+test_expect_success 'sched-backfill: hold: cancel hold test jobs' '
+	flux cancel $(cat jh_a.id) $(cat jh_three.id) &&
+	flux job wait-event --timeout=5 $(cat jh_three.id) free &&
+	wait_free
+'
+
+#
 # Stale t_estimate: when a higher-priority job displaces the head, the old
 # head's t_estimate annotation must be cleared.
 #
