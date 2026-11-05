@@ -453,6 +453,9 @@ class Scheduler(BrokerModule):
         computation.
         """
         if not self._queue:
+            # Nothing left to schedule, but a pass in progress may still
+            # reach jobs that were just removed from the queue, so end it.
+            self._abort_schedule()
             return
         now = time.monotonic()
         if self._sched_last_request is not None:
@@ -493,14 +496,18 @@ class Scheduler(BrokerModule):
         # The forecast generator (if any) is intentionally left running: its
         # simulation snapshot was taken at pass start and remains internally
         # consistent, and a slightly stale t_estimate is better than none.
+        self._abort_schedule()
+        if not self._sched_pending:
+            self._sched_pending = True
+            self._sched_timer.reset(after=self._sched_delay)
+
+    def _abort_schedule(self):
+        """Close any in-progress schedule() generator and stop its watchers."""
         if self._sched_generator is not None:
             self._sched_generator.close()
             self._sched_generator = None
             self._sched_idle.stop()
             self._sched_check.stop()
-        if not self._sched_pending:
-            self._sched_pending = True
-            self._sched_timer.reset(after=self._sched_delay)
 
     def _on_sched_timer(self, *_):
         """Timer callback: invoke schedule() and dispatch the result.
