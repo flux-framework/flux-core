@@ -67,6 +67,24 @@ static bool environment_name_ok (const char *name)
     return true;
 }
 
+/* systemd v239 also fails the request if a value contains control
+ * characters other than tab and newline. Newer systemd allows them, but
+ * filter by the stricter rule for consistent behavior. Values are always
+ * valid UTF-8 since they come from JSON.
+ * https://github.com/systemd/systemd/blob/v239/src/basic/env-util.c
+ */
+static bool environment_value_ok (const char *value)
+{
+    if (!value)
+        return false;
+    for (const char *p = value; *p; p++) {
+        unsigned char c = *p;
+        if ((c < ' ' && c != '\t' && c != '\n') || c == 127)
+            return false;
+    }
+    return true;
+}
+
 /* The Environment property is an array of "key=value" strings, which
  * is built up from the env dict received as part of the command.
  */
@@ -79,7 +97,8 @@ static void prop_add_env (struct sdexec_proplist *pl, json_t *dict)
     if ((a = json_array ())) {
         json_object_foreach (dict, k, vo) {
             char *kv = NULL;
-            if (!environment_name_ok (k))
+            if (!environment_name_ok (k)
+                || !environment_value_ok (json_string_value (vo)))
                 continue;
             if (asprintf (&kv, "%s=%s", k, json_string_value (vo)) < 0
                 || json_array_append_new (a, json_string (kv)) < 0) {
