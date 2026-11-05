@@ -67,6 +67,7 @@ Reference:
     12(6):529-543, June 2001.
 """
 
+import bisect
 import heapq
 import time
 
@@ -85,6 +86,7 @@ class BackfillScheduler(Scheduler):
       - :meth:`schedule`   — head-first with backfill for lower-priority jobs
 
     Helper methods (not base-class overrides):
+      - :meth:`_dequeue`          — remove a handled job from the queue
       - :meth:`_try_alloc`        — attempt a real allocation, handling exceptions
       - :meth:`_shadow_time`      — compute head job's reservation time via simulation
       - :meth:`_annotate_pending` — maintain ``t_estimate`` across the queue
@@ -131,6 +133,20 @@ class BackfillScheduler(Scheduler):
     # ------------------------------------------------------------------
     # Scheduling logic
     # ------------------------------------------------------------------
+
+    def _dequeue(self, job):
+        """Remove a job handled by :meth:`_try_alloc` from the queue.
+
+        :meth:`schedule` sorts the queue at the start of a pass, and a
+        sorted list is a valid heap. Removing a job keeps it sorted, so the
+        job is found by bisection and no heapify is needed.
+        """
+        i = bisect.bisect_left(self._queue, job)
+        if i < len(self._queue) and self._queue[i] is job:
+            del self._queue[i]
+        else:
+            self._queue.remove(job)
+            heapq.heapify(self._queue)
 
     def _try_alloc(self, job, backfill=None):
         """Attempt to allocate resources for a job.
@@ -302,56 +318,45 @@ class BackfillScheduler(Scheduler):
         # shadow time is unknown because the running jobs have no known
         # end time: backfill stops behind it, so that a stream of short
         # jobs cannot starve it.
-        # N.B. an allocated job is popped from self._queue before the
-        # yield that follows it.  The yield returns to the reactor, where
-        # an alloc or free callback may push or remove queue entries, so
-        # the queue must be correct at every yield rather than written
-        # back from a snapshot at the end of the pass.
-        setaside = []
+        #
+        # N.B. the base class closes this generator at a yield when a new
+        # event arrives, so the queue must be correct at every yield. Jobs
+        # stay in self._queue until _try_alloc() handles them, and are then
+        # removed before the next yield. The walk is over a snapshot, which
+        # is safe because any event that changes the queue ends the pass.
+        # For the same reason the queue stays sorted for the whole pass.
+        self._queue.sort()
         head = None
         shadow = None
-        while self._queue:
-            job = heapq.heappop(self._queue)
-            if self._try_alloc(job):
-                yield
-                continue
-            shadow, never = self._shadow_time(job)
-            if not never:
+        now = None
+        for job in list(self._queue):
+            if head is None:
+                if self._try_alloc(job):
+                    self._dequeue(job)
+                    yield
+                    continue
+                shadow, never = self._shadow_time(job)
+                if never:
+                    self.log.debug(
+                        f"{JobID(job.jobid).f58}: no resources will free; set aside"
+                    )
+                    continue
                 head = job
-                break
-            self.log.debug(f"{JobID(job.jobid).f58}: no resources will free; set aside")
-            setaside.append(job)
-        # Whatever is left is the backfill candidate set.  As on the
-        # pre-existing path, it is snapshotted here and written back at
-        # the end of the pass.
-        rest = sorted(self._queue)
+                now = time.time()
+                continue
 
-        if head is None:
-            # Every job was allocated or set aside; none holds a reservation.
-            self._queue = setaside
-            heapq.heapify(self._queue)
-            self._annotate_pending(None, None)
-            return
-
-        now = time.time()
-
-        kept = setaside + [head]
-        for job in rest:
             duration = job.resource_request.duration
             # EASY constraint: backfill only if the job finishes before shadow.
             can_backfill = (
                 shadow is not None and duration > 0.0 and now + duration <= shadow
             )
             if can_backfill and self._try_alloc(job, backfill=head.jobid):
+                self._dequeue(job)
                 self.log.debug(
                     f"backfill: {JobID(job.jobid).f58} (shadow={shadow:.0f})"
                 )
-            else:
-                kept.append(job)
             yield
 
-        self._queue = kept
-        heapq.heapify(self._queue)
         self._annotate_pending(head, shadow)
 
 
