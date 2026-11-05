@@ -13,6 +13,7 @@
 #endif
 
 #include <ctype.h>
+#include <stdint.h>
 #include <jansson.h>
 
 #include <flux/core.h>
@@ -694,14 +695,14 @@ int taskmap_nodeid (const struct taskmap *map, int taskid)
 
     block = zlistx_first (map->blocklist);
     while (block) {
-        for (int n = 0; n < block->repeat; n++) {
-            int last = current + block->nnodes * block->ppn - 1;
-            if (taskid <= last) {
-                int distance = taskid - current;
-                return block->start + (distance / block->ppn);
-            }
-            current = last + 1;
-        }
+        /*  current only advances past blocks ending at or before
+         *  taskid, so it cannot overflow.
+         */
+        int64_t size = (int64_t) block->nnodes * block->ppn;
+        int distance = taskid - current;
+        if (distance / size < block->repeat)
+            return block->start + (distance % size) / block->ppn;
+        current += size * block->repeat;
         block = zlistx_next (map->blocklist);
     }
     errno = ENOENT;
@@ -710,10 +711,24 @@ int taskmap_nodeid (const struct taskmap *map, int taskid)
 
 int taskmap_ntasks (const struct taskmap *map, int nodeid)
 {
-    const struct idset *taskids = taskmap_taskids (map, nodeid);
-    if (!taskids)
+    struct taskmap_block *block;
+    int n = 0;
+
+    if (!map || nodeid < 0 || taskmap_unknown (map)) {
+        errno = EINVAL;
         return -1;
-    return idset_count (taskids);
+    }
+    block = zlistx_first (map->blocklist);
+    while (block) {
+        if (nodeid >= block->start && nodeid <= taskmap_block_end (block))
+            n += block->ppn * block->repeat;
+        block = zlistx_next (map->blocklist);
+    }
+    if (n == 0) {
+        errno = ENOENT;
+        return -1;
+    }
+    return n;
 }
 
 int taskmap_nnodes (const struct taskmap *map)
