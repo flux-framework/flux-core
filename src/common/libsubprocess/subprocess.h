@@ -141,6 +141,7 @@ typedef struct {
     flux_subprocess_sigchld_f on_sigchld; /* Process sigchld, ordered
                                            * after RUNNING when
                                            * on_state_change is set     */
+    void        *_pad[5]; // reserved for future use
 } flux_subprocess_ops_t;
 
 /*
