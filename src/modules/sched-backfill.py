@@ -88,6 +88,7 @@ class BackfillScheduler(Scheduler):
     Helper methods (not base-class overrides):
       - :meth:`_dequeue`          — remove a handled job from the queue
       - :meth:`_try_alloc`        — attempt a real allocation, handling exceptions
+      - :meth:`_fits_idle`        — test whether a job fits on an idle cluster
       - :meth:`_shadow_time`      — compute head job's reservation time via simulation
       - :meth:`_annotate_pending` — maintain ``t_estimate`` across the queue
     """
@@ -104,6 +105,10 @@ class BackfillScheduler(Scheduler):
         # several head jobs, which a single slot would thrash.
         self._shadow_cache = {}
         self._shadow_cache_gen = None
+        # Copy of the pool with all jobs freed, used to find jobs that
+        # cannot run until resources return. Built when needed and
+        # discarded with the shadow time cache.
+        self._idle = None
 
     # ------------------------------------------------------------------
     # Scheduler overrides
@@ -214,6 +219,27 @@ class BackfillScheduler(Scheduler):
                 job._last_annotation = value
                 job.request.annotate({"sched": {"t_estimate": value}})
 
+    def _fits_idle(self, job):
+        """Return True if a job fits on the cluster with no jobs running.
+
+        A job that does not fit cannot run until resources return. The
+        idle pool is a copy of the resource pool with all jobs freed. It
+        is built once per pool generation and shared by every job tested
+        in that generation, which is much cheaper than walking the
+        expirations of running jobs for each one.
+        """
+        if self._idle is None:
+            idle = self.resources.copy()
+            for jid, _ in idle.job_end_times():
+                idle.free(jid)
+            self._idle = idle
+        try:
+            self._idle.alloc(job.jobid, job.resource_request)
+        except (InfeasibleRequest, InsufficientResources):
+            return False
+        self._idle.free(job.jobid)
+        return True
+
     def _shadow_time(self, head):
         """Compute the EASY reservation time for the head job via direct simulation.
 
@@ -244,47 +270,43 @@ class BackfillScheduler(Scheduler):
         generation = self.resources.generation
         if generation != self._shadow_cache_gen:
             self._shadow_cache.clear()
+            self._idle = None
             self._shadow_cache_gen = generation
         if head.jobid in self._shadow_cache:
             return self._shadow_cache[head.jobid]
 
-        sim = self.resources.copy()
-        rr = head.resource_request
-        t = 0.0
         shadow = None
-        never = False
-        while True:
-            try:
-                sim.alloc(head.jobid, rr)
-                shadow = max(t, time.time())  # map sim time to wall clock
-                break
-            except InfeasibleRequest:
-                never = True  # cannot be satisfied by this cluster at all
-                break
-            except InsufficientResources:
-                # Not enough resources now; advance to the next expiration.
-                nxt = min(
-                    (e for _, e in sim.job_end_times() if e > t),
-                    default=None,
-                )
-                if nxt is None:
-                    # No expiration left to wait for.  Everything with a
-                    # known end time has already been freed above, so
-                    # freeing the rest leaves an idle cluster: if the job
-                    # still does not fit, nothing will ever make room for
-                    # it.  Otherwise it is only the unknown end times
-                    # that prevent a shadow time being computed.
-                    for jid, _ in sim.job_end_times():
-                        sim.free(jid)
-                    try:
-                        sim.alloc(head.jobid, rr)
-                    except (InfeasibleRequest, InsufficientResources):
-                        never = True
+        # A job that does not fit on an idle cluster has no shadow time,
+        # since no expiration can make room for it. Test that first, so
+        # such a job does not walk every expiration to find out.
+        never = not self._fits_idle(head)
+        if not never:
+            sim = self.resources.copy()
+            rr = head.resource_request
+            t = 0.0
+            while True:
+                try:
+                    sim.alloc(head.jobid, rr)
+                    shadow = max(t, time.time())  # map sim time to wall clock
                     break
-                t = nxt
-                for jid, end_time in sim.job_end_times():
-                    if 0 < end_time <= t:
-                        sim.free(jid)
+                except InfeasibleRequest:
+                    never = True  # cannot be satisfied by this cluster at all
+                    break
+                except InsufficientResources:
+                    # Not enough resources now; advance to the next expiration.
+                    nxt = min(
+                        (e for _, e in sim.job_end_times() if e > t),
+                        default=None,
+                    )
+                    if nxt is None:
+                        # No expiration left to wait for. The job fits on
+                        # an idle cluster, so only the unknown end times of
+                        # running jobs prevent a shadow time being computed.
+                        break
+                    t = nxt
+                    for jid, end_time in sim.job_end_times():
+                        if 0 < end_time <= t:
+                            sim.free(jid)
 
         self._shadow_cache[head.jobid] = (shadow, never)
         return (shadow, never)
@@ -340,6 +362,7 @@ class BackfillScheduler(Scheduler):
                     self.log.debug(
                         f"{JobID(job.jobid).f58}: no resources will free; set aside"
                     )
+                    yield
                     continue
                 head = job
                 now = time.time()
