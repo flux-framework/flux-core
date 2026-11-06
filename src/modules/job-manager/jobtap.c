@@ -2652,9 +2652,11 @@ int flux_jobtap_jobspec_update_pack (flux_plugin_t *p, const char *fmt, ...)
      *  than this update alone. Note that the pending updates are merged
      *  into 'o' rather than the other way around: 'o' is private to this
      *  call, so a rejected update leaves the pending updates untouched,
-     *  and values from 'o' still take precedence.
+     *  and values from 'o' still take precedence. If 'o' is not an
+     *  object, skip the merge so that it is rejected below.
      */
     if (jobtap->jobspec_update
+        && json_is_object (o)
         && json_object_update_missing (o, jobtap->jobspec_update) < 0) {
         errno = ENOMEM;
         goto out;
