@@ -1367,6 +1367,134 @@ void test_issue7494 (void)
     idset_destroy (idset);
 }
 
+/* RFC 22 test vectors.  Keep in sync with the Test Vectors section of
+ * RFC 22.  An empty string is shown here as "".
+ */
+struct rfc22_decode {
+    const char *in;
+    const char *canonical;
+    bool normalized;
+};
+
+static struct rfc22_decode rfc22_decode[] = {
+    { "",               "",             true },
+    { "[]",             "",             true },
+    { "0",              "0",            true },
+    { "[0]",            "0",            true },
+    { "1-2",            "1-2",          true },
+    { "1,2",            "1-2",          true },
+    { "[1-2]",          "1-2",          true },
+    { "[1,2]",          "1-2",          true },
+    { "1-3,5-6,42",     "1-3,5-6,42",   true },
+    { "1,2,3,5,6,42",   "1-3,5-6,42",   true },
+    { "[1-3,5-6,42]",   "1-3,5-6,42",   true },
+    { "[1,2,3,5,6,42]", "1-3,5-6,42",   true },
+    { "1,2-4",          "1-4",          false },
+    { "1-3,4",          "1-4",          false },
+    { "1-2,3-4",        "1-4",          false },
+    { "6,4,2,0",        "0,2,4,6",      false },
+    { "[3,1]",          "1,3",          false },
+    { "2,2,2",          "2",            false },
+    { "0-3,2",          "0-3",          false },
+    { "5,0-1",          "0-1,5",        false },
+};
+
+static const char *rfc22_invalid[] = {
+    "01",
+    "-5",
+    "3-0",
+    "2-2",
+    "1-2-3",
+    "0-",
+    "1,,2",
+    "1,",
+    ",",
+    "[0",
+    "[[0]]",
+    "1 2",
+    "4.2",
+};
+
+/* Return true if 's' is listed as a normalized idset string with
+ * the given canonical idset string.
+ */
+static bool rfc22_is_normalized (const char *s, const char *canonical)
+{
+    for (int i = 0; i < ARRAY_SIZE (rfc22_decode); i++) {
+        if (rfc22_decode[i].normalized
+            && streq (rfc22_decode[i].in, s)
+            && streq (rfc22_decode[i].canonical, canonical))
+            return true;
+    }
+    return false;
+}
+
+void test_rfc22 (void)
+{
+    int flags[] = {
+        0,
+        IDSET_FLAG_RANGE,
+        IDSET_FLAG_BRACKETS,
+        IDSET_FLAG_RANGE | IDSET_FLAG_BRACKETS,
+    };
+
+    for (int i = 0; i < ARRAY_SIZE (rfc22_decode); i++) {
+        struct rfc22_decode *v = &rfc22_decode[i];
+        struct idset *ids;
+        char *s = NULL;
+
+        ids = idset_decode (v->in);
+        ok (ids != NULL
+            && (s = idset_encode (ids, IDSET_FLAG_RANGE)) != NULL
+            && streq (s, v->canonical),
+            "RFC 22: '%s' decodes to canonical '%s'",
+            v->in,
+            v->canonical);
+        free (s);
+        idset_destroy (ids);
+    }
+
+    /* Round trip: the canonical string decodes and re-encodes unchanged,
+     * and every encoding of the idset is a listed normalized string.
+     */
+    for (int i = 0; i < ARRAY_SIZE (rfc22_decode); i++) {
+        struct rfc22_decode *v = &rfc22_decode[i];
+        struct idset *ids;
+        char *s = NULL;
+
+        if (!v->normalized || !streq (v->in, v->canonical))
+            continue;
+        ids = idset_decode (v->canonical);
+        ok (ids != NULL
+            && (s = idset_encode (ids, IDSET_FLAG_RANGE)) != NULL
+            && streq (s, v->canonical),
+            "RFC 22: canonical '%s' round trips",
+            v->canonical);
+        free (s);
+        for (int j = 0; ids && j < ARRAY_SIZE (flags); j++) {
+            s = idset_encode (ids, flags[j]);
+            ok (s != NULL && rfc22_is_normalized (s, v->canonical),
+                "RFC 22: '%s' encoded with flags=0x%x is normalized ('%s')",
+                v->canonical,
+                flags[j],
+                s ? s : "NULL");
+            free (s);
+        }
+        idset_destroy (ids);
+    }
+
+    for (int i = 0; i < ARRAY_SIZE (rfc22_invalid); i++) {
+        struct idset *ids;
+
+        errno = 0;
+        ids = idset_decode (rfc22_invalid[i]);
+        ok (ids == NULL && errno == EINVAL,
+            "RFC 22: '%s' is rejected with EINVAL",
+            rfc22_invalid[i]);
+        idset_destroy (ids);
+    }
+}
+
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
@@ -1401,6 +1529,7 @@ int main (int argc, char *argv[])
     test_decode_info ();
     test_decode_addsub ();
     test_issue7494 ();
+    test_rfc22 ();
 
     done_testing ();
 }
