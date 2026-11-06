@@ -121,6 +121,12 @@ test_expect_success 'sdexec ignores environment containing parens' '
 	test_must_fail grep -q badenv666 badenv.out
 '
 
+# older systemd rejects control characters in values, e.g. a colorized PS1
+test_expect_success 'sdexec ignores environment containing control chars' '
+	T2409_CC="$(printf "\033[0mbadenv777")" \
+		$sdexec -r 0 $printenv >badenv2.out &&
+	test_must_fail grep -q badenv777 badenv2.out
+'
 
 # each entry: "TESTVAR_xxxxx=" (14) + val (1009) + delim (1) = 1024 bytes
 make_exports() {
