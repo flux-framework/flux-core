@@ -19,6 +19,25 @@
 #include "ccan/str/str.h"
 #include "src/common/libutil/errprintf.h"
 
+/*  A non-object update should fail with EINVAL. Call this function with
+ *  and without updates pending, since the two cases take different paths.
+ */
+static int check_nonobject_update (flux_error_t *errp,
+                                   flux_plugin_t *p,
+                                   const char *when)
+{
+    errno = 0;
+    if (flux_jobtap_jobspec_update_pack (p, "[i]", 1) == 0
+        || errno != EINVAL) {
+        errprintf (errp,
+                   "non-object update %s: expected EINVAL, got %s",
+                   when,
+                   errno ? strerror (errno) : "success");
+        return -1;
+    }
+    return 0;
+}
+
 static int get_and_update_jobspec_name (flux_error_t *errp,
                                         flux_plugin_t *p,
                                         flux_plugin_arg_t *args,
@@ -62,6 +81,9 @@ static int get_and_update_jobspec_name (flux_error_t *errp,
         return -1;
     }
 
+    if (check_nonobject_update (errp, p, "with no updates pending") < 0)
+        goto error;
+
     /*  Update job name in jobspec and ensure it doesn't change in this
      *  function.
      */
@@ -80,6 +102,8 @@ static int get_and_update_jobspec_name (flux_error_t *errp,
         errprintf (errp, "unpacked job name failed to match after update");
         goto error;
     }
+    if (check_nonobject_update (errp, p, "with updates pending") < 0)
+        goto error;
     /*  jobspec update with key not starting with attributes. should fail:
      */
     if (flux_jobtap_jobspec_update_pack (p, "{s:s}", "foo.bar", "baz") == 0) {

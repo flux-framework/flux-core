@@ -547,6 +547,7 @@ test_expect_success 'job-manager: plugins can update jobspec' '
 	flux job eventlog -H $jobid &&
 	flux job eventlog $jobid | grep jobspec-update &&
 	flux job eventlog $jobid | grep attributes.system.update-test &&
+	flux dmesg -H | grep "jobspec update must be a JSON object" &&
 	flux job eventlog $jobid | \
 		test_must_fail grep attributes.system.run-update &&
 	test_must_fail flux job wait-event --count=2 -Hv \

@@ -671,6 +671,15 @@ static void test_jobspec_update (void)
 
     json_decref (o);
 
+    if (!(o = json_pack ("[s]", "attributes.system.queue")))
+        BAIL_OUT ("failed to create update");
+
+    ok (validate_jobspec_updates (o, &error) == false,
+        "validate_jobspec_updates fails on non-object update");
+    diag ("%s", error.text);
+
+    json_decref (o);
+
     /*  An update that is nested too deeply must be rejected, even though
      *  all of its keys are valid. See flux-framework/flux-core#7815.
      */
