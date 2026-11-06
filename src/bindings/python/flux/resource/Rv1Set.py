@@ -44,6 +44,45 @@ def _idset_str(ints) -> str:
     return str(IDset(",".join(str(i) for i in ids)))
 
 
+def _parse_slots(slots: Mapping) -> dict:
+    """Parse an RFC 20 R_lite ``slots`` object.
+
+    Returns a dict mapping slot label to
+    ``{"count": int, "cores": frozenset, "gpus": frozenset}``.
+    """
+    result = {}
+    for label, entry in slots.items():
+        count = entry["count"]
+        if not isinstance(count, int) or count <= 0:
+            raise ValueError(f"slots.{label}.count must be an integer > 0")
+        result[label] = {
+            "count": count,
+            "cores": frozenset(IDset(entry.get("core", ""))),
+            "gpus": frozenset(IDset(entry.get("gpu", ""))),
+        }
+    return result
+
+
+def _slots_key(slots: dict) -> tuple:
+    """Return a hashable key for slots parsed by :func:`_parse_slots`."""
+    return tuple(
+        sorted((label, e["count"], e["cores"], e["gpus"]) for label, e in slots.items())
+    )
+
+
+def _encode_slots(key: tuple) -> dict:
+    """Encode slots from :func:`_slots_key` as an RFC 20 object."""
+    result = {}
+    for label, count, cores, gpus in key:
+        obj = {"count": count}
+        if cores:
+            obj["core"] = _idset_str(cores)
+        if gpus:
+            obj["gpu"] = _idset_str(gpus)
+        result[label] = obj
+    return result
+
+
 def _display_idset(ints) -> str:
     """Return a bracketed idset string for human-readable display.
 
@@ -89,7 +128,9 @@ class Rv1Set(ResourceSetImplementation):
 
     version = 1
 
-    def __init__(self, arg=None, keep_scheduling: bool = False):
+    def __init__(
+        self, arg=None, keep_scheduling: bool = False, keep_slots: bool = False
+    ):
         """Construct from an R JSON string, dict, or ``None`` (empty).
 
         Args:
@@ -98,6 +139,10 @@ class Rv1Set(ResourceSetImplementation):
                 so it can be propagated to allocations.  Non-scheduler
                 components should leave this False (the default) to avoid
                 retaining potentially large scheduler-private data.
+            keep_slots: If True, keep RFC 20 task slots in ``R_lite`` so
+                they are encoded again by :meth:`to_dict`.  By default,
+                slots are ignored, since they are advisory to the execution
+                system.  Slots are never kept by set operations or copies.
         """
         self._expiration: float = 0.0
         self._starttime: float = 0.0
@@ -105,6 +150,7 @@ class Rv1Set(ResourceSetImplementation):
         self._ranks: Dict[int, dict] = {}
         self._properties: Dict[str, Set[int]] = {}
         self._scheduling = None
+        self._slots = None
 
         if arg is None:
             return
@@ -141,8 +187,12 @@ class Rv1Set(ResourceSetImplementation):
         # Collect all (rank, cores, gpus) tuples first so we can assign
         # nodelist entries positionally (nodelist[i] = i-th smallest rank).
         rank_info = []
+        slots_by_rank = {}
         for entry in execution.get("R_lite", []):
             rank_ids = IDset(entry["rank"])
+            if keep_slots and "slots" in entry:
+                slots = _parse_slots(entry["slots"])
+                slots_by_rank.update((rank, slots) for rank in rank_ids)
             children = entry.get("children", {})
             cores = (
                 frozenset(IDset(children["core"]))
@@ -166,6 +216,8 @@ class Rv1Set(ResourceSetImplementation):
                 "cores": cores,
                 "gpus": gpus,
             }
+        if slots_by_rank:
+            self._slots = slots_by_rank
 
         self._properties = {
             prop: set(IDset(ids_str))
@@ -456,24 +508,34 @@ class Rv1Set(ResourceSetImplementation):
 
     def _build_dict(self) -> dict:
         """Build the Rv1 R JSON dict from internal state."""
+        # RFC 20: slots must be present in every R_lite entry or none, so
+        # only encode slots if every rank has them.
+        slots = getattr(self, "_slots", None)
+        if slots is not None and not all(rank in slots for rank in self._ranks):
+            slots = None
         by_resources: Dict[tuple, List[int]] = {}
         for rank, info in self._ranks.items():
-            key = (frozenset(info["cores"]), frozenset(info["gpus"]))
+            key = (
+                frozenset(info["cores"]),
+                frozenset(info["gpus"]),
+                _slots_key(slots[rank]) if slots is not None else None,
+            )
             by_resources.setdefault(key, []).append(rank)
 
         R_lite = []
-        for (cores, gpus), ranks in sorted(
+        for (cores, gpus, slots_key), ranks in sorted(
             by_resources.items(), key=lambda item: min(item[1])
         ):
             children: dict = {"core": _idset_str(cores)}
             if gpus:
                 children["gpu"] = _idset_str(gpus)
-            R_lite.append(
-                {
-                    "rank": _idset_str(ranks),
-                    "children": children,
-                }
-            )
+            entry = {
+                "rank": _idset_str(ranks),
+                "children": children,
+            }
+            if slots_key is not None:
+                entry["slots"] = _encode_slots(slots_key)
+            R_lite.append(entry)
 
         execution: dict = {
             "R_lite": R_lite,

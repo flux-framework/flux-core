@@ -11,10 +11,13 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <errno.h>
 #include <jansson.h>
 
+#include "ccan/str/str.h"
+
 #include "jobspec.h"
-#include "rcalc.h"
+#include "slotmap.h"
 
 #include "src/common/libtap/tap.h"
 
@@ -227,17 +230,162 @@ struct input bad_input[] = {
     { NULL, NULL, NULL },
 };
 
+static struct slotmap *slotmap_from_string (const char *s)
+{
+    json_t *R = json_loads (s, 0, NULL);
+    struct slotmap *sm = slotmap_create (R, NULL);
+    json_decref (R);
+    return sm;
+}
+
+/* A jobspec with one task per slot label, as for the labels of RFC 14
+ * "or" slots.
+ */
+static const char *multitask_jobspec =
+    "{\"version\": 1,"
+    " \"resources\": [{\"type\": \"slot\", \"count\": 1, \"label\": \"alpha\","
+    "   \"with\": [{\"type\": \"core\", \"count\": 1}]}],"
+    " \"tasks\": ["
+    "   {\"command\": [\"app_a\"], \"slot\": \"alpha\","
+    "    \"count\": {\"per_slot\": 1}},"
+    "   {\"command\": [\"app_b\"], \"slot\": \"beta\","
+    "    \"count\": {\"per_slot\": 1}}],"
+    " \"attributes\": {\"system\": {\"duration\": 0, \"cwd\": \"/tmp\"}}}";
+
+static const char *multitask_R =
+    "{\"version\": 1, \"execution\": {\"R_lite\":"
+    " [{\"rank\": \"0\", \"children\": {\"core\": \"0\"}}]}}";
+
+static const char *command0 (json_t *command)
+{
+    return json_string_value (json_array_get (command, 0));
+}
+
+/* Return a copy of multitask_jobspec with tasks[1] replaced by `task`.
+ */
+static char *multitask_with (const char *task)
+{
+    json_t *o = json_loads (multitask_jobspec, 0, NULL);
+    json_t *t = json_loads (task, 0, NULL);
+    char *s;
+    if (!o || !t || json_array_set_new (json_object_get (o, "tasks"), 1, t))
+        BAIL_OUT ("failed to create jobspec");
+    s = json_dumps (o, JSON_COMPACT);
+    json_decref (o);
+    return s;
+}
+
+static void test_multitask (void)
+{
+    struct slotmap *sm;
+    struct jobspec *js;
+    json_error_t error;
+    struct {
+        const char *desc;
+        const char *task;
+        const char *command;
+    } other[] = {
+        {
+            "task without slot",
+            "{\"command\": [\"b\"], \"count\": {\"per_slot\": 1}}",
+            "app_a",
+        },
+        {
+            "task with total count",
+            "{\"command\": [\"b\"], \"slot\": \"beta\","
+            " \"count\": {\"total\": 2}}",
+            "b",
+        },
+        {
+            "task with the same slot as the first task",
+            "{\"command\": [\"b\"], \"slot\": \"alpha\","
+            " \"count\": {\"per_slot\": 1}}",
+            "app_a",
+        },
+        { NULL, NULL, NULL },
+    };
+
+    if (!(sm = slotmap_from_string (multitask_R)))
+        BAIL_OUT ("slotmap_create failed");
+    js = jobspec_parse (multitask_jobspec, sm, &error);
+    ok (js != NULL, "multi-task jobspec parses");
+    if (!js)
+        diag ("%s", error.text);
+    else {
+        ok (js->labels != NULL
+            && streq (js->labels[0], "alpha")
+            && streq (js->labels[1], "beta")
+            && js->labels[2] == NULL,
+            "labels are alpha and beta");
+        is (command0 (js->command), "app_a", "default command is tasks[0]");
+        is (command0 (jobspec_task_command (js, NULL)),
+            "app_a",
+            "command for NULL label is tasks[0]");
+        is (command0 (jobspec_task_command (js, "beta")),
+            "app_b",
+            "command for label beta is app_b");
+        is (command0 (jobspec_task_command (js, "alpha")),
+            "app_a",
+            "command for label alpha is app_a");
+        errno = 0;
+        ok (jobspec_task_command (js, "gamma") == NULL && errno == ENOENT,
+            "command for unknown label fails with ENOENT");
+        jobspec_destroy (js);
+    }
+
+    /* Other tasks need not have a slot, a per_slot count, or a distinct
+     * slot. The command for a label is that of the first task bound to it.
+     */
+    for (int i = 0; other[i].desc; i++) {
+        char *s = multitask_with (other[i].task);
+        js = jobspec_parse (s, sm, &error);
+        ok (js != NULL, "multi-task jobspec with %s parses", other[i].desc);
+        if (!js)
+            diag ("%s", error.text);
+        else {
+            is (command0 (jobspec_task_command (js, "beta")
+                          ? jobspec_task_command (js, "beta")
+                          : jobspec_task_command (js, "alpha")),
+                other[i].command,
+                "command for label beta (or alpha) is %s",
+                other[i].command);
+        }
+        jobspec_destroy (js);
+        free (s);
+    }
+
+    /* The command of every task must be an array
+     */
+    {
+        char *s = multitask_with ("{\"command\": \"b\", \"slot\": \"beta\","
+                                  " \"count\": {\"per_slot\": 1}}");
+        js = jobspec_parse (s, sm, &error);
+        ok (js == NULL && streq (error.text, "Malformed command entry"),
+            "multi-task jobspec with malformed command in tasks[1] fails");
+        jobspec_destroy (js);
+        free (s);
+    }
+
+    /* A single task jobspec has no labels if the task has no slot
+     */
+    js = jobspec_parse (good_input[0].j, sm, &error);
+    ok (js != NULL && js->labels != NULL && streq (js->labels[0], "task"),
+        "single task jobspec has its slot label");
+    jobspec_destroy (js);
+    slotmap_destroy (sm);
+}
+
 int main (int argc, char **argv)
 {
     plan (NO_PLAN);
     struct jobspec *js;
     struct output *expect;
-    rcalc_t *rs;
+    struct slotmap *rs;
     json_error_t error;
     int i;
 
     for (i = 0; good_input[i].desc; i++) {
-        rs = rcalc_create (good_input[i].r);
+        rs = slotmap_from_string (good_input[i].r);
         js = jobspec_parse (good_input[i].j, rs, &error);
         ok (js != NULL, "good.%d (%s) works", i, good_input[i].desc);
         if (!js) {
@@ -290,19 +438,21 @@ int main (int argc, char **argv)
             }
             jobspec_destroy (js);
         }
-        rcalc_destroy (rs);
+        slotmap_destroy (rs);
     }
 
     for (i = 0; bad_input[i].desc; i++) {
-        rs = rcalc_create (bad_input[i].r);
+        rs = slotmap_from_string (bad_input[i].r);
         js = jobspec_parse (bad_input[i].j, rs, &error);
         ok (js == NULL, "bad.%d (%s) fails", i, bad_input[i].desc);
         if (!js)
             diag ("%s", error.text);
         else
             jobspec_destroy (js);
-        rcalc_destroy (rs);
+        slotmap_destroy (rs);
     }
+
+    test_multitask ();
 
     done_testing ();
     return 0;

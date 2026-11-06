@@ -16,7 +16,7 @@
 #include "ccan/str/str.h"
 
 #include "jobspec.h"
-#include "rcalc.h"
+#include "slotmap.h"
 
 static void set_error (json_error_t *error, const char *fmt, ...)
 {
@@ -36,6 +36,7 @@ void jobspec_destroy (struct jobspec *job)
         json_decref (job->environment);
         json_decref (job->options);
         json_decref (job->jobspec);
+        free (job->labels);
         free (job);
     }
 }
@@ -168,13 +169,90 @@ static int get_per_resource_option (const struct jobspec *jobspec,
     return 0;
 }
 
+/* Parse the tasks array. The first task provides the default command,
+ * slot label, and task count. Other tasks may bind commands to other
+ * slot labels, e.g. one per label of RFC 14 "or" slots, of which the
+ * scheduler assigns only some. Collect the slot labels of all tasks.
+ */
+static int parse_tasks (struct jobspec *job,
+                        json_t **countp,
+                        json_error_t *error)
+{
+    size_t ntasks = json_array_size (job->tasks);
+    size_t index;
+    json_t *task;
+    int n = 0;
+
+    if (!json_is_array (job->tasks) || ntasks == 0) {
+        set_error (error, "tasks must be a non-empty array");
+        return -1;
+    }
+    if (!(job->labels = calloc (ntasks + 1, sizeof (*job->labels)))) {
+        set_error (error, "Out of memory");
+        return -1;
+    }
+    json_array_foreach (job->tasks, index, task) {
+        json_t *command;
+        json_t *count;
+        const char *label = NULL;
+
+        if (json_unpack_ex (task,
+                            error,
+                            0,
+                            "{s:o s:o s?s}",
+                            "command", &command,
+                            "count", &count,
+                            "slot", &label) < 0)
+            return -1;
+        if (!json_is_array (command)) {
+            set_error (error, "Malformed command entry");
+            return -1;
+        }
+        if (index == 0) {
+            job->command = command;
+            job->slot_label = label;
+            *countp = count;
+        }
+        if (label)
+            job->labels[n++] = label;
+    }
+    if (n == 0) {
+        free (job->labels);
+        job->labels = NULL;
+    }
+    return 0;
+}
+
+json_t *jobspec_task_command (struct jobspec *job, const char *label)
+{
+    size_t index;
+    json_t *task;
+
+    if (!job) {
+        errno = EINVAL;
+        return NULL;
+    }
+    if (!label)
+        return job->command;
+    json_array_foreach (job->tasks, index, task) {
+        const char *slot = NULL;
+        json_t *command = NULL;
+        if (json_unpack (task, "{s:s s:o}", "slot", &slot, "command", &command)
+                == 0
+            && streq (slot, label))
+            return command;
+    }
+    errno = ENOENT;
+    return NULL;
+}
+
 struct jobspec *jobspec_parse (const char *jobspec,
-                               rcalc_t *r,
+                               struct slotmap *sm,
                                json_error_t *error)
 {
     struct jobspec *job;
     json_t *resources;
-    json_t *count;
+    json_t *count = NULL;
     bool is_node_specified;
     const char *type;
 
@@ -198,12 +276,10 @@ struct jobspec *jobspec_parse (const char *jobspec,
     if (json_unpack_ex (job->jobspec,
                         error,
                         0,
-                        "{s:i s:o s:[{s:o s:o}] s:{s?{s?s s?O s?{s?O}}}}",
+                        "{s:i s:o s:o s:{s?{s?s s?O s?{s?O}}}}",
                         "version", &job->version,
                         "resources", &resources,
-                        "tasks",
-                            "command", &job->command,
-                            "count", &count,
+                        "tasks", &job->tasks,
                         "attributes",
                             "system",
                                 "cwd", &job->cwd,
@@ -215,6 +291,8 @@ struct jobspec *jobspec_parse (const char *jobspec,
         set_error (error, "attributes.system.environment is not object type");
         goto error;
     }
+    if (parse_tasks (job, &count, error) < 0)
+        goto error;
     /* Ensure that shell options and environment are never NULL, so a shell
      * component or plugin may set a new option or environment var.
      */
@@ -224,17 +302,17 @@ struct jobspec *jobspec_parse (const char *jobspec,
         goto error;
     }
 
-    if (r != NULL && rcalc_total_slots (r) > 0) {
-        job->slot_count = rcalc_total_slots (r);
-        job->cores_per_slot = rcalc_total_cores (r) / job->slot_count;
-        job->gpus_per_slot = rcalc_total_gpus (r) / job->slot_count;
+    if (sm != NULL && slotmap_total_slots (sm) > 0) {
+        job->slot_count = slotmap_total_slots (sm);
+        job->cores_per_slot = slotmap_total_cores (sm) / job->slot_count;
+        job->gpus_per_slot = slotmap_total_gpus (sm) / job->slot_count;
         /* Check whether nodes were explicitly specified in jobspec
          */
         if (json_unpack_ex (resources, error, 0, "[{s:s}]", "type", &type) < 0) {
             goto error;
         }
         if (streq (type, "node")) {
-            job->node_count = rcalc_total_nodes (r);
+            job->node_count = slotmap_total_nodes (sm);
             job->slots_per_node = job->slot_count / job->node_count;
         }
         else {
@@ -251,15 +329,15 @@ struct jobspec *jobspec_parse (const char *jobspec,
             goto error;
         }
         if (is_node_specified) {
-            job->node_count = rcalc_total_nodes (r);
+            job->node_count = slotmap_total_nodes (sm);
             job->slots_per_node = job->slot_count;
             job->slot_count *= job->node_count;
         } else {
             job->node_count = -1;
             job->slots_per_node = -1;
         }
-        job->cores_per_slot = rcalc_total_cores (r) / job->slot_count;
-        job->gpus_per_slot = rcalc_total_gpus (r) / job->slot_count;
+        job->cores_per_slot = slotmap_total_cores (sm) / job->slot_count;
+        job->gpus_per_slot = slotmap_total_gpus (sm) / job->slot_count;
     }
     /* Set job->node_exclusive
      */
@@ -282,12 +360,7 @@ struct jobspec *jobspec_parse (const char *jobspec,
             goto error;
         }
         job->task_count = job->slot_count;
-    }
-    /* Check command
-     */
-    if (!json_is_array (job->command)) {
-        set_error (error, "Malformed command entry");
-        goto error;
+        job->per_slot = per_slot;
     }
     /* Check for per-resource jobspec section
      */

@@ -86,7 +86,17 @@ Each shell proceeds through the following lifecycle phases:
    (See :man7:`flux-shell-options` for override options)
  * Load user initrc if specified via ``userrc`` option
  * Compute task mapping from jobspec and R (call ``taskmap.SCHEME`` if
-   non-default taskmap selected by user)
+   non-default taskmap selected by user). Tasks are assigned to task
+   slots. If the scheduler assigned RFC 20 task slots in R, those slots
+   are used, limited to slots with the slot labels of the jobspec tasks
+   if any match. Otherwise, slots are created by dividing the cores in R
+   evenly, or per resource if the ``per-resource`` shell option is used.
+   Tasks are then assigned to slots round-robin, nodes with the most
+   slots first.
+ * If the jobspec has multiple tasks, e.g. one per label of "or" slots,
+   each task runs the command of the first jobspec task bound to the
+   label of its slot, or of the first jobspec task if none is. Labels the
+   scheduler did not assign are unused.
  * Call ``shell.init`` plugin callbacks
  * Change working directory to job's cwd
  * Enter initialization barrier (wait for all shells)

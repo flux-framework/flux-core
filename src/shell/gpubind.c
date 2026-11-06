@@ -20,6 +20,8 @@
 #endif
 #include <stdio.h>
 #include <string.h>
+#include <errno.h>
+#include <jansson.h>
 #include <flux/core.h>
 #include <flux/shell.h>
 #include <flux/idset.h>
@@ -33,6 +35,9 @@ struct gpu_affinity {
     int ntasks;
     int ngpus;
     struct idset *gpus;
+    struct idset *rank_gpus;    /* GPU ids from R, before any remap */
+    bool constrained;
+    bool slots;                 /* gpusets are from RFC 20 slots in R */
     hwloc_cpuset_t *gpusets;
 };
 
@@ -41,6 +46,7 @@ static void gpu_affinity_destroy (struct gpu_affinity *ctx)
 {
     if (ctx) {
         idset_destroy (ctx->gpus);
+        idset_destroy (ctx->rank_gpus);
         cpuset_array_destroy (ctx->gpusets, ctx->ntasks);
         free (ctx);
     }
@@ -62,8 +68,9 @@ static struct gpu_affinity *gpu_affinity_create (flux_shell_t *shell)
         shell_log_errno ("flux_shell_rank_info_unpack");
         goto error;
     }
-    if (!(ctx->gpus = idset_decode (gpu_list ? gpu_list : ""))) {
-        shell_log_errno ("idset_encode (%s)", gpu_list);
+    if (!(ctx->gpus = idset_decode (gpu_list ? gpu_list : ""))
+        || !(ctx->rank_gpus = idset_copy (ctx->gpus))) {
+        shell_log_errno ("idset_decode (%s)", gpu_list);
         goto error;
     }
     ctx->ngpus = idset_count (ctx->gpus);
@@ -87,6 +94,7 @@ static struct gpu_affinity *gpu_affinity_create (flux_shell_t *shell)
         if (constrained) {
             struct idset *rel;
 
+            ctx->constrained = true;
             if (!(rel = idset_create (0, IDSET_FLAG_AUTOGROW))) {
                 shell_log_errno ("idset_create");
                 goto error;
@@ -169,6 +177,11 @@ static int gpubind_task_init (flux_plugin_t *p,
     if ((taskid = plugin_task_id (p)) < 0)
         return -1;
 
+    /* A task in a slot with no GPUs keeps CUDA_VISIBLE_DEVICES=-1
+     */
+    if (ctx->slots && hwloc_bitmap_iszero (ctx->gpusets[taskid]))
+        return 0;
+
     /* Need to convert hwloc_cpuset_t to idset since there's no function
      * to convert a hwloc_cpuset_t to a strict comma-separated list of ids:
      */
@@ -183,6 +196,90 @@ static int gpubind_task_init (flux_plugin_t *p,
     free (s);
     idset_destroy (ids);
     return 0;
+}
+
+/*  Return the index of `id` in `ids`, or -1 if `id` is not in `ids`.
+ */
+static int idset_index (const struct idset *ids, unsigned int id)
+{
+    int index = 0;
+    unsigned int i = idset_first (ids);
+    while (i != IDSET_INVALID_ID) {
+        if (i == id)
+            return index;
+        index++;
+        i = idset_next (ids, i);
+    }
+    return -1;
+}
+
+/*  Set the GPUs in `gpuids`, an RFC 22 idset string of GPU ids from R,
+ *   in `gpuset`. Under device containment, set the position of each GPU
+ *   within this rank's GPUs instead, as for the whole rank.
+ */
+static int gpuset_set_slot_gpus (struct gpu_affinity *ctx,
+                                 hwloc_cpuset_t gpuset,
+                                 const char *gpuids)
+{
+    struct idset *ids;
+    unsigned int id;
+    int rc = -1;
+
+    if (!(ids = idset_decode (gpuids))) {
+        shell_log_error ("invalid slot gpus %s", gpuids);
+        return -1;
+    }
+    for (id = idset_first (ids);
+         id != IDSET_INVALID_ID;
+         id = idset_next (ids, id)) {
+        int gpu = id;
+        if (ctx->constrained
+            && (gpu = idset_index (ctx->rank_gpus, id)) < 0) {
+            shell_log_error ("slot gpu %u not allocated to this rank", id);
+            goto out;
+        }
+        hwloc_bitmap_set (gpuset, gpu);
+    }
+    rc = 0;
+out:
+    idset_destroy (ids);
+    return rc;
+}
+
+/*  Return a per-task gpuset array using the GPUs of each task's RFC 20
+ *   slot. Tasks that share a slot share its GPUs.
+ */
+static hwloc_cpuset_t *slot_gpusets (flux_shell_t *shell,
+                                     struct gpu_affinity *ctx)
+{
+    hwloc_cpuset_t *gpusets;
+    flux_shell_task_t *task;
+
+    if (!(gpusets = cpuset_array_create (ctx->ntasks)))
+        return NULL;
+    for (task = flux_shell_task_first (shell);
+         task != NULL;
+         task = flux_shell_task_next (shell)) {
+        int localid;
+        const char *gpuids;
+
+        if (flux_shell_task_info_unpack (task,
+                                         "{s:i s:{s:s}}",
+                                         "localid", &localid,
+                                         "slot",
+                                           "gpus", &gpuids) < 0
+            || localid < 0
+            || localid >= ctx->ntasks) {
+            shell_log_error ("failed to get task slot");
+            goto error;
+        }
+        if (gpuset_set_slot_gpus (ctx, gpusets[localid], gpuids) < 0)
+            goto error;
+    }
+    return gpusets;
+error:
+    cpuset_array_destroy (gpusets, ctx->ntasks);
+    return NULL;
 }
 
 static hwloc_cpuset_t *distribute_gpus (struct gpu_affinity *ctx)
@@ -258,8 +355,16 @@ static int gpubind_init (flux_plugin_t *p,
 
     flux_shell_setenvf (shell, 0, "CUDA_DEVICE_ORDER", "PCI_BUS_ID");
 
+    /*  If gpu-affinity=per-task, then assign each task the GPUs of its
+     *   slot if the scheduler assigned slots in R. Otherwise, divide
+     *   GPUs among tasks.
+     */
     if (streq (opt, "per-task")) {
-        if (!(ctx->gpusets = distribute_gpus (ctx)))
+        if ((ctx->slots = shell_has_slots (shell))) {
+            if (!(ctx->gpusets = slot_gpusets (shell, ctx)))
+                return shell_log_errno ("failed to assign slot gpus");
+        }
+        else if (!(ctx->gpusets = distribute_gpus (ctx)))
             return shell_log_errno ("failed to distribute %d gpus",
                                     ctx->ngpus);
     }
