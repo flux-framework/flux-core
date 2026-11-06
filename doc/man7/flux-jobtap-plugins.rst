@@ -474,6 +474,12 @@ UPDATING JOBS PROGRAMMATICALLY
                                           const char *fmt,
                                           ...);
 
+  int flux_jobtap_jobspec_update (flux_plugin_t *p, const char *update);
+
+  int flux_jobtap_jobspec_update_id (flux_plugin_t *p,
+                                     flux_jobid_t id,
+                                     const char *update);
+
 ``flux_jobtap_jobspec_update_pack()`` updates the jobspec of the current
 job (the job for which the callback was invoked). Arguments follow Jansson
 pack format with period-delimited keys per RFC 21 jobspec-update format.
@@ -486,10 +492,18 @@ outside a callback for the target job. The job must not be the current job
 (use ``flux_jobtap_jobspec_update_pack()`` for that). Returns 0 on success,
 -1 on failure.
 
+``flux_jobtap_jobspec_update()`` and ``flux_jobtap_jobspec_update_id()``
+are the same, except that ``update`` is a JSON string, such as
+``{"attributes.system.queue": "batch"}``. They are useful for language
+bindings and for code that already has the update as a JSON string. Unlike
+the event context above, a NULL ``update`` is an error, since there is no
+such thing as an update with no content.
+
 Restrictions:
 
 - Jobs in RUN, CLEANUP, or INACTIVE state cannot be updated
 - Jobs with readonly eventlogs cannot be updated
+- An update that is not a JSON object is rejected
 - Updates are subject to ``job.validate`` callbacks
 - Use ``job.update.*`` callbacks to allow/deny specific attribute updates
 - An update that nests more than 128 levels deep, or that exceeds 1 MiB
@@ -856,6 +870,38 @@ Track the number of times a job has been through PRIORITY state::
 
       return 0;
   }
+
+POSTING EVENTS
+==============
+
+Plugins can post events to the job eventlog.
+
+::
+
+  int flux_jobtap_event_post_pack (flux_plugin_t *p,
+                                   flux_jobid_t id,
+                                   const char *name,
+                                   const char *fmt,
+                                   ...);
+
+  int flux_jobtap_event_post (flux_plugin_t *p,
+                              flux_jobid_t id,
+                              const char *name,
+                              const char *context);
+
+``flux_jobtap_event_post_pack()`` posts event ``name`` to job ``id``. The
+optional event context is built from Jansson pack format ``fmt`` and its
+arguments. ``flux_jobtap_event_post()`` is the same, except that ``context``
+is a JSON string, such as ``{"reason": "test"}``. The ``id`` parameter
+accepts ``FLUX_JOBTAP_CURRENT_JOB``. Returns 0 on success, -1 on failure.
+
+To post an event with no context, pass NULL for ``fmt`` or ``context``.
+An empty object is equivalent: consumers of the eventlog and journal treat
+a missing context and an empty one the same way.
+
+The event ``name`` may not be empty, may not contain whitespace or ``=``,
+and may be at most 53 characters long. The context must be a JSON object.
+It may not nest more than 128 levels deep or exceed 1 MiB when serialized.
 
 .. _raising_exceptions:
 
