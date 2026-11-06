@@ -64,15 +64,22 @@ struct inout test_inputs[] = {
     { "2,3,4,5",       IDSET_FLAG_RANGE|IDSET_FLAG_BRACKETS, "[2-5]" },
     { "",              IDSET_FLAG_RANGE|IDSET_FLAG_BRACKETS, ""},
 
+    /* elements in any order, possibly overlapping (RFC 22) */
+    { "3,2",           IDSET_FLAG_RANGE, "2-3" },
+    { "2,2,2,2",       IDSET_FLAG_RANGE, "2" },
+    { "6,4,2,0",       IDSET_FLAG_RANGE, "0,2,4,6" },
+    { "[3,1]",         IDSET_FLAG_RANGE, "1,3" },
+    { "0-3,2",         IDSET_FLAG_RANGE, "0-3" },
+    { "5,0-1",         IDSET_FLAG_RANGE, "0-1,5" },
+    { "4-7,0-5",       IDSET_FLAG_RANGE, "0-7" },
+
     /* expected failures */
     { "4.2",            0,          NULL },
     { "x",              0,          NULL },
     { "1-2x",           0,          NULL },
     { "01,2",           0,          NULL },
     { "00",             0,          NULL },
-    { "3,2",            0,          NULL },
     { "3-0",            0,          NULL },
-    { "2,2,2,2",        0,          NULL },
     { "[0",             0,          NULL },
     { "0]",             0,          NULL },
     { "[[0]]",          0,          NULL },
@@ -1128,6 +1135,8 @@ void test_decode_empty (void)
         "idset_decode_empty \"\" returns true");
     ok (idset_decode_empty ("1-4", -1) == false,
         "idset_decode_empty 1-4 returns false");
+    ok (idset_decode_empty ("2147483647,0", -1) == false,
+        "idset_decode_empty 2147483647,0 returns false");
     ok (idset_decode_empty ("[", -1) == false,
         "idset_decode_empty [ returns false");
     ok (idset_decode_empty (NULL, -1) == false,
@@ -1154,6 +1163,16 @@ struct infovec infovec[] = {
     { "1,2", 0, 2, 2 },
     { "1,2-1024", 0, 1024, 1024 },
     { "0-3", 0, 4, 3 },
+    { "3,1", 0, 2, 3 },
+    { "2,2,2", 0, 1, 2 },
+    { "0-3,2", 0, 4, 3 },
+    { "5,0-1", 0, 3, 5 },
+    { "4-7,0-5", 0, 8, 7 },
+    { "6,4,2,0", 0, 4, 6 },
+    { "3-4,0-1", 0, 4, 4 },           // abutting ranges merge
+    { "9,0-2,1-5,3,7-8", 0, 9, 9 },   // nested, chained, abutting
+    { "0-10,2-3,4-5", 0, 11, 10 },    // ranges nested in the first
+    { "2147483647,0", 0, 2, 2147483647 }, // large id space, no idset
 };
 
 
@@ -1217,6 +1236,12 @@ void test_decode_addsub (void)
     ok (idset_decode_subtract (idset, "", -1, &error) == 0
         && idset_count (idset) == 6,
         "idset_decode_subtract \"\"  works");
+    ok (idset_decode_add (idset, "8,1", -1, &error) == 0
+        && idset_count (idset) == 7,
+        "idset_decode_add 8,1 works");
+    ok (idset_decode_subtract (idset, "8,2-3,1", -1, &error) == 0
+        && idset_count (idset) == 3,
+        "idset_decode_subtract 8,2-3,1 works");
     ok (idset_decode_subtract (idset, "0-100", -1, &error) == 0
         && idset_count (idset) == 0,
         "idset_decode_subtract 0-100 works");

@@ -574,7 +574,7 @@ void test_deranged (void)
 struct test_vector raw_tests[] = {
     { "-1",        "error parsing range '-1'" },
     { "1-3;a-b",   "error parsing range 'a-b'" },
-    { "1,1",       "range '1' is out of order" },
+    { "1,,2",      "empty element" },
     { "0-1;1-2",   "duplicate taskid specified: 1" },
     { "5-15;0-10", "duplicate taskids specified: 5-10" },
     { "1",         "missing taskid: 0" },

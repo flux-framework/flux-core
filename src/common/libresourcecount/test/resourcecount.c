@@ -39,6 +39,8 @@ struct inout test_codec_inputs[] = {
     { "1-3,7-9,14,16",  0,          "1,2,3,7,8,9,14,16" },
     { "2,3,4,5",        0,          "2,3,4,5" },
     { "1048576",        0,          "1048576"},
+    { "3,2",            0,          "2,3" },
+    { "2,2,2,2",        0,          "2" },
 
     { "[2]",            0,          "2" },
     { "[7-9]",          0,          "7,8,9" },
@@ -51,6 +53,7 @@ struct inout test_codec_inputs[] = {
     { "1,7-9,14,16",    RESOURCECOUNT_FLAG_SHORT,  "1,7-9,14,16" },
     { "1-3,7-9,14,16",  RESOURCECOUNT_FLAG_SHORT,  "1-3,7-9,14,16" },
     { "2,3,4,5",        RESOURCECOUNT_FLAG_SHORT,  "2-5" },
+    { "5,2-4",          RESOURCECOUNT_FLAG_SHORT,  "2-5" },
 
     { "2",
       RESOURCECOUNT_FLAG_SHORT|RESOURCECOUNT_FLAG_BRACKETS,
@@ -177,9 +180,7 @@ struct inout test_codec_inputs[] = {
     { "1-2x",           0,          NULL },
     { "01,2",           0,          NULL },
     { "00",             0,          NULL },
-    { "3,2",            0,          NULL },
     { "3-0",            0,          NULL },
-    { "2,2,2,2",        0,          NULL },
     { "[0",             0,          NULL },
     { "0]",             0,          NULL },
     { "[[0]]",          0,          NULL },

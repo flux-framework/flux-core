@@ -228,10 +228,15 @@ struct validate_test validate_tests[] = {
       true,
       NULL
     },
-    { "invalid ranks entry fails",
+    { "unordered ranks entry is accepted",
       "{\"ranks\": [\"5,1-3\"]}",
+      true,
+      NULL
+    },
+    { "invalid ranks entry fails",
+      "{\"ranks\": [\"5,1-\"]}",
       false,
-      "invalid idset '5,1-3' in [\"5,1-3\"]",
+      "invalid idset '5,1-' in [\"5,1-\"]",
     },
     { NULL, NULL, 0, NULL }
 };
