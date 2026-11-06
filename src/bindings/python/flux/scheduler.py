@@ -270,6 +270,19 @@ class Scheduler(BrokerModule):
     #: 0.25 converges in roughly 4 samples.
     SCHED_EWMA_ALPHA = 0.25
 
+    #: Module debug bit for testing. When set, a :meth:`schedule` pass is
+    #: aborted at its next yield, as if an event had arrived there, and the
+    #: bit is cleared. Set it with
+    #: ``flux module debug --setbit 0x10000000 <module-name>``. Subclasses
+    #: should use low bits for their own debug flags.
+    DEBUG_ABORT_PASS = 0x10000000
+
+    #: Module debug bit for testing. While it is set, a :meth:`schedule`
+    #: pass that has yielded is not resumed, but events are still handled,
+    #: so a test can make an event arrive at a known yield. Clear the bit
+    #: to resume the pass.
+    DEBUG_HOLD_PASS = 0x20000000
+
     #: If True (the default), send ``partial-ok: True`` in the hello RPC so
     #: that job-manager may report partially-freed ranks for running jobs.
     #: Set to False (or pass ``test-hello-nopartial`` at load time on
@@ -453,6 +466,9 @@ class Scheduler(BrokerModule):
         computation.
         """
         if not self._queue:
+            # Nothing left to schedule, but a pass in progress may still
+            # reach jobs that were just removed from the queue, so end it.
+            self._abort_schedule()
             return
         now = time.monotonic()
         if self._sched_last_request is not None:
@@ -493,14 +509,18 @@ class Scheduler(BrokerModule):
         # The forecast generator (if any) is intentionally left running: its
         # simulation snapshot was taken at pass start and remains internally
         # consistent, and a slightly stale t_estimate is better than none.
+        self._abort_schedule()
+        if not self._sched_pending:
+            self._sched_pending = True
+            self._sched_timer.reset(after=self._sched_delay)
+
+    def _abort_schedule(self):
+        """Close any in-progress schedule() generator and stop its watchers."""
         if self._sched_generator is not None:
             self._sched_generator.close()
             self._sched_generator = None
             self._sched_idle.stop()
             self._sched_check.stop()
-        if not self._sched_pending:
-            self._sched_pending = True
-            self._sched_timer.reset(after=self._sched_delay)
 
     def _on_sched_timer(self, *_):
         """Timer callback: invoke schedule() and dispatch the result.
@@ -530,6 +550,13 @@ class Scheduler(BrokerModule):
 
     def _on_sched_check(self, *_):
         """Check-watcher callback: advance the generator by one yield."""
+        started = (
+            inspect.getgeneratorstate(self._sched_generator) == inspect.GEN_SUSPENDED
+        )
+        if started and self.debug_test(self.DEBUG_HOLD_PASS):
+            # The idle watcher keeps the reactor running, so events are
+            # handled and this check repeats until the bit is cleared.
+            return
         try:
             next(self._sched_generator)
             self._sched_yields += 1
@@ -541,6 +568,11 @@ class Scheduler(BrokerModule):
             # EWMA is not updated for generator-based schedulers: burst-coalescing
             # delay remains 0 and the timer fires on the next reactor iteration.
             self._request_forecast()
+            return
+        if self.debug_test(self.DEBUG_ABORT_PASS, clear=True):
+            # Handle an event at this yield, as the reactor would.
+            self.log.debug("debug: aborting schedule pass")
+            self._request_schedule()
 
     def _update_sched_ewma(self, duration):
         """Update the adaptive scheduling delay from a completed pass duration."""
