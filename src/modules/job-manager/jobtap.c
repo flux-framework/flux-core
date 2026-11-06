@@ -2519,6 +2519,48 @@ int flux_jobtap_get_job_result (flux_plugin_t *p,
     return 0;
 }
 
+/*  Check arguments common to the event post functions and look up the
+ *   target job.
+ */
+static struct job *event_post_lookup (flux_plugin_t *p,
+                                      flux_jobid_t id,
+                                      const char *name,
+                                      struct jobtap **jobtapp)
+{
+    struct jobtap *jobtap;
+
+    if (!p || !name
+        || !(jobtap = flux_plugin_aux_get (p, "flux::jobtap"))) {
+        errno = EINVAL;
+        return NULL;
+    }
+    /*  An event name is written to the job eventlog and is used to key an
+     *  internal hash of event names, so apply the same restrictions used
+     *  for an exception type, plus a length limit.
+     */
+    if (raise_check_type (name) < 0 || strlen (name) > MAX_EVENT_NAME) {
+        errno = EINVAL;
+        return NULL;
+    }
+    *jobtapp = jobtap;
+    return jobtap_lookup_active_jobid (p, id);
+}
+
+/*  Post eventlog 'entry' to 'job'. The entry is built by the caller
+ *  rather than posted directly so that the plugin supplied context can
+ *  be checked against the standard depth and size limits before it is
+ *  added to the eventlog.
+ */
+static int event_post_entry (struct jobtap *jobtap,
+                             struct job *job,
+                             json_t *entry)
+{
+    if (json_check_default_limits (json_object_get (entry, "context"),
+                                   NULL) < 0)
+        return -1;
+    return event_job_post_entry (jobtap->ctx->event, job, 0, entry);
+}
+
 int flux_jobtap_event_post_pack (flux_plugin_t *p,
                                  flux_jobid_t id,
                                  const char *name,
@@ -2531,50 +2573,27 @@ int flux_jobtap_event_post_pack (flux_plugin_t *p,
     struct job *job;
     json_t *entry;
 
-    if (!p || !name
-        || !(jobtap = flux_plugin_aux_get (p, "flux::jobtap"))) {
-        errno = EINVAL;
+    if (!(job = event_post_lookup (p, id, name, &jobtap)))
         return -1;
-    }
-    /*  An event name is written to the job eventlog and is used to key an
-     *  internal hash of event names, so apply the same restrictions used
-     *  for an exception type, plus a length limit.
-     */
-    if (raise_check_type (name) < 0 || strlen (name) > MAX_EVENT_NAME) {
-        errno = EINVAL;
-        return -1;
-    }
-    if (!(job = jobtap_lookup_active_jobid (p, id)))
-        return -1;
-
-    /*  Build the entry here rather than posting directly so that the
-     *  plugin supplied context can be checked against the standard depth
-     *  and size limits before it is added to the eventlog.
-     */
     va_start (ap, fmt);
     entry = eventlog_entry_vpack (0., name, fmt, ap);
     va_end (ap);
     if (!entry)
         return -1;
-    rc = json_check_default_limits (json_object_get (entry, "context"), NULL);
-    if (rc == 0)
-        rc = event_job_post_entry (jobtap->ctx->event, job, 0, entry);
+    rc = event_post_entry (jobtap, job, entry);
     ERRNO_SAFE_WRAP (json_decref, entry);
     return rc;
 }
 
-int flux_jobtap_jobspec_update_id_pack (flux_plugin_t *p,
-                                        flux_jobid_t id,
-                                        const char *fmt,
-                                        ...)
+/*  Check arguments common to the jobspec update functions for a
+ *   specific job and look up the target job.
+ */
+static struct job *jobspec_update_id_lookup (flux_plugin_t *p,
+                                             flux_jobid_t id,
+                                             struct jobtap **jobtapp)
 {
-    int rc = -1;
-    va_list ap;
     struct jobtap *jobtap;
     struct job *job;
-    json_error_t error;
-    flux_error_t errp;
-    json_t *update = NULL;
 
     if (!p
         || !(jobtap = flux_plugin_aux_get (p, "flux::jobtap"))
@@ -2583,7 +2602,7 @@ int flux_jobtap_jobspec_update_id_pack (flux_plugin_t *p,
         || job->state == FLUX_JOB_STATE_CLEANUP
         || job->eventlog_readonly) {
         errno = EINVAL;
-        return -1;
+        return NULL;
     }
 
     /* This interface is only appropriate from outside a jobtap callback,
@@ -2592,9 +2611,50 @@ int flux_jobtap_jobspec_update_id_pack (flux_plugin_t *p,
      */
     if (job == current_job (jobtap)) {
         errno = EINVAL;
+        return NULL;
+    }
+    *jobtapp = jobtap;
+    return job;
+}
+
+/*  Validate 'update' and post it to 'job' in a jobspec-update event.
+ */
+static int jobspec_update_id_post (struct jobtap *jobtap,
+                                   flux_plugin_t *p,
+                                   struct job *job,
+                                   json_t *update)
+{
+    flux_error_t error;
+
+    if (!validate_jobspec_updates (update, &error)) {
+        log_update_rejected (jobtap, p, job, &error);
+        errno = EINVAL;
         return -1;
     }
+    /* XXX: should job.validate be called on these updates before posting?
+     */
+    return event_job_post_pack (jobtap->ctx->event,
+                                job,
+                                "jobspec-update",
+                                0,
+                                "O",
+                                update);
+}
 
+int flux_jobtap_jobspec_update_id_pack (flux_plugin_t *p,
+                                        flux_jobid_t id,
+                                        const char *fmt,
+                                        ...)
+{
+    int rc;
+    va_list ap;
+    struct jobtap *jobtap;
+    struct job *job;
+    json_error_t error;
+    json_t *update;
+
+    if (!(job = jobspec_update_id_lookup (p, id, &jobtap)))
+        return -1;
     va_start (ap, fmt);
     update = json_vpack_ex (&error, 0, fmt, ap);
     va_end (ap);
@@ -2602,34 +2662,19 @@ int flux_jobtap_jobspec_update_id_pack (flux_plugin_t *p,
         errno = EINVAL;
         return -1;
     }
-    if (!validate_jobspec_updates (update, &errp)) {
-        log_update_rejected (jobtap, p, job, &errp);
-        errno = EINVAL;
-        goto out;
-    }
-    /* XXX: should job.validate be called on these updates before posting?
-     */
-    rc = event_job_post_pack (jobtap->ctx->event,
-                              job,
-                              "jobspec-update",
-                              0,
-                              "O",
-                              update);
-out:
+    rc = jobspec_update_id_post (jobtap, p, job, update);
     ERRNO_SAFE_WRAP (json_decref, update);
     return rc;
 }
 
-int flux_jobtap_jobspec_update_pack (flux_plugin_t *p, const char *fmt, ...)
+/*  Check arguments common to the jobspec update functions for the
+ *   current job and return the current job.
+ */
+static struct job *jobspec_update_lookup (flux_plugin_t *p,
+                                          struct jobtap **jobtapp)
 {
-    int rc = -1;
-    int saved_errno;
-    va_list ap;
     struct jobtap *jobtap;
-    struct job * job;
-    json_t *o = NULL;
-    json_error_t error;
-    flux_error_t errp;
+    struct job *job;
 
     if (!p
         || !(jobtap = flux_plugin_aux_get (p, "flux::jobtap"))
@@ -2638,41 +2683,67 @@ int flux_jobtap_jobspec_update_pack (flux_plugin_t *p, const char *fmt, ...)
         || job->state == FLUX_JOB_STATE_CLEANUP
         || job->eventlog_readonly) {
         errno = EINVAL;
-        return -1;
+        return NULL;
     }
-    va_start (ap, fmt);
-    o = json_vpack_ex (&error, 0, fmt, ap);
-    va_end (ap);
-    if (!o) {
-        errno = EINVAL;
-        return -1;
-    }
+    *jobtapp = jobtap;
+    return job;
+}
+
+/*  Add 'update' to the updates pending for the current job. 'update' is
+ *  modified, so it must be private to the caller.
+ */
+static int jobspec_update_add (struct jobtap *jobtap,
+                               flux_plugin_t *p,
+                               struct job *job,
+                               json_t *update)
+{
+    flux_error_t error;
+
     /*  Updates accumulate across calls until they are posted as a single
      *  jobspec-update event, so validate the accumulated result rather
      *  than this update alone. Note that the pending updates are merged
-     *  into 'o' rather than the other way around: 'o' is private to this
-     *  call, so a rejected update leaves the pending updates untouched,
-     *  and values from 'o' still take precedence. If 'o' is not an
-     *  object, skip the merge so that it is rejected below.
+     *  into 'update' rather than the other way around: 'update' is private
+     *  to this call, so a rejected update leaves the pending updates
+     *  untouched, and values from 'update' still take precedence. If
+     *  'update' is not an object, skip the merge so that it is rejected
+     *  below.
      */
     if (jobtap->jobspec_update
-        && json_is_object (o)
-        && json_object_update_missing (o, jobtap->jobspec_update) < 0) {
+        && json_is_object (update)
+        && json_object_update_missing (update, jobtap->jobspec_update) < 0) {
         errno = ENOMEM;
-        goto out;
+        return -1;
     }
-    if (!validate_jobspec_updates (o, &errp)) {
-        log_update_rejected (jobtap, p, job, &errp);
+    if (!validate_jobspec_updates (update, &error)) {
+        log_update_rejected (jobtap, p, job, &error);
         errno = EINVAL;
-        goto out;
+        return -1;
     }
     json_decref (jobtap->jobspec_update);
-    jobtap->jobspec_update = json_incref (o);
-    rc = 0;
-out:
-    saved_errno = errno;
-    json_decref (o);
-    errno = saved_errno;
+    jobtap->jobspec_update = json_incref (update);
+    return 0;
+}
+
+int flux_jobtap_jobspec_update_pack (flux_plugin_t *p, const char *fmt, ...)
+{
+    int rc;
+    va_list ap;
+    struct jobtap *jobtap;
+    struct job *job;
+    json_error_t error;
+    json_t *update;
+
+    if (!(job = jobspec_update_lookup (p, &jobtap)))
+        return -1;
+    va_start (ap, fmt);
+    update = json_vpack_ex (&error, 0, fmt, ap);
+    va_end (ap);
+    if (!update) {
+        errno = EINVAL;
+        return -1;
+    }
+    rc = jobspec_update_add (jobtap, p, job, update);
+    ERRNO_SAFE_WRAP (json_decref, update);
     return rc;
 }
 
