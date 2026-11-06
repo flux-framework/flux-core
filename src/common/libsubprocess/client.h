@@ -73,6 +73,7 @@ bool subprocess_rexec_is_attached (flux_future_t *f,
                                    json_t **cmd);
 bool subprocess_rexec_is_started (flux_future_t *f, pid_t *pid);
 bool subprocess_rexec_is_stopped (flux_future_t *f);
+bool subprocess_rexec_is_continued (flux_future_t *f);
 bool subprocess_rexec_is_finished (flux_future_t *f, int *status);
 bool subprocess_rexec_is_output (flux_future_t *f,
                                  const char **stream,
