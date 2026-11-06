@@ -56,7 +56,8 @@ static const char *errdecode (int errnum)
 }
 
 /* strtoul() with result parameter, assumed base=10.
- * Fail if no digits, leading non-digits, or leading zero.
+ * Fail if no digits, leading non-digits, leading zero,
+ * or greater than IDSET_MAX_UNIVERSE.
  * Returns 0 on success, -1 on failure.
  */
 static int strtoul_check (const char *s, char **endptr, unsigned long *result)
@@ -73,6 +74,8 @@ static int strtoul_check (const char *s, char **endptr, unsigned long *result)
     if (!isdigit (*s))
         return -1;
     if (*s == '0' && ep - s > 1) // leading zero (RFC 22)
+        return -1;
+    if (n >= IDSET_MAX_UNIVERSE)
         return -1;
     *result = n;
     if (endptr)
