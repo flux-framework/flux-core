@@ -193,6 +193,31 @@ static char *trim_brackets (char *s, idset_error_t *error)
     return s;
 }
 
+/* Split the next comma-delimited element off the front of '*s' and return
+ * it, advancing '*s' past the comma.  Set '*s' to NULL after the last
+ * element.  Unlike strtok_r(), do not skip empty elements: RFC 22 does not
+ * allow them, so fail with errno and error set.  An empty string has no
+ * elements, so the caller should not call this function on one.
+ */
+static char *next_element (char **s, idset_error_t *error)
+{
+    char *tok = *s;
+    char *comma;
+
+    if ((comma = strchr (tok, ','))) {
+        *comma = '\0';
+        *s = comma + 1;
+    }
+    else
+        *s = NULL;
+    if (*tok == '\0') {
+        errprintf (error, "empty element");
+        errno = EINVAL;
+        return NULL;
+    }
+    return tok;
+}
+
 static char *dup_input (const char *str, ssize_t len, idset_error_t *error)
 {
     char *cpy;
@@ -224,7 +249,7 @@ static int decode_and_set_with_info (struct idset *idset,
                                      idset_error_t *error)
 {
     char *cpy;
-    char *tok, *saveptr, *a1;
+    char *tok, *a1;
     int saved_errno;
     unsigned int maxid = IDSET_INVALID_ID;
     size_t count = 0;
@@ -233,11 +258,12 @@ static int decode_and_set_with_info (struct idset *idset,
         return -1;
     if (!(a1 = trim_brackets (cpy, error)))
         goto error;
-    saveptr = NULL;
-    while ((tok = strtok_r (a1, ",", &saveptr))) {
-        if (append_element (idset, tok, &count, &maxid, error) < 0)
+    if (*a1 == '\0')
+        a1 = NULL; // no elements: the empty set
+    while (a1) {
+        if (!(tok = next_element (&a1, error))
+            || append_element (idset, tok, &count, &maxid, error) < 0)
             goto error;
-        a1 = NULL;
     }
     free (cpy);
     if (maxid != IDSET_INVALID_ID && maxid >= IDSET_MAX_UNIVERSE) {
@@ -332,7 +358,7 @@ int idset_decode_subtract (struct idset *idset,
                            idset_error_t *error)
 {
     char *cpy;
-    char *tok, *saveptr, *a1;
+    char *tok, *a1;
     int saved_errno;
     unsigned int maxid = IDSET_INVALID_ID;
 
@@ -340,11 +366,12 @@ int idset_decode_subtract (struct idset *idset,
         return -1;
     if (!(a1 = trim_brackets (cpy, error)))
         goto error;
-    saveptr = NULL;
-    while ((tok = strtok_r (a1, ",", &saveptr))) {
-        if (remove_element (idset, tok, &maxid, error) < 0)
+    if (*a1 == '\0')
+        a1 = NULL; // no elements: the empty set
+    while (a1) {
+        if (!(tok = next_element (&a1, error))
+            || remove_element (idset, tok, &maxid, error) < 0)
             goto error;
-        a1 = NULL;
     }
     free (cpy);
     return 0;

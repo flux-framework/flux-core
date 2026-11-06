@@ -86,6 +86,12 @@ struct inout test_inputs[] = {
     { "[-5]",           0,          NULL },
     { "4294967296",     0,          NULL },
     { "1,5294967296",   0,          NULL },
+    { ",",              0,          NULL },
+    { "1,",             0,          NULL },
+    { ",1",             0,          NULL },
+    { "1,,2",           0,          NULL },
+    { "[1,]",           0,          NULL },
+    { "[,]",            0,          NULL },
 
     { NULL, 0, NULL },
 };
@@ -1126,6 +1132,8 @@ void test_decode_empty (void)
         "idset_decode_empty [ returns false");
     ok (idset_decode_empty (NULL, -1) == false,
         "idset_decode_empty NULL returns false");
+    ok (idset_decode_empty (",", -1) == false,
+        "idset_decode_empty , returns false");
 }
 
 struct infovec {
@@ -1140,6 +1148,8 @@ struct infovec infovec[] = {
     { "", 0, 0, IDSET_INVALID_ID },
     { "[", EINVAL, 0, 0 },
     { NULL, EINVAL, 0, 0 },
+    { "1,", EINVAL, 0, 0 },
+    { "1,,2", EINVAL, 0, 0 },
     { "0", 0, 1, 0 },
     { "1,2", 0, 2, 2 },
     { "1,2-1024", 0, 1024, 1024 },
@@ -1226,6 +1236,20 @@ void test_decode_addsub (void)
          && strlen (error.text) > 0,
          "idset_decode_subtract ] fails with errno and error");
     diag ("%s", error.text);
+
+    errno = 0;
+    error.text[0] = '\0';
+    ok  (idset_decode_add (idset, "1,,2", -1, &error) < 0
+         && errno == EINVAL
+         && streq (error.text, "empty element"),
+         "idset_decode_add 1,,2 fails with empty element error");
+
+    errno = 0;
+    error.text[0] = '\0';
+    ok  (idset_decode_subtract (idset, "1,", -1, &error) < 0
+         && errno == EINVAL
+         && streq (error.text, "empty element"),
+         "idset_decode_subtract 1, fails with empty element error");
 
     idset_destroy (idset);
 }
