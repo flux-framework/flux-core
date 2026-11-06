@@ -224,6 +224,17 @@ int flux_jobtap_event_post_pack (flux_plugin_t *p,
                                  const char *fmt,
                                  ...);
 
+/*  Like flux_jobtap_event_post_pack(), but the context is a JSON string.
+ *
+ *  As with 'fmt' above, a NULL 'context' posts the event with no context.
+ *   An empty object is equivalent, since consumers of the eventlog and
+ *   journal treat a missing context and an empty one the same way.
+ */
+int flux_jobtap_event_post (flux_plugin_t *p,
+                            flux_jobid_t id,
+                            const char *name,
+                            const char *context);
+
 /*  Post a request to update jobspec for the current job. Accumulated updates
  *  will be applied once the current callback returns so that the jobspec is
  *  not modified while the plugin may have references to it.
@@ -246,6 +257,17 @@ int flux_jobtap_event_post_pack (flux_plugin_t *p,
  */
 int flux_jobtap_jobspec_update_pack (flux_plugin_t *p, const char *fmt, ...);
 
+/*  Like flux_jobtap_jobspec_update_pack(), but the update is a JSON string,
+ *   e.g.
+ *
+ *      flux_jobtap_jobspec_update (p,
+ *                                  "{\"attributes.system.queue\":\"batch\"}");
+ *
+ *  A NULL 'update' fails with EINVAL, as does a malformed one or one that
+ *   does not decode to a JSON object.
+ */
+int flux_jobtap_jobspec_update (flux_plugin_t *p, const char *update);
+
 /*  Similar to flux_jobtap_jobspec_update_pack(), but asynchronously update
  *  a specific jobid. This version assumes the job is quiescent, so the event
  *  is applied immediately.
@@ -258,6 +280,14 @@ int flux_jobtap_jobspec_update_id_pack (flux_plugin_t *p,
                                         flux_jobid_t id,
                                         const char *fmt,
                                         ...);
+
+/*  Like flux_jobtap_jobspec_update_id_pack(), but the update is a JSON
+ *   string. As with flux_jobtap_jobspec_update(), a NULL, malformed, or
+ *   non-object 'update' fails with EINVAL.
+ */
+int flux_jobtap_jobspec_update_id (flux_plugin_t *p,
+                                   flux_jobid_t id,
+                                   const char *update);
 
 /*  Return a flux_plugin_arg_t object for a job.
  *

@@ -847,6 +847,21 @@ static void log_update_rejected (struct jobtap *jobtap,
               errp->text);
 }
 
+static void log_event_rejected (struct jobtap *jobtap,
+                                flux_plugin_t *p,
+                                struct job *job,
+                                const char *name,
+                                flux_error_t *errp)
+{
+    flux_log (jobtap->ctx->h,
+              LOG_ERR,
+              "jobtap: %s: %s: rejecting %s event: %s",
+              jobtap_plugin_name (p),
+              idf58 (job->id),
+              name,
+              errp->text);
+}
+
 static int jobtap_post_jobspec_updates (struct jobtap *jobtap,
                                         struct job *job)
 {
@@ -2585,6 +2600,84 @@ int flux_jobtap_event_post_pack (flux_plugin_t *p,
     return rc;
 }
 
+/*  Log why eventlog_entry_create() rejected context string 's', which it
+ *  reports only as EINVAL. Called on the error path, so the cost of
+ *  decoding 's' a second time to find the reason does not matter.
+ *
+ *  errno is preserved so that the caller may log the error without
+ *  disturbing the errno it is about to return.
+ */
+static void log_event_context_error (struct jobtap *jobtap,
+                                     flux_plugin_t *p,
+                                     struct job *job,
+                                     const char *name,
+                                     const char *s)
+{
+    int saved_errno = errno;
+    json_t *context;
+    json_error_t jerror;
+    flux_error_t error;
+
+    if (!(context = json_loads (s, 0, &jerror)))
+        errprintf (&error, "%s", jerror.text);
+    else {
+        errprintf (&error, "event context must be a JSON object");
+        json_decref (context);
+    }
+    log_event_rejected (jobtap, p, job, name, &error);
+    errno = saved_errno;
+}
+
+int flux_jobtap_event_post (flux_plugin_t *p,
+                            flux_jobid_t id,
+                            const char *name,
+                            const char *context)
+{
+    int rc;
+    struct jobtap *jobtap;
+    struct job *job;
+    json_t *entry;
+
+    if (!(job = event_post_lookup (p, id, name, &jobtap)))
+        return -1;
+    /*  A NULL 'context' is not an error: the event is posted with no
+     *  context. 'name' was checked above, so EINVAL here means the
+     *  context string could not be decoded or is not an object.
+     */
+    if (!(entry = eventlog_entry_create (0., name, context))) {
+        if (context && errno == EINVAL)
+            log_event_context_error (jobtap, p, job, name, context);
+        return -1;
+    }
+    rc = event_post_entry (jobtap, job, entry);
+    ERRNO_SAFE_WRAP (json_decref, entry);
+    return rc;
+}
+
+/*  Decode jobspec update JSON string 's'. Log the reason for a failure.
+ */
+static json_t *jobspec_update_decode (struct jobtap *jobtap,
+                                      flux_plugin_t *p,
+                                      struct job *job,
+                                      const char *s)
+{
+    json_t *update;
+    json_error_t jerror;
+    flux_error_t error;
+
+    if (!s) {
+        errno = EINVAL;
+        return NULL;
+    }
+    if (!(update = json_loads (s, 0, &jerror))) {
+        errprintf (&error, "%s", jerror.text);
+        log_update_rejected (jobtap, p, job, &error);
+        errno = EINVAL;
+        return NULL;
+    }
+    return update;
+}
+
 /*  Check arguments common to the jobspec update functions for a
  *   specific job and look up the target job.
  */
@@ -2667,6 +2760,23 @@ int flux_jobtap_jobspec_update_id_pack (flux_plugin_t *p,
     return rc;
 }
 
+int flux_jobtap_jobspec_update_id (flux_plugin_t *p,
+                                   flux_jobid_t id,
+                                   const char *update)
+{
+    int rc;
+    struct jobtap *jobtap;
+    struct job *job;
+    json_t *o;
+
+    if (!(job = jobspec_update_id_lookup (p, id, &jobtap))
+        || !(o = jobspec_update_decode (jobtap, p, job, update)))
+        return -1;
+    rc = jobspec_update_id_post (jobtap, p, job, o);
+    ERRNO_SAFE_WRAP (json_decref, o);
+    return rc;
+}
+
 /*  Check arguments common to the jobspec update functions for the
  *   current job and return the current job.
  */
@@ -2744,6 +2854,21 @@ int flux_jobtap_jobspec_update_pack (flux_plugin_t *p, const char *fmt, ...)
     }
     rc = jobspec_update_add (jobtap, p, job, update);
     ERRNO_SAFE_WRAP (json_decref, update);
+    return rc;
+}
+
+int flux_jobtap_jobspec_update (flux_plugin_t *p, const char *update)
+{
+    int rc;
+    struct jobtap *jobtap;
+    struct job *job;
+    json_t *o;
+
+    if (!(job = jobspec_update_lookup (p, &jobtap))
+        || !(o = jobspec_update_decode (jobtap, p, job, update)))
+        return -1;
+    rc = jobspec_update_add (jobtap, p, job, o);
+    ERRNO_SAFE_WRAP (json_decref, o);
     return rc;
 }
 
