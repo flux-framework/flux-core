@@ -6,6 +6,7 @@ noinst_SCRIPTS = \
 	checks_run.sh \
 	cppcheck.sh \
 	docker-deploy.sh \
-	generate-matrix.py
+	generate-matrix.py \
+	shard-tests.sh
 
 EXTRA_DIST = $(noinst_SCRIPTS)
