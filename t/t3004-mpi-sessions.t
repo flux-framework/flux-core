@@ -94,6 +94,12 @@ test_expect_success GROUP_BARRIER 'subset communicator used a group barrier' '
 	grep "cmd=barrier_in group=" trace12.err &&
 	grep "cmd=barrier_out tag=" trace12.err
 '
+test_expect_success GROUP_BARRIER 'even subset sent an ascending rank list' '
+	grep "cmd=barrier_in group=0,2:" trace12.err
+'
+test_expect_success GROUP_BARRIER 'descending subset sent a descending rank list' '
+	grep "cmd=barrier_in group=3,1:" trace12.err
+'
 # On MPICH 4.x a group barrier would mean the version check is wrong.
 test_expect_success !GROUP_BARRIER 'MPICH 4.x client used only 1.1 barriers' '
 	grep "cmd=barrier_in" trace12.err &&
