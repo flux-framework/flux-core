@@ -25,7 +25,7 @@ declare -r prog=${0##*/}
 die() { echo -e "$prog: $@"; exit 1; }
 
 #
-declare -r long_opts="help,quiet,interactive,image:,flux-security-version:,jobs:,no-cache,no-home,distcheck,tag:,build-directory:,install-only,no-poison,recheck,unit-test-only,quick-check,inception,platform:,workdir:,system"
+declare -r long_opts="help,quiet,interactive,image:,flux-security-version:,jobs:,no-cache,no-home,distcheck,tag:,build-directory:,install-only,no-poison,recheck,unit-test-only,quick-check,inception,platform:,workdir:,system,shard:"
 declare -r short_opts="hqIdi:S:j:t:D:Prup:"
 declare usage="
 Usage: $prog [OPTIONS] -- [CONFIGURE_ARGS...]\n\
@@ -50,6 +50,7 @@ Options:\n\
  -d, --distcheck               Run 'make distcheck' instead of 'make check'\n\
  -r, --recheck                 Run 'make recheck' after failure\n\
  -u, --unit-test-only          Only run unit tests\n\
+     --shard=I/N               Only run shard I of N of the tests\n\
      --quick-check             Only run 'make check TESTS=' and one basic test\n\
  -P, --no-poison               Do not install poison libflux and flux(1)\n\
  -D, --build-directory=DIRNAME Name of a subdir to build in, will be made\n\
@@ -95,6 +96,7 @@ while true; do
       --install-only)              INSTALL_ONLY=t;             shift   ;;
       --inception)                 INCEPTION=t;                shift   ;;
       --system)                    SYSTEM=t;                   shift   ;;
+      --shard)                     SHARD="$2";                 shift 2 ;;
       -P|--no-poison)              POISON=0;                   shift   ;;
       -t|--tag)                    TAG="$2";                   shift 2 ;;
       --)                          shift; break;                       ;;
@@ -117,6 +119,7 @@ DOCKER_BUILD="docker build"
 if test "$DISTCHECK" = "t"; then
     test "$RECHECK" = "t" && die "--recheck not allowed with --distcheck"
     test "$SYSTEM" = "t" && die "--system not allowed with --distcheck"
+    test -n "$SHARD" && die "--shard not allowed with --distcheck"
     for arg in "$@"; do
         case $arg in
           --sysconfdir=*|systemdsystemunitdir=*)
@@ -126,6 +129,7 @@ if test "$DISTCHECK" = "t"; then
 fi
 
 if test "$SYSTEM" = "t"; then
+    test -n "$SHARD" && die "--shard not allowed with --system"
     if test "$IMAGE" != "el8"; then
         echo >&2 "Setting image to el8 for system checks build"
     fi
@@ -215,6 +219,7 @@ export DISTCHECK
 export RECHECK
 export UNIT_TEST_ONLY
 export QUICK_CHECK
+export SHARD
 export BUILD_DIR
 export COVERAGE
 export chain_lint
@@ -259,6 +264,7 @@ else
         -e RECHECK \
         -e UNIT_TEST_ONLY \
         -e QUICK_CHECK \
+        -e SHARD \
         -e chain_lint \
         -e JOBS \
         -e USER \
