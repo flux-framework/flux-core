@@ -371,14 +371,18 @@ matrix.add_build(
     command_args="--workdir=/usr/src/" + "workdir/" * 15,
 )
 
-# coverage
-matrix.add_build(
-    name="coverage",
-    image="bookworm",
-    coverage_flags="ci-basic",
-    coverage=True,
-    args="--with-flux-security",
-)
+# coverage, split into shards to reduce wallclock time. Codecov merges
+# the reports, see after_n_builds in codecov.yml.
+COVERAGE_SHARDS = 2
+for i in range(1, COVERAGE_SHARDS + 1):
+    matrix.add_build(
+        name=f"coverage ({i}/{COVERAGE_SHARDS})",
+        image="bookworm",
+        coverage_flags="ci-basic",
+        coverage=True,
+        command_args=f"--shard={i}/{COVERAGE_SHARDS}",
+        args="--with-flux-security",
+    )
 
 # RHEL8 clone
 matrix.add_build(
