@@ -19,6 +19,25 @@
 #include "ccan/str/str.h"
 #include "src/common/libutil/errprintf.h"
 
+/*  A non-object update should fail with EINVAL. Call this function with
+ *  and without updates pending, since the two cases take different paths.
+ */
+static int check_nonobject_update (flux_error_t *errp,
+                                   flux_plugin_t *p,
+                                   const char *when)
+{
+    errno = 0;
+    if (flux_jobtap_jobspec_update_pack (p, "[i]", 1) == 0
+        || errno != EINVAL) {
+        errprintf (errp,
+                   "non-object update %s: expected EINVAL, got %s",
+                   when,
+                   errno ? strerror (errno) : "success");
+        return -1;
+    }
+    return 0;
+}
+
 static int get_and_update_jobspec_name (flux_error_t *errp,
                                         flux_plugin_t *p,
                                         flux_plugin_arg_t *args,
@@ -62,6 +81,9 @@ static int get_and_update_jobspec_name (flux_error_t *errp,
         return -1;
     }
 
+    if (check_nonobject_update (errp, p, "with no updates pending") < 0)
+        goto error;
+
     /*  Update job name in jobspec and ensure it doesn't change in this
      *  function.
      */
@@ -80,11 +102,49 @@ static int get_and_update_jobspec_name (flux_error_t *errp,
         errprintf (errp, "unpacked job name failed to match after update");
         goto error;
     }
+    if (check_nonobject_update (errp, p, "with updates pending") < 0)
+        goto error;
     /*  jobspec update with key not starting with attributes. should fail:
      */
     if (flux_jobtap_jobspec_update_pack (p, "{s:s}", "foo.bar", "baz") == 0) {
         errprintf (errp,
                    "update key not starting with attributes. not rejected");
+        goto error;
+    }
+    /*  NULL, malformed, and non-object JSON string updates should fail
+     *  with EINVAL:
+     */
+    const char *bad_updates[] = { NULL, "{", "[1]" };
+    for (int i = 0; i < 3; i++) {
+        errno = 0;
+        if (flux_jobtap_jobspec_update (p, bad_updates[i]) == 0
+            || errno != EINVAL) {
+            errprintf (errp,
+                       "update '%s': expected EINVAL, got %s",
+                       bad_updates[i] ? bad_updates[i] : "NULL",
+                       errno ? strerror (errno) : "success");
+            goto error;
+        }
+    }
+    /*  flux_jobtap_jobspec_update_id() should fail here for the same
+     *  reason as flux_jobtap_jobspec_update_id_pack():
+     */
+    if (flux_jobtap_jobspec_update_id (p,
+                                       id,
+                                       "{\"attributes.system.foo\":\"bar\"}")
+        == 0) {
+        errprintf (errp,
+                   "flux_jobtap_jobspec_update_id() unexpected success");
+        goto error;
+    }
+    /*  Add a key from a JSON string:
+     */
+    if (flux_jobtap_jobspec_update (p,
+                                    "{\"attributes.system.update-str\":1}")
+        < 0) {
+        errprintf (errp,
+                   "flux_jobtap_jobspec_update: %s",
+                   strerror (errno));
         goto error;
     }
     /*  Add a second key to update in another call:
@@ -230,6 +290,25 @@ static void update_msg_cb (flux_t *h,
     flux_respond (h, msg, NULL);
 }
 
+static void update_str_msg_cb (flux_t *h,
+                               flux_msg_handler_t *mh,
+                               const flux_msg_t *msg,
+                               void *arg)
+{
+    flux_plugin_t *p = arg;
+    flux_jobid_t id;
+    const char *update;
+
+    if (flux_msg_unpack (msg, "{s:I s:s}", "id", &id, "update", &update) < 0
+        || flux_jobtap_jobspec_update_id (p, id, update) < 0) {
+        if (flux_respond_error (h, msg, errno, NULL) < 0)
+            flux_log_error (h, "error responding to update-str request");
+        return;
+    }
+    if (flux_respond (h, msg, NULL) < 0)
+        flux_log_error (h, "error responding to update-str request");
+}
+
 static const struct flux_plugin_handler tab[] = {
     { "job.new", new_cb, NULL },
     { "job.update", update_cb, NULL },
@@ -245,6 +324,12 @@ int flux_plugin_init (flux_plugin_t *p)
     if (flux_plugin_register (p, "jobspec-update", tab) < 0)
         return -1;
     if (flux_jobtap_service_register (p, "update", update_msg_cb, p) < 0)
+        flux_log_error (flux_jobtap_get_flux (p),
+                        "flux_jobtap_service_register");
+    if (flux_jobtap_service_register (p,
+                                      "update-str",
+                                      update_str_msg_cb,
+                                      p) < 0)
         flux_log_error (flux_jobtap_get_flux (p),
                         "flux_jobtap_service_register");
     return 0;

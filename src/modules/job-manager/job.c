@@ -640,6 +640,11 @@ bool validate_jobspec_updates (json_t *updates, flux_error_t *errp)
 {
     const char *key;
     json_t *entry;
+
+    if (!json_is_object (updates)) {
+        errprintf (errp, "jobspec update must be a JSON object");
+        return false;
+    }
     json_object_foreach (updates, key, entry) {
         if (!streq (key, "attributes")
             && !strstarts (key, "attributes.")

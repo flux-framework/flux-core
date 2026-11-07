@@ -262,6 +262,8 @@ check_event_post() {
 	id=$(flux submit \
 	    --setattr system.${state}.post-event=testevent hostname) &&
 	flux job wait-event -vt 20 $id testevent &&
+	flux job wait-event -vt 20 -m test_context=yes $id testevent-str &&
+	flux job wait-event -vt 20 $id testevent-null &&
 	flux job wait-event -t 20 $id clean >/dev/null
 }
 
@@ -270,6 +272,12 @@ for state in validate new depend priority run cleanup; do
         check_event_post ${state}
     "
 done
+
+test_expect_success 'job-manager: event context decode errors are logged' '
+	flux dmesg -H >event-decode.log &&
+	grep "rejecting foo event" event-decode.log &&
+	grep "event context must be a JSON object" event-decode.log
+'
 
 test_expect_success 'job-manager: load test jobtap plugin' '
 	flux jobtap load --remove=all ${PLUGINPATH}/test.so foo.test=1 &&
@@ -547,6 +555,8 @@ test_expect_success 'job-manager: plugins can update jobspec' '
 	flux job eventlog -H $jobid &&
 	flux job eventlog $jobid | grep jobspec-update &&
 	flux job eventlog $jobid | grep attributes.system.update-test &&
+	flux job eventlog $jobid | grep attributes.system.update-str &&
+	flux dmesg -H | grep "jobspec update must be a JSON object" &&
 	flux job eventlog $jobid | \
 		test_must_fail grep attributes.system.run-update &&
 	test_must_fail flux job wait-event --count=2 -Hv \
@@ -568,6 +578,32 @@ test_expect_success 'job-manager: plugin can asynchronously update jobspec' '
 	flux python update-test.py &&
 	flux job wait-event -Hv -t 30 $jobid jobspec-update &&
 	flux jobs $jobid
+'
+test_expect_success 'job-manager: plugin can update jobspec with JSON string' '
+	jobid=$(flux submit -n1 --urgency=hold sleep 0) &&
+	cat <<-EOF >update-str-test.py &&
+	import sys
+	import flux
+	from flux.job import JobID
+	flux.Flux().rpc(
+	    "job-manager.jobspec-update.update-str",
+	    dict(id=JobID(sys.argv[1]), update=sys.argv[2]),
+	).get()
+	EOF
+	flux python update-str-test.py $jobid \
+		"{\"attributes.system.job.name\": \"strtest\"}" &&
+	flux job wait-event -Hv -t 30 \
+		--match-context=attributes.system.job.name=strtest \
+		$jobid jobspec-update &&
+	flux cancel $jobid
+'
+test_expect_success 'job-manager: invalid JSON string update is rejected' '
+	jobid=$(flux submit -n1 --urgency=hold sleep 0) &&
+	test_must_fail flux python update-str-test.py $jobid "{" &&
+	test_must_fail flux python update-str-test.py $jobid "[1]" &&
+	test_must_fail flux python update-str-test.py $jobid \
+		"{\"foo\": 1}" &&
+	flux cancel $jobid
 '
 test_expect_success 'job-manager: plugin fails to load on config.update error' '
 	flux jobtap remove all &&

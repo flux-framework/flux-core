@@ -69,6 +69,11 @@ test_expect_success 'update request with invalid duration type fails' '
               }" \
 	    | ${FLUX_BUILD_DIR}/t/request/rpc job-manager.update 71 # EPROTO
 '
+test_expect_success 'update request with non-object updates fails' '
+	echo "{\"id\": $(flux job id $jobid), \"updates\": [1]}" \
+	    | ${FLUX_BUILD_DIR}/t/request/rpc job-manager.update \
+		22 "must be a JSON object" # EINVAL
+'
 test_expect_success 'update of duration of pending job works' '
 	flux update --wait $jobid duration=1m &&
 	flux job eventlog $jobid \
