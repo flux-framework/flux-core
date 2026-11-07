@@ -8,6 +8,7 @@ import json
 import os
 import re
 import subprocess
+import yaml
 
 docker_run_checks = "src/test/docker/docker-run-checks.sh"
 
@@ -229,6 +230,27 @@ class BuildMatrix:
                     **kwargs,
                 )
 
+    def check_codecov_config(self, path):
+        """
+        Ensure after_n_builds in the codecov config at path equals the
+        number of coverage builds, so codecov reports only after all
+        coverage builds have uploaded.
+        """
+        expected = sum(1 for build in self.matrix if build["coverage"])
+        with open(path) as f:
+            conf = yaml.safe_load(f)
+        found = {
+            "codecov.notify": conf.get("codecov", {})
+            .get("notify", {})
+            .get("after_n_builds"),
+            "comment": conf.get("comment", {}).get("after_n_builds"),
+        }
+        for key, n in found.items():
+            if n != expected:
+                raise SystemExit(
+                    f"{path}: {key}.after_n_builds is {n}, expected {expected}"
+                )
+
     def __str__(self):
         """Return compact JSON representation of matrix"""
         return json.dumps(
@@ -393,5 +415,7 @@ matrix.add_build(
     image="fedora40",
     command_args="--inception",
 )
+
+matrix.check_codecov_config("codecov.yml")
 
 print(matrix)
