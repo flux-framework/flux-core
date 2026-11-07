@@ -13,6 +13,7 @@
 
 #include <stdio.h>
 #include <pthread.h>
+#include <stdbool.h>
 
 #include "src/common/libutil/aux.h"
 #include "src/common/libflux/types.h"
@@ -25,6 +26,8 @@ struct pmi_simple_client {
 
     // valid after client_init()
     int initialized;
+    unsigned int version;       // server's negotiated PMI version
+    unsigned int subversion;    // server's maximum PMI subversion
     unsigned int kvsname_max;
     unsigned int keylen_max;
     unsigned int vallen_max;
@@ -38,6 +41,12 @@ struct pmi_simple_client {
     size_t rbufsize;
     size_t rlen;                // bytes of unread input in rbuf
     pthread_mutex_t lock;       // serializes wire I/O and the fields above
+    struct barrier_out *pending;  // barrier_out responses read for other tags
+    struct barrier_wait *waiting;  // barriers in flight
+    pthread_cond_t cond;  // signaled when pending or reader changes
+    bool reader;  // a barrier waiter is polling the fd
+    bool failed;  // barrier replies can no longer be matched to waiters
+    int wakefd[2];  // pipe that wakes the reader from poll
     struct aux_item *aux;
 };
 
@@ -70,6 +79,27 @@ int pmi_simple_client_aux_set (struct pmi_simple_client *pmi,
 /* Synchronization
  */
 int pmi_simple_client_barrier (struct pmi_simple_client *pmi);
+
+/* PMI-1.2 group barrier (RFC 13).  'group' is "WORLD", "NODE", or a
+ * comma-separated list of ranks.  'tag' is a non-negative integer the
+ * server echoes in the response.  Returns PMI_FAIL if the server did
+ * not offer subversion 2.  PMI_Barrier_group() in pmi.c wraps this.
+ *
+ * Group barriers with distinct tags may be issued concurrently from
+ * multiple threads and interleaved with other operations, including
+ * pmi_simple_client_barrier(), which is sent untagged.  A barrier
+ * entered while another with the same tag (or another whole-job
+ * barrier) is in flight on this client fails with PMI_FAIL.  Once a
+ * barrier fails after it was sent, every later barrier fails too.
+ */
+int pmi_simple_client_barrier_group (struct pmi_simple_client *pmi,
+                                     const char *group,
+                                     int tag);
+
+/* Hash a string tag to the integer wire tag as MPICH does (32-bit
+ * FNV-1a, cast to int, made non-negative).  NULL maps to 0.
+ */
+int pmi_simple_client_barrier_tag (const char *stringtag);
 
 /* KVS operations
  */
