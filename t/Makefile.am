@@ -43,6 +43,12 @@ uninstall-local:
 clean-local:
 	rm -fr trash-directory.* test-results .prove *.broker.log */*.broker.log *.output python/__pycache__
 
+#  Print TESTS one per line, e.g. for src/test/shard-tests.sh
+print-tests:
+	@for t in $(TESTS); do echo $$t; done
+
+.PHONY: print-tests
+
 #  Put long running tests here. They will be included first
 #   in TESTS so that `make check` runs them first, hopefully resulting
 #   in a reduced makespan overall.
