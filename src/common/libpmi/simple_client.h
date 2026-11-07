@@ -12,6 +12,8 @@
 #define _FLUX_CORE_PMI_SIMPLE_CLIENT_H
 
 #include <stdio.h>
+#include <pthread.h>
+
 #include "src/common/libutil/aux.h"
 #include "src/common/libflux/types.h"
 
@@ -28,9 +30,14 @@ struct pmi_simple_client {
     unsigned int vallen_max;
 
     // for internal pmi_simple_client use only
-    char *buf;
+    int fd;
+    FILE *f;                    // write side (stdio); reads use fd directly
+    char *buf;                  // current response line
     int buflen;
-    FILE *f;
+    char *rbuf;                 // raw input buffer for read-ahead
+    size_t rbufsize;
+    size_t rlen;                // bytes of unread input in rbuf
+    pthread_mutex_t lock;       // serializes wire I/O and the fields above
     struct aux_item *aux;
 };
 

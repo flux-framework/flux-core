@@ -201,7 +201,8 @@ flux_libpmi_la_LIBADD = \
 	$(builddir)/libpmi/libpmi_common.la \
 	$(builddir)/libutil/aux.lo \
 	$(builddir)/libutil/fdutils.lo \
-	$(builddir)/libmissing/libmissing.la
+	$(builddir)/libmissing/libmissing.la \
+	$(LIBPTHREAD)
 
 flux_libpmi_la_LDFLAGS = \
 	-export-symbols-regex "^(PMI_|flux_pmi_library|__asan)" \
@@ -218,7 +219,8 @@ flux_libpmi2_la_LIBADD = \
 	$(builddir)/libpmi/libpmi_common.la \
 	$(builddir)/libutil/aux.lo \
 	$(builddir)/libutil/fdutils.lo \
-	$(builddir)/libmissing/libmissing.la
+	$(builddir)/libmissing/libmissing.la \
+	$(LIBPTHREAD)
 flux_libpmi2_la_LDFLAGS = \
 	-export-symbols-regex "^(PMI2_|flux_pmi_library|__asan)" \
 	-version-info 0:0:0 \
