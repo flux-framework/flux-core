@@ -303,7 +303,7 @@ test_expect_success 'flux R parse-config detects invalid idset' '
 	cat <<-EOF >conf/resource.toml &&
 	[[resource.config]]
 	hosts = "foo0"
-	gpus = "2,1"
+	gpus = "1,,2"
 	EOF
 	test_must_fail flux R parse-config conf
 '
