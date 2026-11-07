@@ -22,6 +22,7 @@
 #  INCEPTION     Run tests under a flux instance
 #  chain_lint    Run sharness with --chain-lint if chain_lint=t
 #  SYSTEM        Run only the system sharness tests
+#  SHARD=I/N     Run only shard I of N of the tests (see shard-tests.sh)
 #
 #  And, obviously, some crucial variables that configure itself cares about:
 #
@@ -60,6 +61,29 @@ ARGS="$@"
 JOBS=${JOBS:-2}
 MAKECMDS="${MAKE} -j ${JOBS}"
 CHECKCMDS="${MAKE} -j ${JOBS} ${DISTCHECK:+dist}check"
+
+#  Run the src/ unit tests and shard $SHARD of the sharness tests.
+#  The unit tests are fast, so they run only in shard 1.
+sharded_check() {
+	local tests
+	${MAKE} -j ${JOBS} check TESTS= || return 1
+	if test "${SHARD%/*}" -eq 1; then
+		(cd src && ${MAKE} -j ${JOBS} check) || return 1
+	fi
+	tests=$(make -s --no-print-directory -C t print-tests \
+		| ${WORKDIR}/src/test/shard-tests.sh "$SHARD" | tr '\n' ' ')
+	test -n "$tests" || return 1
+	(cd t && ${MAKE} -j ${JOBS} check TESTS="$tests")
+}
+
+#  Return true if any tests under ./t were run
+t_tests_ran() {
+	local f
+	for f in t/*.trs t/*/*.trs; do
+		test -e "$f" && return 0
+	done
+	return 1
+}
 
 # Add non-standard path for libfaketime to LD_LIBRARY_PATH:
 export LD_LIBRARY_PATH="/usr/lib/x86_64-linux-gnu/faketime"
@@ -140,9 +164,10 @@ if test "$COVERAGE" = "t"; then
 
 	ARGS="$ARGS --enable-code-coverage"
 
-	CHECKCMDS="\
+	COVERAGE_ENV="\
 	export ENABLE_USER_SITE=1 && \
-	export COVERAGE_PROCESS_START=$(pwd)/coverage.rc && \
+	export COVERAGE_PROCESS_START=$(pwd)/coverage.rc"
+	CHECKCMDS="${COVERAGE_ENV} && \
 	${MAKE} -j $JOBS check TESTS= && \
 	(cd src && ${MAKE} -j $JOBS check) && \
 	(cd t && ${MAKE} -j $JOBS check ${SYSTEM:+TESTS=\"$SYSTEM_TESTS\"})"
@@ -167,6 +192,16 @@ elif test "$INCEPTION" = "t"; then
 	CHECKCMDS="make -j ${JOBS} check TESTS= && \
 	           cd t && ../src/cmd/flux start -s1 ./test-inception.sh && \
 	           cd .."
+fi
+
+if test -n "$SHARD"; then
+	for var in DISTCHECK TEST_INSTALL INCEPTION SYSTEM PRELOAD \
+		   UNIT_TEST_ONLY QUICK_CHECK; do
+		test -z "${!var}" || checks_die "SHARD is not supported with $var"
+	done
+	src/test/shard-tests.sh "$SHARD" </dev/null \
+		|| checks_die "invalid SHARD=$SHARD"
+	CHECKCMDS="${COVERAGE_ENV:+$COVERAGE_ENV && }sharded_check"
 fi
 
 if test -n "$PRELOAD" ; then
@@ -246,7 +281,7 @@ if test "$RECHECK" = "t" -a $RC -ne 0; then
   # `make recheck` is not recursive, only perform it if at least some tests
   #   under ./t were run (and presumably failed)
   #
-  if test -s t/t0000-sharness.trs; then
+  if t_tests_ran; then
     printf "::warning::make check failed, trying recheck in ./t\n"
 		(cd t ; checks_group "make recheck" ${MAKE} -j ${JOBS} recheck) && \
 			checks_group "${POSTCHECKCMDS}" "${POSTCHECKCMDS}"
