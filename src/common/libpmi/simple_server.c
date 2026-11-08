@@ -77,6 +77,7 @@
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "ccan/str/str.h"
+#include "src/common/libutil/errno_safe.h"
 
 #include "simple_server.h"
 #include "keyval.h"
@@ -349,6 +350,67 @@ static int client_respond (struct pmi_simple_server *pmi,
     return (0);
 }
 
+/* Handle barrier_in from 'rank'.  The group string is an explicit rank
+ * list whose length is bounded only by the job size, so it is copied to
+ * a buffer sized for the request line rather than to one sized for a KVS
+ * request, which an MPI job spanning a few hundred nodes would overflow.
+ * Returns 0 on success, -1 on failure with errno set (EPROTO if the
+ * request is malformed).
+ */
+static int barrier_in (struct pmi_simple_server *pmi,
+                       const char *buf,
+                       void *client,
+                       int rank)
+{
+    char *groupbuf;
+    const char *group = NULL;
+    struct barrier *b;
+    int rc = -1;
+
+    if (!(groupbuf = malloc (strlen (buf) + 1)))
+        return -1;
+    switch (keyval_parse_word (buf, "group", groupbuf, strlen (buf) + 1)) {
+        case EKV_SUCCESS:
+            group = groupbuf;
+            break;
+        case EKV_NOKEY: // legacy whole-job barrier
+            break;
+        default:
+            goto proto;
+    }
+    if (!(b = zhashx_lookup (pmi->barriers, group ? group : ""))) {
+        if (!(b = barrier_create (pmi, group))) {
+            if (errno == EINVAL)
+                goto proto;
+            goto error;
+        }
+        if (zhashx_insert (pmi->barriers, b->name, b) < 0) {
+            barrier_destroy (b);
+            goto error;
+        }
+    }
+    if (b->members && !idset_test (b->members, rank))
+        goto proto; // rank entered a group it is not a member of
+    if (!zlistx_add_end (b->clients, client))
+        goto error;
+    rc = 0;
+    if (zlistx_size (b->clients) == b->expected) {
+        if (pmi->ops.barrier_enter) {
+            if (pmi->ops.barrier_enter (pmi->arg, group) < 0)
+                rc = barrier_exit (pmi, b, PMI_FAIL);
+        }
+        else
+            rc = barrier_exit (pmi, b, 0);
+    }
+    free (groupbuf);
+    return rc;
+proto:
+    errno = EPROTO;
+error:
+    ERRNO_SAFE_WRAP (free, groupbuf);
+    return -1;
+}
+
 int pmi_simple_server_request (struct pmi_simple_server *pmi,
                                const char *buf,
                                void *client,
@@ -518,35 +580,10 @@ get_respond:
     }
     /* barrier */
     else if (keyval_parse_isword (buf, "cmd", "barrier_in") == 0) {
-        char groupbuf[SIMPLE_MAX_PROTO_LINE];
-        const char *group = NULL;
-        struct barrier *b;
-
-        if (keyval_parse_word (buf, "group", groupbuf, sizeof (groupbuf)) == 0)
-            group = groupbuf;
-        if (!(b = zhashx_lookup (pmi->barriers, group ? group : ""))) {
-            if (!(b = barrier_create (pmi, group))) {
-                if (errno == EINVAL)
-                    goto proto;
-                goto error;
-            }
-            if (zhashx_insert (pmi->barriers, b->name, b) < 0) {
-                barrier_destroy (b);
-                goto error;
-            }
-        }
-        if (b->members && !idset_test (b->members, rank))
-            goto proto; // rank entered a group it is not a member of
-        if (!zlistx_add_end (b->clients, client))
+        if (barrier_in (pmi, buf, client, rank) < 0) {
+            if (errno == EPROTO)
+                goto proto;
             goto error;
-        if (zlistx_size (b->clients) == b->expected) {
-            if (pmi->ops.barrier_enter) {
-                if (pmi->ops.barrier_enter (pmi->arg, group) < 0)
-                    if (barrier_exit (pmi, b, PMI_FAIL) < 0)
-                        rc = -1;
-            } else
-                if (barrier_exit (pmi, b, 0) < 0)
-                    rc = -1;
         }
     }
     /* publish */
