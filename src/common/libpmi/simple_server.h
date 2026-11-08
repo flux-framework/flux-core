@@ -35,6 +35,15 @@ struct pmi_simple_server;
                         + SIMPLE_KVS_NAME_MAX \
                         + SIMPLE_MAX_PROTO_OVERHEAD)
 
+/* Maximum length of a request line.  Every request but barrier_in is
+ * bounded by SIMPLE_MAX_PROTO_LINE, but a PMI-1.2 barrier_in group
+ * string lists one rank per group member, and MPICH uses one member per
+ * node, so this bounds the node count.  1 MiB holds about 128K
+ * seven-digit ranks.  The server itself does not read lines; this is
+ * for whoever buffers them on its behalf.
+ */
+#define SIMPLE_MAX_REQUEST_LINE  (1024 * 1024)
+
 
 /* User-provided service implementation.
  * Integer return: 0 on success, -1 on failure.

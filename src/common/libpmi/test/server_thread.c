@@ -29,12 +29,11 @@
 
 struct pmi_server_context;
 
-/* Request lines are buffered here before being handed to the server.
- * The shell reads them from a 4 MB subprocess channel, so a request may
- * legitimately exceed SIMPLE_MAX_PROTO_LINE, which bounds only the KVS
- * fields.  8K is enough for the long group tested here.
+/* Request lines are buffered here before being handed to the server,
+ * as the shell does with its PMI_FD channel.  A request may exceed
+ * SIMPLE_MAX_PROTO_LINE, which bounds only the KVS fields.
  */
-#define TEST_LINE_MAX 8192
+#define TEST_LINE_MAX SIMPLE_MAX_REQUEST_LINE
 
 // server side context for one client
 struct client {
