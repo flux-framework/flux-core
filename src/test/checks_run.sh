@@ -190,7 +190,7 @@ elif test "$TEST_INSTALL" = "t"; then
 # Run checks as Flux jobs:
 elif test "$INCEPTION" = "t"; then
 	CHECKCMDS="make -j ${JOBS} check TESTS= && \
-	           cd t && ../src/cmd/flux start -s1 ./test-inception.sh && \
+	           cd t && ../src/cmd/flux start -s2 ./test-inception.sh && \
 	           cd .."
 fi
 
