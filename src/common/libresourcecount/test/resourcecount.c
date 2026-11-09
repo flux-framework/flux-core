@@ -90,6 +90,10 @@ struct inout test_codec_inputs[] = {
     { "[2-5:1:+]",      0,                                    "2-5:1:+"},
     { "[2-8:2:*]",      0,                                    "2-8:2:*" },
     { "[25-133:17:+]",  0,                                    "25-133:17:+"},
+    { "1-8:2:^",        0,                                    "1-8:2:^" },
+    { "2-8:2:^",        0,                                    "2-8:2:^" },
+    { "4-4:2:^",        0,                                    "4" },
+    { "2-100:3:^",      0,                                    "2-100:3:^" },
     { "3-3",            RESOURCECOUNT_FLAG_SHORT,                     "3" },
     { "2+",             RESOURCECOUNT_FLAG_SHORT,                     "2+" },
     { "2-5:3",          RESOURCECOUNT_FLAG_SHORT,                     "2-5:3" },
@@ -114,6 +118,9 @@ struct inout test_codec_inputs[] = {
     { "25-133:17:+",
       RESOURCECOUNT_FLAG_SHORT|RESOURCECOUNT_FLAG_BRACKETS,
       "[25-133:17]"},
+    { "1-8:2:^",
+      RESOURCECOUNT_FLAG_SHORT|RESOURCECOUNT_FLAG_BRACKETS,
+      "[1-8:2:^]" },
 
     /* ranges as JSON strings */
     { "{\"min\": 3, \"max\": 3}",                                      0, "3" },
@@ -121,6 +128,7 @@ struct inout test_codec_inputs[] = {
     { "{\"min\": 2, \"max\": 5, \"operand\": 3}",                      0, "2-5:3:+" },
     { "{\"min\": 2, \"max\": 5, \"operand\": 1, \"operator\": \"+\"}", 0, "2-5:1:+" },
     { "{\"min\": 2, \"max\": 8, \"operand\": 2, \"operator\": \"*\"}", 0, "2-8:2:*" },
+    { "{\"min\": 1, \"max\": 16, \"operand\": 2, \"operator\": \"^\"}", 0, "1-16:2:^" },
     { "{\"min\": 25, \"max\": 133, \"operand\": 17, \"operator\": \"+\"}",
       0,
       "25-133:17:+" },
@@ -172,7 +180,8 @@ struct inout test_codec_inputs[] = {
     { "2-8:1;+",        0,          NULL },
     { "2-8:1:*",        0,          NULL },
     { "2-8:1:^",        0,          NULL },
-    { "1-8:2:^",        0,          NULL },
+    { "5-5:2:^",        0,          NULL },
+    { "2-100:400000:^", 0,          NULL },
     { "2-8:1:/",        0,          NULL },
     { "2-8:1:++",       0,          NULL },
     { "4.2",            0,          NULL },
@@ -213,7 +222,7 @@ struct inout test_codec_inputs[] = {
     { "{\"min\": 3, \"max\": 1, \"operand\": 2, \"operator\": \"+\"}",   0, NULL },
     { "{\"min\": 2, \"max\": 16, \"operand\": 1, \"operator\": \"*\"}",  0, NULL },
     { "{\"min\": 2, \"max\": 16, \"operand\": 1, \"operator\": \"^\"}",  0, NULL },
-    { "{\"min\": 1, \"max\": 16, \"operand\": 2, \"operator\": \"^\"}",  0, NULL },
+    { "{\"min\": 5, \"max\": 8, \"operand\": 2, \"operator\": \"^\"}",   0, NULL },
     { "{\"min\": 2, \"max\": 16, \"operand\": 1, \"operator\": \"/\"}",  0, NULL },
     { "{[\"min\": 4, \"max\": 6, \"operand\": 1, \"operator\": \"+\"]}", 0, NULL },
 
@@ -269,12 +278,17 @@ struct inout test_iteration_inputs[] = {
     { "[1]", 0, "1" },
     { "[\"13\"]", 0, "13" },
     { "[\"5,7,13\"]", 0, "5,7,13" },
+    { "[\"5-20:2:^\"]", 0, "9,16" },
+    { "[\"10-100:2:^\"]", 0, "16,25,36,49,64,81,100" },
+    { "[\"9-100:3:^\"]", 0, "27,64" },
     { "[{\"min\": 4, \"max\": 6}]", 0, "4,5,6" },
     { "[{\"min\": 4, \"max\": 6, \"operand\": 1, \"operator\": \"+\"}]", 0, "4,5,6" },
     { "[{\"min\": 1, \"max\": 3, \"operand\": 2}]", 0, "1,3" },
     { "[{\"min\": 1, \"max\": 3, \"operand\": 2, \"operator\": \"+\"}]", 0, "1,3" },
     { "[{\"min\": 2, \"max\": 16, \"operand\": 2, \"operator\": \"*\"}]", 0, "2,4,8,16" },
-    { "[{\"min\": 2, \"max\": 16, \"operand\": 2, \"operator\": \"^\"}]", 0, "2,4,16" },
+    { "[{\"min\": 2, \"max\": 16, \"operand\": 2, \"operator\": \"^\"}]", 0, "4,9,16" },
+    { "[{\"min\": 1, \"max\": 16, \"operand\": 2, \"operator\": \"^\"}]", 0, "1,4,9,16" },
+    { "[{\"min\": 2, \"max\": 100, \"operand\": 3, \"operator\": \"^\"}]", 0, "8,27,64" },
 
     /* expected failures */
     { "[-1]", 0, NULL },
@@ -346,9 +360,11 @@ struct inout_uint test_last_inputs[] = {
     { "1-4294967292:2", 4294967291 },
     { "2-16:2:*", 16 },
     { "2-16:3:*", 6 },
-    { "2-100:2:^", 16 },
-    { "3-100:2:^", 81 },
-    { "2-100:4000000000:^", 2 },
+    { "2-100:2:^", 100 },
+    { "3-100:2:^", 100 },
+    { "2-50:2:^", 49 },
+    { "1-100:3:^", 64 },
+    { "2-4294967293:2:^", 4294836225 },
     { "2+", RESOURCECOUNT_MAX },
     { NULL, 0 },
 };
@@ -395,6 +411,17 @@ void test_bounded_last (void)
         "resourcecount_bounded_last '2-100:2:*', 50 -> 32 works");
     ok (resourcecount_bounded_last (count, 1) == RESOURCECOUNT_INVALID_VALUE,
         "resourcecount_bounded_last '2-100:2:*', 1 -> RESOURCECOUNT_INVALID_VALUE works");
+    resourcecount_destroy (count);
+
+    count = resourcecount_decode ("2-100:2:^");
+    ok (resourcecount_bounded_last (count, 9) == 9,
+        "resourcecount_bounded_last '2-100:2:^', 9 -> 9 works");
+    ok (resourcecount_bounded_last (count, 50) == 49,
+        "resourcecount_bounded_last '2-100:2:^', 50 -> 49 works");
+    ok (resourcecount_bounded_last (count, 200) == 100,
+        "resourcecount_bounded_last '2-100:2:^', 200 -> 100 works");
+    ok (resourcecount_bounded_last (count, 3) == RESOURCECOUNT_INVALID_VALUE,
+        "resourcecount_bounded_last '2-100:2:^', 3 -> RESOURCECOUNT_INVALID_VALUE works");
     resourcecount_destroy (count);
 
     count = resourcecount_decode ("4,9,16");
