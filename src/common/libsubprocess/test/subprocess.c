@@ -1375,7 +1375,14 @@ int main (int argc, char *argv[])
     diag ("sigchld_stopped");
     test_sigchld_stopped (r);
     diag ("sigchld_continued");
+    /* macOS does not send SIGCHLD to the parent when a stopped child is
+     * continued, so the CONTINUED sigchld notification is never generated.
+     */
+#if __APPLE__
+    tap_skip (11, "SIGCONT does not generate SIGCHLD on macOS");
+#else
     test_sigchld_continued (r);
+#endif
     diag ("state_strings");
     test_state_strings ();
     diag ("sigchld_strings");

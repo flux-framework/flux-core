@@ -1248,7 +1248,14 @@ int main (int argc, char *argv[])
     diag ("local_unbuf_multiline_test");
     local_unbuf_multiline_test (h);
     diag ("sigchld_sigstop_test");
+    /* macOS does not send SIGCHLD to the parent when a stopped child is
+     * continued, so the CONTINUED sigchld notification is never generated.
+     */
+#if __APPLE__
+    tap_skip (8, "SIGCONT does not generate SIGCHLD on macOS");
+#else
     sigchld_sigstop_test (h);
+#endif
     diag ("background_test");
     background_waitable_test (h);
     diag ("background_output_test");

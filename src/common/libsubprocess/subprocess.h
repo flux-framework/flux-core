@@ -67,6 +67,10 @@ typedef enum {
  * Likewise, if a subprocess receives a SIGSTOP and a pending
  * FLUX_SUBPROCESS_SIGCHLD_CONTINUED has not yet been reported, the
  * pending FLUX_SUBPROCESS_SIGCHLD_CONTINUED will be discarded.
+ *
+ * FLUX_SUBPROCESS_SIGCHLD_CONTINUED is not supported on macOS.  The
+ * macOS kernel does not send SIGCHLD to the parent when a stopped child
+ * is continued, so the notification is never generated.
  */
 typedef enum {
     FLUX_SUBPROCESS_SIGCHLD_STOPPED = 1, /* SIGSTOP received */
