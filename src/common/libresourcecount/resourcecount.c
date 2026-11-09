@@ -110,11 +110,6 @@ struct resourcecount *resourcecount_create (json_t *json_count,
     // check validity of operator/operand combination
     switch (count->operator) {
         case '^':
-            if (count->min < 2) {
-                set_error (error,
-                           "resourcecount_create: min must be >= 2 for '^' operator");
-                goto error;
-            }
         case '*':
             if (count->operand < 2) {
                 set_error (error,
@@ -135,6 +130,10 @@ struct resourcecount *resourcecount_create (json_t *json_count,
         goto error;
     }
     count->isrange = true;
+    if (resourcecount_first (count) == RESOURCECOUNT_INVALID_VALUE) {
+        set_error (error, "resourcecount_create: range has no valid values");
+        goto error;
+    }
     return count;
 error:
     resourcecount_destroy (count);
@@ -258,9 +257,6 @@ struct resourcecount *resourcecount_decode (const char *s)
     }
     switch (ep[1]) {
         case '^':
-            if (count->min < 2) {
-                goto error_inval;
-            }
         case '*':
             if (count->operand < 2) {
                 goto error_inval;
@@ -270,6 +266,10 @@ struct resourcecount *resourcecount_decode (const char *s)
             break;
         default:
             goto error_inval;
+    }
+    if (resourcecount_first (count) == RESOURCECOUNT_INVALID_VALUE) {
+        // range has no valid values
+        goto error_inval;
     }
     if (ep[2] != '\0') {
         // input continues after operator
@@ -335,6 +335,44 @@ char *resourcecount_encode (const struct resourcecount *count, int flags)
     return str;
 }
 
+/* Return 'base' raised to the power 'exp', or RESOURCECOUNT_INVALID_VALUE
+ * if the result would exceed RESOURCECOUNT_MAX.
+ */
+static unsigned int power (unsigned int base, unsigned int exp)
+{
+    unsigned int result = base;
+
+    if (base == 1) {
+        return 1;
+    }
+    for (unsigned int i = 1; i < exp; ++i) {
+        if (result > RESOURCECOUNT_MAX / base) {
+            result = RESOURCECOUNT_INVALID_VALUE;
+            break;
+        }
+        result *= base;
+    }
+    return result;
+}
+
+/* Return floor (value ** (1/exp)) for value >= 1, exp >= 2.
+ */
+static unsigned int root (unsigned int value, unsigned int exp)
+{
+    unsigned int lo = 1;
+    unsigned int hi = value;
+
+    while (lo < hi) {
+        unsigned int mid = (lo + hi + 1) / 2;
+        if (power (mid, exp) <= value) {
+            lo = mid;
+        } else {
+            hi = mid - 1;
+        }
+    }
+    return lo;
+}
+
 unsigned int resourcecount_first (const struct resourcecount *count)
 {
     unsigned int first = RESOURCECOUNT_INVALID_VALUE;
@@ -343,7 +381,18 @@ unsigned int resourcecount_first (const struct resourcecount *count)
         if (count->integer) {
             first = count->integer;
         } else if (count->isrange) {
-            first = count->min;
+            if (count->operator == '^') {
+                unsigned int base = root (count->min, count->operand);
+                first = power (base, count->operand);
+                if (first < count->min) {
+                    first = power (base + 1, count->operand);
+                    if (first > count->max) {
+                        first = RESOURCECOUNT_INVALID_VALUE;
+                    }
+                }
+            } else {
+                first = count->min;
+            }
         } else if (count->idset) {
             first = idset_first (count->idset);
         }
@@ -365,13 +414,9 @@ unsigned int resourcecount_next (const struct resourcecount *count, unsigned int
                 next = count->max / count->operand < value ? RESOURCECOUNT_INVALID_VALUE
                                                            : value * count->operand;
             } else if (count->operator == '^') {
-                next = value;
-                for (unsigned int i = 1; i < count->operand; ++i) {
-                    if (next > count->max / value) {
-                        next = RESOURCECOUNT_INVALID_VALUE;
-                        break;
-                    }
-                    next *= value;
+                next = power (root (value, count->operand) + 1, count->operand);
+                if (next > count->max) {
+                    next = RESOURCECOUNT_INVALID_VALUE;
                 }
             }
         } else if (count->idset) {
@@ -393,6 +438,11 @@ unsigned int resourcecount_bounded_last (const struct resourcecount *count,
             bound = bound < count->max ? bound : count->max;
             if (count->operator == '+') {
                 last = bound - ((bound - count->min) % count->operand);
+            } else if (count->operator == '^') {
+                last = power (root (bound, count->operand), count->operand);
+                if (last < count->min) {
+                    last = RESOURCECOUNT_INVALID_VALUE;
+                }
             } else {
                 unsigned int tmp = count->min;
                 while (tmp <= bound) {
