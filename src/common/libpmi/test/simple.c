@@ -601,6 +601,47 @@ int main (int argc, char *argv[])
         pmi_server_destroy (srv3);
     }
 
+    /* A long explicit rank list.  The group string grows with the job
+     * (MPICH lists one rank per node), so it is bounded by the request
+     * line rather than by the KVS limits that bound every other field.
+     * The list here is longer than SIMPLE_MAX_PROTO_LINE; both local
+     * members enter and must get barrier_out with the tag, rather than
+     * having the group silently dropped and the legacy barrier run.
+     */
+    char *longgroup;
+    size_t longlen = 0;
+    int cfd4[2];
+    struct pmi_server_context *srv4;
+    int t0 = -1, t1 = -1;
+
+    for (int i = 0; i < 400; i++)
+        longlen += snprintf (NULL, 0, "%d,", i);
+    longgroup = xzmalloc (longlen + 8);
+    for (int i = 0, n = 0; i < 400; i++)
+        n += sprintf (longgroup + n, "%s%d", i > 0 ? "," : "", i);
+    strcat (longgroup, ":7");
+    ok (strlen (longgroup) > SIMPLE_MAX_PROTO_LINE,
+        "long group string of %zu bytes exceeds SIMPLE_MAX_PROTO_LINE",
+        strlen (longgroup));
+    srv4 = pmi_server_create (cfd4, 2);
+    if (!(f0 = fdopen (cfd4[0], "r+")))
+        BAIL_OUT ("fdopen failed");
+    if (!(f1 = fdopen (cfd4[1], "r+")))
+        BAIL_OUT ("fdopen failed");
+    ok (send_barrier_in (f0, longgroup) == 0
+        && send_barrier_in (f1, longgroup) == 0
+        && recv_barrier_out (f0, &t0) == 0
+        && recv_barrier_out (f1, &t1) == 0
+        && t0 == 7
+        && t1 == 7,
+        "barrier_in with a long group string completes with its tag");
+    ok (fake_finalize (f0) == 0 && fake_finalize (f1) == 0,
+        "long group: both members finalized");
+    fclose (f0);
+    fclose (f1);
+    pmi_server_destroy (srv4);
+    free (longgroup);
+
     done_testing ();
     return 0;
 }

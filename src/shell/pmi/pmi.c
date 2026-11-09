@@ -703,6 +703,16 @@ static int shell_pmi_task_init (flux_plugin_t *p,
 
     if (flux_cmd_add_channel (cmd, "PMI_FD") < 0)
         return -1;
+    /* Bound the request line explicitly rather than relying on the
+     * libsubprocess default, which is larger than needed and could
+     * shrink.  The buffer grows on demand, so the bound is free until a
+     * request approaches it.  A longer request is flushed in pieces and
+     * fails as a protocol error.
+     */
+    char bufsize[16];
+    snprintf (bufsize, sizeof (bufsize), "%d", SIMPLE_MAX_REQUEST_LINE);
+    if (flux_cmd_setopt (cmd, "PMI_FD_BUFSIZE", bufsize) < 0)
+        return -1;
     if (flux_cmd_setenvf (cmd, 1, "PMI_RANK", "%d", task->rank) < 0)
         return -1;
     if (flux_cmd_setenvf (cmd, 1, "PMI_SIZE", "%d", task->size) < 0)

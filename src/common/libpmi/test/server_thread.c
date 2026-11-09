@@ -29,12 +29,18 @@
 
 struct pmi_server_context;
 
+/* Request lines are buffered here before being handed to the server,
+ * as the shell does with its PMI_FD channel.  A request may exceed
+ * SIMPLE_MAX_PROTO_LINE, which bounds only the KVS fields.
+ */
+#define TEST_LINE_MAX SIMPLE_MAX_REQUEST_LINE
+
 // server side context for one client
 struct client {
     int sfd;
     int rank;
     cbuf_t cbuf;
-    char buf[SIMPLE_MAX_PROTO_LINE];
+    char buf[TEST_LINE_MAX];
     struct pmi_server_context *ctx;
 };
 
@@ -240,8 +246,7 @@ struct pmi_server_context *pmi_server_create (int *cfd, int size)
         ctx->cli[i].sfd = fd[1];
         ctx->cli[i].rank = i;
         ctx->cli[i].ctx = ctx;
-        if (!(ctx->cli[i].cbuf = cbuf_create (SIMPLE_MAX_PROTO_LINE,
-                                              SIMPLE_MAX_PROTO_LINE))
+        if (!(ctx->cli[i].cbuf = cbuf_create (TEST_LINE_MAX, TEST_LINE_MAX))
             || cbuf_opt_set (ctx->cli[i].cbuf,
                              CBUF_OPT_OVERWRITE,
                              CBUF_NO_DROP) < 0)

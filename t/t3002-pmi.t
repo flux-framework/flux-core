@@ -207,6 +207,26 @@ test_expect_success 'pmi-simple.version=2.0 is rejected' '
 	test_must_fail flux run -n1 -o pmi-simple.version=2.0 true 2>ver20.err &&
 	grep "version must be 1.1 or 1.2" ver20.err
 '
+# An explicit group string grows with the job size, so unlike every other
+# PMI-1 request it may exceed the KVS-derived protocol line limit.  Drive
+# the wire protocol directly since the libpmi client here has no group
+# barrier.  With 400 ranks the request line is about 1.5K.
+test_expect_success 'PMI-1.2 group barrier with a long rank list works' '
+	cat >longgroup.sh <<-EOT &&
+	#!/bin/bash
+	group=\$(seq -s, 0 \$((FLUX_JOB_SIZE-1)))
+	echo "cmd=init pmi_version=1 pmi_subversion=2" >&\$PMI_FD
+	read -u \$PMI_FD line
+	echo "cmd=barrier_in group=\${group}:7" >&\$PMI_FD
+	read -u \$PMI_FD line
+	echo "\$line"
+	echo "cmd=finalize" >&\$PMI_FD
+	read -u \$PMI_FD line
+	EOT
+	chmod +x longgroup.sh &&
+	flux run -t 2m -N1 --tasks-per-node=400 ./longgroup.sh >longgroup.out &&
+	test $(grep -c "cmd=barrier_out tag=7 rc=0" longgroup.out) -eq 400
+'
 test_expect_success 'flux-pmi get PMI_process_mapping works' '
 	flux run --label-io -n2 \
 	    flux pmi get PMI_process_mapping
