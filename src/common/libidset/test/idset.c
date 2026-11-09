@@ -64,15 +64,22 @@ struct inout test_inputs[] = {
     { "2,3,4,5",       IDSET_FLAG_RANGE|IDSET_FLAG_BRACKETS, "[2-5]" },
     { "",              IDSET_FLAG_RANGE|IDSET_FLAG_BRACKETS, ""},
 
+    /* elements in any order, possibly overlapping (RFC 22) */
+    { "3,2",           IDSET_FLAG_RANGE, "2-3" },
+    { "2,2,2,2",       IDSET_FLAG_RANGE, "2" },
+    { "6,4,2,0",       IDSET_FLAG_RANGE, "0,2,4,6" },
+    { "[3,1]",         IDSET_FLAG_RANGE, "1,3" },
+    { "0-3,2",         IDSET_FLAG_RANGE, "0-3" },
+    { "5,0-1",         IDSET_FLAG_RANGE, "0-1,5" },
+    { "4-7,0-5",       IDSET_FLAG_RANGE, "0-7" },
+
     /* expected failures */
     { "4.2",            0,          NULL },
     { "x",              0,          NULL },
     { "1-2x",           0,          NULL },
     { "01,2",           0,          NULL },
     { "00",             0,          NULL },
-    { "3,2",            0,          NULL },
     { "3-0",            0,          NULL },
-    { "2,2,2,2",        0,          NULL },
     { "[0",             0,          NULL },
     { "0]",             0,          NULL },
     { "[[0]]",          0,          NULL },
@@ -86,6 +93,12 @@ struct inout test_inputs[] = {
     { "[-5]",           0,          NULL },
     { "4294967296",     0,          NULL },
     { "1,5294967296",   0,          NULL },
+    { ",",              0,          NULL },
+    { "1,",             0,          NULL },
+    { ",1",             0,          NULL },
+    { "1,,2",           0,          NULL },
+    { "[1,]",           0,          NULL },
+    { "[,]",            0,          NULL },
 
     { NULL, 0, NULL },
 };
@@ -1122,10 +1135,14 @@ void test_decode_empty (void)
         "idset_decode_empty \"\" returns true");
     ok (idset_decode_empty ("1-4", -1) == false,
         "idset_decode_empty 1-4 returns false");
+    ok (idset_decode_empty ("2147483647,0", -1) == false,
+        "idset_decode_empty 2147483647,0 returns false");
     ok (idset_decode_empty ("[", -1) == false,
         "idset_decode_empty [ returns false");
     ok (idset_decode_empty (NULL, -1) == false,
         "idset_decode_empty NULL returns false");
+    ok (idset_decode_empty (",", -1) == false,
+        "idset_decode_empty , returns false");
 }
 
 struct infovec {
@@ -1140,10 +1157,22 @@ struct infovec infovec[] = {
     { "", 0, 0, IDSET_INVALID_ID },
     { "[", EINVAL, 0, 0 },
     { NULL, EINVAL, 0, 0 },
+    { "1,", EINVAL, 0, 0 },
+    { "1,,2", EINVAL, 0, 0 },
     { "0", 0, 1, 0 },
     { "1,2", 0, 2, 2 },
     { "1,2-1024", 0, 1024, 1024 },
     { "0-3", 0, 4, 3 },
+    { "3,1", 0, 2, 3 },
+    { "2,2,2", 0, 1, 2 },
+    { "0-3,2", 0, 4, 3 },
+    { "5,0-1", 0, 3, 5 },
+    { "4-7,0-5", 0, 8, 7 },
+    { "6,4,2,0", 0, 4, 6 },
+    { "3-4,0-1", 0, 4, 4 },           // abutting ranges merge
+    { "9,0-2,1-5,3,7-8", 0, 9, 9 },   // nested, chained, abutting
+    { "0-10,2-3,4-5", 0, 11, 10 },    // ranges nested in the first
+    { "2147483647,0", 0, 2, 2147483647 }, // large id space, no idset
 };
 
 
@@ -1207,6 +1236,12 @@ void test_decode_addsub (void)
     ok (idset_decode_subtract (idset, "", -1, &error) == 0
         && idset_count (idset) == 6,
         "idset_decode_subtract \"\"  works");
+    ok (idset_decode_add (idset, "8,1", -1, &error) == 0
+        && idset_count (idset) == 7,
+        "idset_decode_add 8,1 works");
+    ok (idset_decode_subtract (idset, "8,2-3,1", -1, &error) == 0
+        && idset_count (idset) == 3,
+        "idset_decode_subtract 8,2-3,1 works");
     ok (idset_decode_subtract (idset, "0-100", -1, &error) == 0
         && idset_count (idset) == 0,
         "idset_decode_subtract 0-100 works");
@@ -1226,6 +1261,20 @@ void test_decode_addsub (void)
          && strlen (error.text) > 0,
          "idset_decode_subtract ] fails with errno and error");
     diag ("%s", error.text);
+
+    errno = 0;
+    error.text[0] = '\0';
+    ok  (idset_decode_add (idset, "1,,2", -1, &error) < 0
+         && errno == EINVAL
+         && streq (error.text, "empty element"),
+         "idset_decode_add 1,,2 fails with empty element error");
+
+    errno = 0;
+    error.text[0] = '\0';
+    ok  (idset_decode_subtract (idset, "1,", -1, &error) < 0
+         && errno == EINVAL
+         && streq (error.text, "empty element"),
+         "idset_decode_subtract 1, fails with empty element error");
 
     idset_destroy (idset);
 }
@@ -1318,6 +1367,134 @@ void test_issue7494 (void)
     idset_destroy (idset);
 }
 
+/* RFC 22 test vectors.  Keep in sync with the Test Vectors section of
+ * RFC 22.  An empty string is shown here as "".
+ */
+struct rfc22_decode {
+    const char *in;
+    const char *canonical;
+    bool normalized;
+};
+
+static struct rfc22_decode rfc22_decode[] = {
+    { "",               "",             true },
+    { "[]",             "",             true },
+    { "0",              "0",            true },
+    { "[0]",            "0",            true },
+    { "1-2",            "1-2",          true },
+    { "1,2",            "1-2",          true },
+    { "[1-2]",          "1-2",          true },
+    { "[1,2]",          "1-2",          true },
+    { "1-3,5-6,42",     "1-3,5-6,42",   true },
+    { "1,2,3,5,6,42",   "1-3,5-6,42",   true },
+    { "[1-3,5-6,42]",   "1-3,5-6,42",   true },
+    { "[1,2,3,5,6,42]", "1-3,5-6,42",   true },
+    { "1,2-4",          "1-4",          false },
+    { "1-3,4",          "1-4",          false },
+    { "1-2,3-4",        "1-4",          false },
+    { "6,4,2,0",        "0,2,4,6",      false },
+    { "[3,1]",          "1,3",          false },
+    { "2,2,2",          "2",            false },
+    { "0-3,2",          "0-3",          false },
+    { "5,0-1",          "0-1,5",        false },
+};
+
+static const char *rfc22_invalid[] = {
+    "01",
+    "-5",
+    "3-0",
+    "2-2",
+    "1-2-3",
+    "0-",
+    "1,,2",
+    "1,",
+    ",",
+    "[0",
+    "[[0]]",
+    "1 2",
+    "4.2",
+};
+
+/* Return true if 's' is listed as a normalized idset string with
+ * the given canonical idset string.
+ */
+static bool rfc22_is_normalized (const char *s, const char *canonical)
+{
+    for (int i = 0; i < ARRAY_SIZE (rfc22_decode); i++) {
+        if (rfc22_decode[i].normalized
+            && streq (rfc22_decode[i].in, s)
+            && streq (rfc22_decode[i].canonical, canonical))
+            return true;
+    }
+    return false;
+}
+
+void test_rfc22 (void)
+{
+    int flags[] = {
+        0,
+        IDSET_FLAG_RANGE,
+        IDSET_FLAG_BRACKETS,
+        IDSET_FLAG_RANGE | IDSET_FLAG_BRACKETS,
+    };
+
+    for (int i = 0; i < ARRAY_SIZE (rfc22_decode); i++) {
+        struct rfc22_decode *v = &rfc22_decode[i];
+        struct idset *ids;
+        char *s = NULL;
+
+        ids = idset_decode (v->in);
+        ok (ids != NULL
+            && (s = idset_encode (ids, IDSET_FLAG_RANGE)) != NULL
+            && streq (s, v->canonical),
+            "RFC 22: '%s' decodes to canonical '%s'",
+            v->in,
+            v->canonical);
+        free (s);
+        idset_destroy (ids);
+    }
+
+    /* Round trip: the canonical string decodes and re-encodes unchanged,
+     * and every encoding of the idset is a listed normalized string.
+     */
+    for (int i = 0; i < ARRAY_SIZE (rfc22_decode); i++) {
+        struct rfc22_decode *v = &rfc22_decode[i];
+        struct idset *ids;
+        char *s = NULL;
+
+        if (!v->normalized || !streq (v->in, v->canonical))
+            continue;
+        ids = idset_decode (v->canonical);
+        ok (ids != NULL
+            && (s = idset_encode (ids, IDSET_FLAG_RANGE)) != NULL
+            && streq (s, v->canonical),
+            "RFC 22: canonical '%s' round trips",
+            v->canonical);
+        free (s);
+        for (int j = 0; ids && j < ARRAY_SIZE (flags); j++) {
+            s = idset_encode (ids, flags[j]);
+            ok (s != NULL && rfc22_is_normalized (s, v->canonical),
+                "RFC 22: '%s' encoded with flags=0x%x is normalized ('%s')",
+                v->canonical,
+                flags[j],
+                s ? s : "NULL");
+            free (s);
+        }
+        idset_destroy (ids);
+    }
+
+    for (int i = 0; i < ARRAY_SIZE (rfc22_invalid); i++) {
+        struct idset *ids;
+
+        errno = 0;
+        ids = idset_decode (rfc22_invalid[i]);
+        ok (ids == NULL && errno == EINVAL,
+            "RFC 22: '%s' is rejected with EINVAL",
+            rfc22_invalid[i]);
+        idset_destroy (ids);
+    }
+}
+
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
@@ -1352,6 +1529,7 @@ int main (int argc, char *argv[])
     test_decode_info ();
     test_decode_addsub ();
     test_issue7494 ();
+    test_rfc22 ();
 
     done_testing ();
 }

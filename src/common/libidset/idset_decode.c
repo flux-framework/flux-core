@@ -110,15 +110,18 @@ static int parse_range (const char *s, unsigned int *hi, unsigned int *lo)
 }
 
 /* Append one element (single digit or range) to 'idset'.
- * Each element must ascend from the previous ones.
- * On the first call set *maxid = IDSET_INVALID_ID and *count = 0.
- * Each call builds the max id value and member count in those values.
+ * Elements may appear in any order and may overlap (RFC 22).
+ * On the first call set *maxid = IDSET_INVALID_ID, *count = 0, and
+ * *ascending = true.  Each call builds the max id value and member count
+ * in those values, and clears *ascending if this element does not ascend
+ * from the previous ones, in which case *count may include duplicates.
  * On success return 0.  On failure, return -1 with errno and error set.
  */
 static int append_element (struct idset *idset,
                            const char *s,
                            size_t *count,
                            unsigned int *maxid,
+                           bool *ascending,
                            idset_error_t *error)
 {
     unsigned int hi, lo;
@@ -127,16 +130,15 @@ static int append_element (struct idset *idset,
         errprintf (error, "error parsing range '%s'", s);
         goto inval;
     }
-    if (*maxid != IDSET_INVALID_ID && lo <= *maxid) {
-        errprintf (error, "range '%s' is out of order", s);
-        goto inval;
-    }
     if (idset && idset_range_set (idset, lo, hi) < 0) {
         errprintf (error, "error appending '%s': %s", s, errdecode (errno));
         goto error;
     }
     *count += hi - lo + 1;
-    *maxid = hi;
+    if (*maxid != IDSET_INVALID_ID && lo <= *maxid)
+        *ascending = false;
+    if (*maxid == IDSET_INVALID_ID || hi > *maxid)
+        *maxid = hi;
     return 0;
 inval:
     errno = EINVAL;
@@ -145,11 +147,10 @@ error:
 }
 
 /* like append_element() except remove one element from 'idset' and
- * don't maintain the count.  We still need maxid to enforce range order.
+ * don't maintain the count or max id.
  */
 static int remove_element (struct idset *idset,
                            const char *s,
-                           unsigned int *maxid,
                            idset_error_t *error)
 {
     unsigned int hi, lo;
@@ -158,15 +159,10 @@ static int remove_element (struct idset *idset,
         errprintf (error, "error parsing range '%s'", s);
         goto inval;
     }
-    if (*maxid != IDSET_INVALID_ID && lo <= *maxid) {
-        errprintf (error, "range '%s' is out of order", s);
-        goto inval;
-    }
     if (idset && idset_range_clear (idset, lo, hi) < 0) {
         errprintf (error, "error clearing '%s': %s", s, errdecode (errno));
         goto error;
     }
-    *maxid = hi;
     return 0;
 inval:
     errno = EINVAL;
@@ -193,6 +189,31 @@ static char *trim_brackets (char *s, idset_error_t *error)
     return s;
 }
 
+/* Split the next comma-delimited element off the front of '*s' and return
+ * it, advancing '*s' past the comma.  Set '*s' to NULL after the last
+ * element.  Unlike strtok_r(), do not skip empty elements: RFC 22 does not
+ * allow them, so fail with errno and error set.  An empty string has no
+ * elements, so the caller should not call this function on one.
+ */
+static char *next_element (char **s, idset_error_t *error)
+{
+    char *tok = *s;
+    char *comma;
+
+    if ((comma = strchr (tok, ','))) {
+        *comma = '\0';
+        *s = comma + 1;
+    }
+    else
+        *s = NULL;
+    if (*tok == '\0') {
+        errprintf (error, "empty element");
+        errno = EINVAL;
+        return NULL;
+    }
+    return tok;
+}
+
 static char *dup_input (const char *str, ssize_t len, idset_error_t *error)
 {
     char *cpy;
@@ -210,6 +231,96 @@ static char *dup_input (const char *str, ssize_t len, idset_error_t *error)
     return cpy;
 }
 
+struct idset_range {
+    unsigned int lo;
+    unsigned int hi;
+};
+
+static int range_cmp (const void *a, const void *b)
+{
+    const struct idset_range *ra = a;
+    const struct idset_range *rb = b;
+
+    if (ra->lo < rb->lo)
+        return -1;
+    if (ra->lo > rb->lo)
+        return 1;
+    return 0;
+}
+
+/* Count the members of 'str' (up to 'len') exactly when its elements may
+ * overlap, without creating an idset.  Parse the elements into an array
+ * of ranges, sort by lower bound, then walk the array merging each range
+ * into the current run of consecutive ids and totaling the runs.  Time and
+ * memory scale with the number of elements, not the id space.  The input
+ * is assumed to have already passed a parsing pass.
+ * On success return 0.  On failure, return -1 with errno and error set.
+ */
+static int count_unordered (const char *str,
+                            ssize_t len,
+                            size_t *countp,
+                            idset_error_t *error)
+{
+    char *cpy;
+    char *tok, *a1;
+    struct idset_range *ranges = NULL;
+    size_t nranges = 0;
+    size_t count = 0;
+    int saved_errno;
+
+    if (!(cpy = dup_input (str, len, error)))
+        return -1;
+    if (!(a1 = trim_brackets (cpy, error)))
+        goto error;
+    for (const char *p = a1; *p != '\0'; p++)
+        if (*p == ',')
+            nranges++;
+    nranges++;
+    if (!(ranges = calloc (nranges, sizeof (ranges[0])))) {
+        errprintf (error, "out of memory");
+        goto error;
+    }
+    nranges = 0;
+    while (a1) {
+        if (!(tok = next_element (&a1, error)))
+            goto error;
+        if (parse_range (tok, &ranges[nranges].hi, &ranges[nranges].lo) < 0) {
+            errprintf (error, "error parsing range '%s'", tok);
+            errno = EINVAL;
+            goto error;
+        }
+        nranges++;
+    }
+    qsort (ranges, nranges, sizeof (ranges[0]), range_cmp);
+    if (nranges > 0) {
+        unsigned int lo = ranges[0].lo;
+        unsigned int hi = ranges[0].hi;
+
+        for (size_t i = 1; i < nranges; i++) {
+            if (ranges[i].lo <= hi + 1) { // overlaps or abuts current run
+                if (ranges[i].hi > hi)
+                    hi = ranges[i].hi;
+            }
+            else {
+                count += hi - lo + 1;
+                lo = ranges[i].lo;
+                hi = ranges[i].hi;
+            }
+        }
+        count += hi - lo + 1;
+    }
+    free (ranges);
+    free (cpy);
+    *countp = count;
+    return 0;
+error:
+    saved_errno = errno;
+    free (ranges);
+    free (cpy);
+    errno = saved_errno;
+    return -1;
+}
+
 /* Decode 'str' (up to 'len') and add it to 'idset'.
  * If 'idset' is NULL, this is a parsing pass to determine count/maxid only.
  * If 'len' < 0, use strlen (str).
@@ -224,20 +335,27 @@ static int decode_and_set_with_info (struct idset *idset,
                                      idset_error_t *error)
 {
     char *cpy;
-    char *tok, *saveptr, *a1;
+    char *tok, *a1;
     int saved_errno;
     unsigned int maxid = IDSET_INVALID_ID;
     size_t count = 0;
+    bool ascending = true;
 
     if (!(cpy = dup_input (str, len, error)))
         return -1;
     if (!(a1 = trim_brackets (cpy, error)))
         goto error;
-    saveptr = NULL;
-    while ((tok = strtok_r (a1, ",", &saveptr))) {
-        if (append_element (idset, tok, &count, &maxid, error) < 0)
+    if (*a1 == '\0')
+        a1 = NULL; // no elements: the empty set
+    while (a1) {
+        if (!(tok = next_element (&a1, error))
+            || append_element (idset,
+                               tok,
+                               &count,
+                               &maxid,
+                               &ascending,
+                               error) < 0)
             goto error;
-        a1 = NULL;
     }
     free (cpy);
     if (maxid != IDSET_INVALID_ID && maxid >= IDSET_MAX_UNIVERSE) {
@@ -245,6 +363,11 @@ static int decode_and_set_with_info (struct idset *idset,
         errprintf (error, "%s", errdecode (errno));
         return -1;
     }
+    /* If elements did not ascend, they may overlap and 'count' may include
+     * duplicates.  Re-parse to get an exact count.
+     */
+    if (countp && !ascending && count_unordered (str, len, &count, error) < 0)
+        return -1;
     if (countp)
         *countp = count;
     if (maxidp)
@@ -302,9 +425,9 @@ struct idset *idset_decode (const char *str)
 
 bool idset_decode_empty (const char *str, ssize_t len)
 {
-    size_t count;
-    if (decode_and_set_with_info (NULL, str, len, &count, NULL, NULL) < 0
-        || count > 0)
+    unsigned int maxid;
+    if (decode_and_set_with_info (NULL, str, len, NULL, &maxid, NULL) < 0
+        || maxid != IDSET_INVALID_ID)
         return false;
     return true;
 }
@@ -332,19 +455,19 @@ int idset_decode_subtract (struct idset *idset,
                            idset_error_t *error)
 {
     char *cpy;
-    char *tok, *saveptr, *a1;
+    char *tok, *a1;
     int saved_errno;
-    unsigned int maxid = IDSET_INVALID_ID;
 
     if (!(cpy = dup_input (str, len, error)))
         return -1;
     if (!(a1 = trim_brackets (cpy, error)))
         goto error;
-    saveptr = NULL;
-    while ((tok = strtok_r (a1, ",", &saveptr))) {
-        if (remove_element (idset, tok, &maxid, error) < 0)
+    if (*a1 == '\0')
+        a1 = NULL; // no elements: the empty set
+    while (a1) {
+        if (!(tok = next_element (&a1, error))
+            || remove_element (idset, tok, error) < 0)
             goto error;
-        a1 = NULL;
     }
     free (cpy);
     return 0;
