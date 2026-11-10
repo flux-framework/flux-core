@@ -41,7 +41,7 @@ class TestResourceCountMethods(unittest.TestCase):
         self.assertEqual(str(rc.ResourceCount({"min": 3})), "3+")
 
     def test_constructor_invalid(self):
-        for bad in ("", "bogus", "0", "-1", "1-", "2-1", "{not json"):
+        for bad in ("", "bogus", "00", "-1", "1-", "2-1", "{not json"):
             with self.assertRaises(ValueError):
                 rc.ResourceCount(bad)
         with self.assertRaises(ValueError):
