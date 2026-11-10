@@ -36,6 +36,7 @@ from flux.job._utils import (
     parse_jobspec_keyval,
     parse_signal_option,
 )
+from flux.resourcecount import ResourceCount
 from flux.util import Fileref, del_treedict, parse_fsd, set_treedict
 
 # thread local storage to support shared and cached validation data
@@ -281,58 +282,6 @@ class Jobspec(object):
         with open(filename, "rb") as infile:
             return cls.from_yaml_stream(infile)
 
-    @staticmethod
-    def _validate_complex_range(range_dict):
-        if "min" not in range_dict:
-            raise ValueError("min must be in range")
-        _validate_keys(
-            ["min", "max", "operand", "operator"], range_dict.keys(), keys_optional=True
-        )
-        for key in ["min", "max", "operand"]:
-            if key not in range_dict:
-                continue
-            if not isinstance(range_dict[key], int):
-                raise TypeError(f"{key} must be an int")
-            if range_dict[key] < 1:
-                raise ValueError(f"{key} must be > 0")
-        if "max" in range_dict and range_dict["max"] < range_dict["min"]:
-            raise ValueError("max must be >= min")
-        if ("operand" in range_dict) != ("operator" in range_dict):
-            raise ValueError("operand and operator must both be in range if either is")
-        if "operator" in range_dict:
-            operator = range_dict["operator"]
-            if not isinstance(operator, str) or len(operator) != 1:
-                raise TypeError("operator must be a single character str")
-            valid_operator_values = ["+", "*", "^"]
-            if operator not in valid_operator_values:
-                raise ValueError(f"operator must be one of {valid_operator_values}")
-            if operator in ["*", "^"] and range_dict["operand"] < 2:
-                raise ValueError("operand must be > 1 for '*' or '^' operator")
-            if operator == "^" and range_dict["min"] < 2:
-                raise ValueError("min must be > 1 for '^' operator")
-
-    @classmethod
-    def _validate_count_string(cls, count):
-        try:
-            idset.decode(count)
-        except ValueError:
-            values = count.split(":")
-            if len(values) > 3 or ("-" not in values[0] and "+" not in values[0]):
-                raise ValueError("count string must be a valid idset or range")
-            range_dict = {}
-            if "-" in values[0]:
-                rmin, _, rmax = values[0].partition("-")
-                range_dict["max"] = int(rmax)
-            elif "+" in values[0]:
-                rmin = values[0].rstrip("+")
-            range_dict["min"] = int(rmin)
-            if len(values) > 1:
-                range_dict["operand"] = int(values[1])
-                range_dict["operator"] = "+"
-            if len(values) > 2:
-                range_dict["operator"] = values[2]
-            cls._validate_complex_range(range_dict)
-
     @classmethod
     # pylint: disable=too-many-branches
     def _validate_resource(cls, res):
@@ -348,20 +297,10 @@ class Jobspec(object):
         # validate the 'count' key
         if "count" not in res:
             raise ValueError("count is a required key for resources")
-        count = res["count"]
-        if isinstance(count, abc.Mapping):
-            cls._validate_complex_range(count)
-        elif isinstance(count, str):
-            cls._validate_count_string(count)
-        elif not isinstance(count, int):
-            raise TypeError("count must be an int or mapping")
-        else:
-            # node, slot, and core must have count > 0, but allow 0 for
-            # any other resource type.
-            if res["type"] in ["node", "slot", "core"] and count < 1:
-                raise ValueError("node, slot, or core count must be > 0")
-            if count < 0:
-                raise ValueError("count must be >= 0")
+        count = ResourceCount(res["count"])
+        # node, slot, and core must have count > 0, but allow 0 for any other type
+        if res["type"] in ["node", "slot", "core"] and count.first < 1:
+            raise ValueError("node, slot, or core count must be > 0")
 
         # validate the string keys
         for key in ["id", "unit", "label"]:
