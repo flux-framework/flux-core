@@ -10,8 +10,9 @@
 
 /* GPU binding plugin
  *
- * Builtin GPU binding for flux-shell. Spread CUDA_VISIBLE_DEVICES
- *  across tasks depending on number in slot.
+ * Builtin GPU binding for flux-shell. Spread the GPU visibility
+ *  environment variable (e.g. CUDA_VISIBLE_DEVICES) across tasks
+ *  depending on number in slot.
  */
 #define FLUX_SHELL_PLUGIN_NAME "gpu-affinity"
 
@@ -19,11 +20,13 @@
 #include "config.h"
 #endif
 #include <stdio.h>
+#include <errno.h>
 #include <string.h>
 #include <flux/core.h>
 #include <flux/shell.h>
 #include <flux/idset.h>
 
+#include "ccan/array_size/array_size.h"
 #include "ccan/str/str.h"
 
 #include "builtins.h"
@@ -34,7 +37,58 @@ struct gpu_affinity {
     int ngpus;
     struct idset *gpus;
     hwloc_cpuset_t *gpusets;
+    const char *envvar;
 };
+
+/*  GPU visibility environment variable to set for each value of the
+ *  gpu-env shell option. The variable for the other vendor is unset so
+ *  that a value inherited from the submission environment cannot select
+ *  GPUs. For example, the ROCm HIP runtime applies CUDA_VISIBLE_DEVICES
+ *  after ROCR_VISIBLE_DEVICES has already renumbered the visible devices.
+ */
+static const struct gpu_env {
+    const char *name;
+    const char *envvar;
+    const char *unset;
+} gpu_envs[] = {
+    {
+        .name = "nvidia",
+        .envvar = "CUDA_VISIBLE_DEVICES",
+        .unset = "ROCR_VISIBLE_DEVICES",
+    },
+    {
+        .name = "amd",
+        .envvar = "ROCR_VISIBLE_DEVICES",
+        .unset = "CUDA_VISIBLE_DEVICES",
+    },
+};
+
+static const struct gpu_env *gpu_env_lookup (const char *name)
+{
+    for (size_t i = 0; i < ARRAY_SIZE (gpu_envs); i++) {
+        if (streq (gpu_envs[i].name, name))
+            return &gpu_envs[i];
+    }
+    return NULL;
+}
+
+/*  Return the gpu_env entry selected by the gpu-env shell option.
+ */
+static const struct gpu_env *gpu_env_get (flux_shell_t *shell)
+{
+    const char *name = "nvidia";
+    const struct gpu_env *env;
+
+    if (flux_shell_getopt_unpack (shell, "gpu-env", "s", &name) < 0) {
+        shell_log_error ("gpu-env shell option must be a string");
+        return NULL;
+    }
+    if (!(env = gpu_env_lookup (name))) {
+        shell_log_error ("invalid gpu-env shell option: %s", name);
+        return NULL;
+    }
+    return env;
+}
 
 
 static void gpu_affinity_destroy (struct gpu_affinity *ctx)
@@ -179,7 +233,12 @@ static int gpubind_task_init (flux_plugin_t *p,
         idset_destroy (ids);
         return -1;
     }
-    plugin_task_setenv (p, "CUDA_VISIBLE_DEVICES", s);
+    if (plugin_task_setenv (p, ctx->envvar, s) < 0) {
+        shell_log_errno ("failed to set %s for task %d", ctx->envvar, taskid);
+        free (s);
+        idset_destroy (ids);
+        return -1;
+    }
     free (s);
     idset_destroy (ids);
     return 0;
@@ -214,6 +273,7 @@ static int gpubind_init (flux_plugin_t *p,
     int rc;
     char *opt;
     struct gpu_affinity *ctx;
+    const struct gpu_env *env;
     flux_shell_t *shell = flux_plugin_get_shell (p);
 
     if (!shell)
@@ -233,14 +293,21 @@ static int gpubind_init (flux_plugin_t *p,
         return 0;
     }
 
-    /*  Set default CUDA_VISIBLE_DEVICES to an invalid id, -1, so that
+    if (!(env = gpu_env_get (shell)))
+        return -1;
+
+    /*  Set default GPU visibility to an invalid id, -1, so that
      *  jobs which are not assigned any GPUs do not use GPUs which
      *  happen to be available on the current node.
      */
-    flux_shell_setenvf (shell, 1, "CUDA_VISIBLE_DEVICES", "%d", -1);
+    if (flux_shell_setenvf (shell, 1, env->envvar, "%d", -1) < 0)
+        return shell_log_errno ("failed to set %s", env->envvar);
+    if (flux_shell_unsetenv (shell, env->unset) < 0 && errno != ENOENT)
+        return shell_log_errno ("failed to unset %s", env->unset);
 
     if (!(ctx = gpu_affinity_create (shell)))
         return -1;
+    ctx->envvar = env->envvar;
     if (flux_plugin_aux_set (p,
                              NULL,
                              ctx,
@@ -268,8 +335,12 @@ static int gpubind_init (flux_plugin_t *p,
             return shell_log_errno ("failed to parse gpu map %s", opt+4);
     }
     else if (ctx->ngpus > 0) {
-        char *ids = idset_encode (ctx->gpus, 0);
-        flux_shell_setenvf (shell, 1, "CUDA_VISIBLE_DEVICES", "%s", ids);
+        char *ids;
+        if (!(ids = idset_encode (ctx->gpus, 0))
+            || flux_shell_setenvf (shell, 1, env->envvar, "%s", ids) < 0) {
+            free (ids);
+            return shell_log_errno ("failed to set %s", env->envvar);
+        }
         free (ids);
     }
     return 0;
