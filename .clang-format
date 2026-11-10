@@ -5,7 +5,7 @@ SpaceBeforeParens : Always
 IndentWidth : 4
 BreakBeforeBraces : Custom
 BraceWrapping :
-  BeforeElse : false
+  BeforeElse : true
   AfterFunction : true
 UseTab : Never
 AllowShortIfStatementsOnASingleLine : false
