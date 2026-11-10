@@ -28,6 +28,7 @@
 
 #include "ccan/array_size/array_size.h"
 #include "ccan/str/str.h"
+#include "src/common/librlist/rhwloc.h"
 
 #include "builtins.h"
 #include "affinity.h"
@@ -48,16 +49,19 @@ struct gpu_affinity {
  */
 static const struct gpu_env {
     const char *name;
+    unsigned int vendor;
     const char *envvar;
     const char *unset;
 } gpu_envs[] = {
     {
         .name = "nvidia",
+        .vendor = RHWLOC_PCI_VENDOR_NVIDIA,
         .envvar = "CUDA_VISIBLE_DEVICES",
         .unset = "ROCR_VISIBLE_DEVICES",
     },
     {
         .name = "amd",
+        .vendor = RHWLOC_PCI_VENDOR_AMD,
         .envvar = "ROCR_VISIBLE_DEVICES",
         .unset = "CUDA_VISIBLE_DEVICES",
     },
@@ -72,16 +76,71 @@ static const struct gpu_env *gpu_env_lookup (const char *name)
     return NULL;
 }
 
+/*  Return the gpu_env entry for the vendor of the GPUs assigned to this
+ *  shell, or of all GPUs in the shell topology if none are assigned, so
+ *  that the -1 default hides GPUs from jobs without GPUs. Use nvidia if
+ *  there are no GPUs, the vendor is unknown, or GPUs come from different
+ *  vendors.
+ *
+ *  If the job is assigned GPUs but their vendor is unknown, for example
+ *  because the job shell topology does not include them, or the GPUs come
+ *  from different vendors, the GPU runtime may not use the selected
+ *  variable. Warn the user in that case.
+ */
+static const struct gpu_env *gpu_env_detect (flux_shell_t *shell)
+{
+    const char *gpu_list = NULL;
+    struct idset *ids;
+    const char *xml;
+    hwloc_topology_t topo;
+    unsigned int vendor = 0;
+    bool have_gpus;
+
+    /*  Use GPU ids from R, which index GPUs in the shell topology,
+     *  not ctx->gpus, which may be renumbered under device containment.
+     */
+    if (flux_shell_rank_info_unpack (shell,
+                                     -1,
+                                     "{s:{s?s}}",
+                                     "resources",
+                                       "gpus", &gpu_list) < 0
+        || !(ids = idset_decode (gpu_list ? gpu_list : ""))) {
+        shell_log_errno ("failed to get GPU ids for gpu-env=auto");
+        return NULL;
+    }
+    have_gpus = idset_count (ids) > 0;
+    if (flux_shell_get_hwloc_xml (shell, &xml) == 0
+        && (topo = rhwloc_xml_topology_load (xml, RHWLOC_NO_RESTRICT))) {
+        vendor = rhwloc_gpu_vendor_id (topo, have_gpus ? ids : NULL);
+        hwloc_topology_destroy (topo);
+    }
+    idset_destroy (ids);
+    for (size_t i = 0; i < ARRAY_SIZE (gpu_envs); i++) {
+        if (gpu_envs[i].vendor == vendor)
+            return &gpu_envs[i];
+    }
+    if (have_gpus)
+        shell_warn ("gpu-env=auto: GPU vendor unknown or mixed,"
+                    " using nvidia (set gpu-env to override)");
+    return gpu_env_lookup ("nvidia");
+}
+
 /*  Return the gpu_env entry selected by the gpu-env shell option.
  */
 static const struct gpu_env *gpu_env_get (flux_shell_t *shell)
 {
-    const char *name = "nvidia";
+    const char *name = "auto";
     const struct gpu_env *env;
 
     if (flux_shell_getopt_unpack (shell, "gpu-env", "s", &name) < 0) {
         shell_log_error ("gpu-env shell option must be a string");
         return NULL;
+    }
+    if (streq (name, "auto")) {
+        if (!(env = gpu_env_detect (shell)))
+            return NULL;
+        shell_debug ("gpu-env=auto: using %s", env->name);
+        return env;
     }
     if (!(env = gpu_env_lookup (name))) {
         shell_log_error ("invalid gpu-env shell option: %s", name);

@@ -185,6 +185,17 @@ test_expect_success MULTICORE 'flux-shell: issue #7281: #7174 workaround disable
 #
 # GPU tests:
 #
+#  The tests below expect gpu-env=nvidia, but gpu-env=auto selects amd
+#  on a test host with AMD GPUs. Set gpu-env=nvidia by default.
+test_expect_success 'flux-shell: set gpu-env=nvidia default in initrc' '
+	cat >gpu-env-initrc.lua <<-EOF &&
+	source ("$(flux getattr conf.shell_initrc)")
+	if not shell.options["gpu-env"] then
+	    shell.options["gpu-env"] = "nvidia"
+	end
+	EOF
+	flux exec flux setattr conf.shell_initrc $(pwd)/gpu-env-initrc.lua
+'
 test_expect_success 'flux-shell: CUDA_VISIBLE_DEVICES=-1 set by default' '
 	flux run printenv CUDA_VISIBLE_DEVICES >default-gpubind.out 2>&1 &&
 	test_debug "cat default-gpubind.out" &&
