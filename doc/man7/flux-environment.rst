@@ -147,11 +147,14 @@ The following are set in the environment of each task spawned by
    the library for bootstrap.
 
 .. envvar:: CUDA_VISIBLE_DEVICES
+            ROCR_VISIBLE_DEVICES
             CUDA_DEVICE_ORDER
 
    The ``gpubind`` shell plugin sets these variables in the job environment
-   to assign GPU devices to tasks.  They are not set when GPU affinity is
-   disabled with :option:`flux run -ogpu-affinity=off`.
+   to assign GPU devices to tasks.  :envvar:`ROCR_VISIBLE_DEVICES` is set
+   instead of :envvar:`CUDA_VISIBLE_DEVICES` on systems with AMD GPUs, as
+   selected by the ``gpu-env`` shell option. They are not set when GPU
+   affinity is disabled with :option:`flux run -ogpu-affinity=off`.
 
 .. envvar:: FLUX_URI
 

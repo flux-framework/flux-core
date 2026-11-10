@@ -309,14 +309,15 @@ GPU AFFINITY
 
 .. option:: gpu-affinity=OPT
 
-  Control GPU device visibility via :envvar:`CUDA_VISIBLE_DEVICES`. If
-  unspecified, defaults to ``on`` (each task sees all GPUs allocated to
-  the job).
+  Control GPU device visibility via a vendor-specific environment variable,
+  :envvar:`CUDA_VISIBLE_DEVICES` or :envvar:`ROCR_VISIBLE_DEVICES`, as
+  selected by :option:`gpu-env`. If unspecified, defaults to ``on`` (each
+  task sees all GPUs allocated to the job).
 
   *OPT* may be:
 
   **on**
-    Set :envvar:`CUDA_VISIBLE_DEVICES` to include all GPUs allocated to the job.
+    Set the GPU visibility variable to include all GPUs allocated to the job.
     All tasks see the same GPU set.
 
     .. code-block:: console
@@ -324,7 +325,7 @@ GPU AFFINITY
       $ flux run -o gpu-affinity=on myapp
 
   **off**
-    Disable the gpu-affinity plugin. :envvar:`CUDA_VISIBLE_DEVICES` will not be
+    Disable the gpu-affinity plugin. GPU visibility variables will not be
     set by the shell.
 
     .. code-block:: console
@@ -332,8 +333,8 @@ GPU AFFINITY
       $ flux run -o gpu-affinity=off myapp
 
   **per-task**
-    Divide allocated GPUs evenly among local tasks. Each task's
-    :envvar:`CUDA_VISIBLE_DEVICES` includes only its assigned GPUs. If there are
+    Divide allocated GPUs evenly among local tasks. Each task's GPU
+    visibility variable includes only its assigned GPUs. If there are
     more tasks than GPUs, tasks share GPUs as evenly as possible.
 
     .. code-block:: console
@@ -353,10 +354,48 @@ GPU AFFINITY
   When the job's resources are constrained to its allocation (see
   ``exec.sdexec-constrain-resources`` in :man5:`flux-config-exec`), the GPU
   runtime enumerates only the devices available to the job. In that case
-  :envvar:`CUDA_VISIBLE_DEVICES` contains the position of each allocated GPU
+  the GPU visibility variable contains the position of each allocated GPU
   within the job's allocation rather than its id from **R** -- a job
   allocated GPU id 7 of 8 gets :envvar:`CUDA_VISIBLE_DEVICES=0`. Ids given in
   ``map:LIST`` are used as-is and are never translated.
+
+.. option:: gpu-env=OPT
+
+  Select the environment variable used by :option:`gpu-affinity`. If
+  unspecified, defaults to ``auto``.
+
+  *OPT* may be:
+
+  **auto**
+    Use ``amd`` if all GPUs assigned to the job on the node are AMD GPUs,
+    otherwise use ``nvidia``. If the job is assigned no GPUs on the node,
+    check all GPUs on the node instead. If the job is assigned GPUs but
+    their vendor cannot be determined, or they come from different
+    vendors, ``nvidia`` is used and the shell logs a warning. Set
+    ``gpu-env`` explicitly to avoid this.
+
+  **nvidia**
+    Set :envvar:`CUDA_VISIBLE_DEVICES` and unset
+    :envvar:`ROCR_VISIBLE_DEVICES`.
+
+  **amd**
+    Set :envvar:`ROCR_VISIBLE_DEVICES` and unset
+    :envvar:`CUDA_VISIBLE_DEVICES`. The ROCm runtime applies
+    :envvar:`CUDA_VISIBLE_DEVICES` to the devices that remain after
+    :envvar:`ROCR_VISIBLE_DEVICES` is applied, so the two must not be set
+    to the same GPU ids.
+
+  :envvar:`HIP_VISIBLE_DEVICES` is never modified, so users may set it to
+  select among the GPUs visible to a task.
+
+  A site may change the default for all jobs with a shell rc file in
+  the ``lua.d`` directory of the shell initrc path, for example:
+
+  .. code-block:: lua
+
+    if not shell.options["gpu-env"] then
+        shell.options["gpu-env"] = "amd"
+    end
 
 INPUT/OUTPUT
 ============
