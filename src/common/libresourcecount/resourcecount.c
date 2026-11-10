@@ -24,11 +24,11 @@
 #include "resourcecount.h"
 
 struct resourcecount {
-    unsigned int integer;
-    unsigned int min;
+    unsigned int min; // also stores simple integer value
     unsigned int max;
     unsigned int operand;
     char operator;
+    bool isinteger;
     bool isrange;
     bool isunbounded;
     struct idset *idset;
@@ -70,15 +70,16 @@ struct resourcecount *resourcecount_create (json_t *json_count,
     }
     count->idset = NULL;
     if (json_is_integer (json_count)) {
-        // have to check positivity and upper bound before assigning to unsigned int
+        // have to check negativity and upper bound before assigning to unsigned int
         integer_value = json_integer_value (json_count);
-        if (integer_value < 1 || integer_value > RESOURCECOUNT_MAX) {
+        if (integer_value < 0 || integer_value > RESOURCECOUNT_MAX) {
             set_error (error,
-                       "resourcecount_create: integer count must be in [1, %u]",
+                       "resourcecount_create: integer count must be in [0, %u]",
                        RESOURCECOUNT_MAX);
             goto error;
         }
-        count->integer = integer_value;
+        count->min = integer_value;
+        count->isinteger = true;
         return count;
     }
     if (json_object_size (json_count) == 0) {
@@ -155,12 +156,15 @@ void resourcecount_destroy (struct resourcecount *count)
  */
 static int strtoui_check (const char *s, char **endptr, unsigned int *result)
 {
-    long long in;
+    unsigned long long in;
 
     errno = 0;
-    in = strtoll (s, endptr, 10);
-    // error, leading zero, non-digit, non-positive, or too large input
-    if (errno != 0 || *s == '0' || !isdigit (*s) || in < 1 || in > RESOURCECOUNT_MAX) {
+    in = strtoull (s, endptr, 10);
+    // error, leading zero, non-digit (catches negative sign), or too large input
+    if (errno != 0
+        || (*s == '0' && *endptr - s > 1)
+        || !isdigit (*s)
+        || in > RESOURCECOUNT_MAX) {
         errno = errno ? errno : EINVAL;
         return -1;
     }
@@ -209,24 +213,26 @@ struct resourcecount *resourcecount_decode (const char *s)
         goto error_inval;
     }
     // first try as a simple integer
-    if (strtoui_check (ep, &ep, &count->integer) < 0) {
+    if (strtoui_check (ep, &ep, &count->min) < 0) {
         goto error;
     } else if (*ep == '\0') {
+        count->isinteger = true;
         goto success;
     }
     // assume it wasn't just a simple integer and carry on; first try as ideset
     if ((count->idset = idset_decode (s))
          && !idset_empty (count->idset)
          && idset_first (count->idset) != 0) {
-        count->integer = 0;
+        count->min = 0;
         goto success;
     }
     // decoding as an idset failed or was invalid, so try as an RFC14 range
     idset_destroy (count->idset);
     count->idset = NULL;
+    if (count->min < 1) {
+        goto error_inval;
+    }
     count->isrange = true;
-    count->min = count->integer;
-    count->integer = 0;
     count->operator = '+';
     count->operand = 1;
     if (*ep == '-') {
@@ -249,6 +255,8 @@ struct resourcecount *resourcecount_decode (const char *s)
     }
     if (strtoui_check (ep+1, &ep, &count->operand) < 0) {
         goto error;
+    } else if (count->operand < 1) {
+        goto error_inval;
     }
     if (*ep == '\0') {
         goto success;
@@ -299,8 +307,8 @@ char *resourcecount_encode (const struct resourcecount *count, int flags)
     }
     if (count->idset) {
         return idset_encode (count->idset, flags);
-    } else if (count->integer) {
-        if (asprintf (&str, "%u", count->integer) < 0) {
+    } else if (count->isinteger) {
+        if (asprintf (&str, "%u", count->min) < 0) {
             return NULL;
         }
         return str;
@@ -378,8 +386,8 @@ unsigned int resourcecount_first (const struct resourcecount *count)
     unsigned int first = RESOURCECOUNT_INVALID_VALUE;
 
     if (count) {
-        if (count->integer) {
-            first = count->integer;
+        if (count->isinteger) {
+            first = count->min;
         } else if (count->isrange) {
             if (count->operator == '^') {
                 unsigned int base = root (count->min, count->operand);
@@ -432,8 +440,8 @@ unsigned int resourcecount_bounded_last (const struct resourcecount *count,
     unsigned int last = RESOURCECOUNT_INVALID_VALUE;
 
     if (count) {
-        if (count->integer && count->integer <= bound) {
-            last = count->integer;
+        if (count->isinteger && count->min <= bound) {
+            last = count->min;
         } else if (count->isrange && bound >= count->min) {
             bound = bound < count->max ? bound : count->max;
             if (count->operator == '+') {
@@ -466,7 +474,7 @@ unsigned int resourcecount_last (const struct resourcecount *count)
 
 bool resourcecount_is_integer (const struct resourcecount *count)
 {
-    return (count && count->integer > 0);
+    return (count && count->isinteger);
 }
 
 bool resourcecount_is_unbounded (const struct resourcecount *count)
