@@ -978,6 +978,104 @@ void test_gpu_objects (void)
     hwloc_topology_destroy (topo);
 }
 
+/* Return a copy of xml_multi_backend with the PCI vendor id of each GPU
+ * replaced by the corresponding entry in vendors[2].
+ */
+static char *xml_with_vendors (const char *vendors[2])
+{
+    char *xml;
+    char *p;
+
+    if (!(xml = strdup (xml_multi_backend)))
+        BAIL_OUT ("strdup failed");
+    p = xml;
+    for (int i = 0; i < 2; i++) {
+        if (!(p = strstr (p, "[10de:1234]")))
+            BAIL_OUT ("failed to find GPU %d vendor id in test XML", i);
+        memcpy (p + 1, vendors[i], 4);
+        p++;
+    }
+    return xml;
+}
+
+/* Return a copy of xml_multi_backend with GPU backends renamed so that
+ * no osdev is a compute GPU.
+ */
+static char *xml_no_gpus (void)
+{
+    char *xml;
+    char *p;
+
+    if (!(xml = strdup (xml_multi_backend)))
+        BAIL_OUT ("strdup failed");
+    while ((p = strstr (xml, "value=\"CUDA\""))
+           || (p = strstr (xml, "value=\"NVML\"")))
+        memcpy (p + 7, "None", 4);
+    return xml;
+}
+
+static unsigned int gpu_vendor_id (const char *xml, const char *ids)
+{
+    hwloc_topology_t topo;
+    struct idset *idset = NULL;
+    unsigned int vendor;
+
+    if (!(topo = rhwloc_xml_topology_load (xml, RHWLOC_NO_RESTRICT)))
+        BAIL_OUT ("failed to load GPU vendor test topology");
+    if (ids && !(idset = idset_decode (ids)))
+        BAIL_OUT ("idset_decode (%s) failed", ids);
+    vendor = rhwloc_gpu_vendor_id (topo, idset);
+    idset_destroy (idset);
+    hwloc_topology_destroy (topo);
+    return vendor;
+}
+
+void test_gpu_vendor_id (void)
+{
+    struct {
+        const char *vendors[2];
+        const char *ids;
+        unsigned int expected;
+        const char *desc;
+    } tests[] = {
+        { { "10de", "10de" }, NULL, RHWLOC_PCI_VENDOR_NVIDIA,
+          "all NVIDIA GPUs" },
+        { { "1002", "1002" }, NULL, RHWLOC_PCI_VENDOR_AMD,
+          "all AMD GPUs" },
+        { { "1002", "10de" }, NULL, 0,
+          "mixed AMD and NVIDIA GPUs" },
+        { { "1002", "10de" }, "0-1", 0,
+          "mixed AMD and NVIDIA GPUs with ids 0-1" },
+        { { "1002", "10de" }, "0", RHWLOC_PCI_VENDOR_AMD,
+          "mixed AMD and NVIDIA GPUs with id 0" },
+        { { "1002", "10de" }, "1", RHWLOC_PCI_VENDOR_NVIDIA,
+          "mixed AMD and NVIDIA GPUs with id 1" },
+        { { "1002", "1002" }, "2", 0,
+          "AMD GPUs with id not in topology" },
+        { { "1002", "1002" }, "", 0,
+          "AMD GPUs with empty ids" },
+    };
+    unsigned int vendor;
+    char *xml;
+
+    for (int i = 0; i < sizeof (tests) / sizeof (tests[0]); i++) {
+        xml = xml_with_vendors (tests[i].vendors);
+        vendor = gpu_vendor_id (xml, tests[i].ids);
+        ok (vendor == tests[i].expected,
+            "rhwloc_gpu_vendor_id: %s returns 0x%x: got 0x%x",
+            tests[i].desc,
+            tests[i].expected,
+            vendor);
+        free (xml);
+    }
+    xml = xml_no_gpus ();
+    vendor = gpu_vendor_id (xml, NULL);
+    ok (vendor == 0,
+        "rhwloc_gpu_vendor_id: topology with no GPUs returns 0: got 0x%x",
+        vendor);
+    free (xml);
+}
+
 
 int main (int ac, char *av[])
 {
@@ -988,6 +1086,7 @@ int main (int ac, char *av[])
     test_xml ();
     test_cores_to_cpuset ();
     test_gpu_objects ();
+    test_gpu_vendor_id ();
 
     done_testing ();
 }
