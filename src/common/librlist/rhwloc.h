@@ -13,6 +13,7 @@
 
 #include <hwloc.h>
 #include <jansson.h>
+#include <flux/idset.h>
 
 #include "src/common/libflux/types.h" /* flux_error_t */
 
@@ -72,6 +73,21 @@ hwloc_obj_t *rhwloc_gpu_objects (hwloc_topology_t topo, int *count_out);
 /*  Return idset string for all GPUs in hwloc topology object
  */
 char * rhwloc_gpu_idset_string (hwloc_topology_t topo);
+
+/*  PCI vendor ids returned by rhwloc_gpu_vendor_id().
+ *  AMD GPUs use the ATI vendor id, not the AMD CPU vendor id 0x1022.
+ */
+#define RHWLOC_PCI_VENDOR_AMD       0x1002
+#define RHWLOC_PCI_VENDOR_NVIDIA    0x10de
+
+/*  Return the PCI vendor id shared by the GPUs in ids, or by all GPUs in
+ *  topo if ids is NULL, e.g. RHWLOC_PCI_VENDOR_AMD. GPU ids are indices
+ *  into the array returned by rhwloc_gpu_objects(). Returns 0 if there
+ *  are no GPUs, if an id is not in topo, if any GPU has no PCI device,
+ *  or if GPUs come from different vendors.
+ */
+unsigned int rhwloc_gpu_vendor_id (hwloc_topology_t topo,
+                                   const struct idset *ids);
 
 /*  Return the count of resource "type" in topology topo. Takes any
  *  hwloc obj type string or "gpu" for supported GPU types.

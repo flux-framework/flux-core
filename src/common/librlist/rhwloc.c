@@ -528,6 +528,34 @@ char *rhwloc_gpu_idset_string (hwloc_topology_t topo)
     return result;
 }
 
+unsigned int rhwloc_gpu_vendor_id (hwloc_topology_t topo,
+                                   const struct idset *ids)
+{
+    hwloc_obj_t *gpus;
+    int count;
+    unsigned int vendor = 0;
+
+    if (!(gpus = rhwloc_gpu_objects (topo, &count)))
+        return 0;
+    if (ids && (idset_count (ids) == 0 || idset_last (ids) >= count))
+        goto out;
+    for (int i = 0; i < count; i++) {
+        hwloc_obj_t pcidev;
+        if (ids && !idset_test (ids, i))
+            continue;
+        pcidev = rhwloc_osdev_get_pcidev (gpus[i]);
+        if (!pcidev
+            || (vendor != 0 && pcidev->attr->pcidev.vendor_id != vendor)) {
+            vendor = 0;
+            break;
+        }
+        vendor = pcidev->attr->pcidev.vendor_id;
+    }
+out:
+    free (gpus);
+    return vendor;
+}
+
 int rhwloc_count_type (hwloc_topology_t topo, const char *name)
 {
     hwloc_obj_type_t type;
