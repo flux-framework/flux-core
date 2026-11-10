@@ -185,6 +185,13 @@ test_expect_success MULTICORE 'flux-shell: issue #7281: #7174 workaround disable
 #
 # GPU tests:
 #
+test "$(flux resource list -no {ngpus})" = 0 && test_set_prereq NO_GPUS
+test_expect_success NO_GPUS 'flux-shell: gpu-env=auto selects nvidia without GPUs' '
+	flux run sh -c "echo \${CUDA_VISIBLE_DEVICES-unset} \
+		\${ROCR_VISIBLE_DEVICES-unset}" >gpu-env-auto.out &&
+	test_debug "cat gpu-env-auto.out" &&
+	test "$(cat gpu-env-auto.out)" = "-1 unset"
+'
 #  The tests below expect gpu-env=nvidia, but gpu-env=auto selects amd
 #  on a test host with AMD GPUs. Set gpu-env=nvidia by default.
 test_expect_success 'flux-shell: set gpu-env=nvidia default in initrc' '
@@ -420,6 +427,128 @@ test_expect_success 'flux-shell: constrained job with no GPUs still gets -1' '
 		printenv CUDA_VISIBLE_DEVICES >${name}.out 2>&1 &&
 	test_debug "cat ${name}.out" &&
 	grep "^-1" ${name}.out
+'
+test_expect_success 'flux-shell: gpu-env=amd sets ROCR_VISIBLE_DEVICES' '
+	name=gpu-env-amd &&
+	flux run -N1 -n2 \
+		--label-io \
+		--setattr=alloc-bypass.R="$(cat R.gpu)" \
+		-o gpu-env=amd \
+		sh -c "echo \$ROCR_VISIBLE_DEVICES \${CUDA_VISIBLE_DEVICES-unset}" \
+		>${name}.output 2>${name}.err &&
+	cat >${name}.expected <<-EOF  &&
+	0: 0,1,2,3 unset
+	1: 0,1,2,3 unset
+	EOF
+	test_debug "cat ${name}.output ${name}.err" &&
+	sort -k1,1n ${name}.output > ${name}.out &&
+	test_cmp ${name}.expected ${name}.out
+'
+test_expect_success 'flux-shell: gpu-env=amd works with gpu-affinity=per-task' '
+	name=gpu-env-amd-per-task &&
+	flux run -N1 -n2 \
+		--label-io \
+		--setattr=alloc-bypass.R="$(cat R.gpu)" \
+		-o gpu-env=amd \
+		-o gpu-affinity=per-task \
+		sh -c "echo \$ROCR_VISIBLE_DEVICES \${CUDA_VISIBLE_DEVICES-unset}" \
+		>${name}.output 2>${name}.err &&
+	cat >${name}.expected <<-EOF  &&
+	0: 0,1 unset
+	1: 2,3 unset
+	EOF
+	test_debug "cat ${name}.output ${name}.err" &&
+	sort -k1,1n ${name}.output > ${name}.out &&
+	test_cmp ${name}.expected ${name}.out
+'
+test_expect_success 'flux-shell: gpu-env=amd works with gpu-affinity=map' '
+	name=gpu-env-amd-map &&
+	flux run -N1 -n2 \
+		--label-io \
+		--setattr=alloc-bypass.R="$(cat R.gpu)" \
+		-o gpu-env=amd \
+		-o gpu-affinity="map:3;0-1" \
+		printenv ROCR_VISIBLE_DEVICES >${name}.output 2>${name}.err &&
+	cat >${name}.expected <<-EOF  &&
+	0: 3
+	1: 0,1
+	EOF
+	test_debug "cat ${name}.output ${name}.err" &&
+	sort -k1,1n ${name}.output > ${name}.out &&
+	test_cmp ${name}.expected ${name}.out
+'
+test_expect_success 'flux-shell: gpu-env=amd sets -1 when no GPUs assigned' '
+	flux run -o gpu-env=amd \
+		sh -c "echo \$ROCR_VISIBLE_DEVICES \${CUDA_VISIBLE_DEVICES-unset}" \
+		>gpu-env-amd-none.out &&
+	test_debug "cat gpu-env-amd-none.out" &&
+	test "$(cat gpu-env-amd-none.out)" = "-1 unset"
+'
+test_expect_success 'flux-shell: gpu-env=amd unsets inherited CUDA_VISIBLE_DEVICES' '
+	flux run \
+		--setattr=alloc-bypass.R="$(cat R.gpu)" \
+		--env=CUDA_VISIBLE_DEVICES=0 \
+		-o gpu-env=amd \
+		sh -c "echo \${CUDA_VISIBLE_DEVICES-unset}" >gpu-env-amd-unset.out &&
+	test "$(cat gpu-env-amd-unset.out)" = "unset"
+'
+test_expect_success 'flux-shell: gpu-env=nvidia unsets inherited ROCR_VISIBLE_DEVICES' '
+	flux run \
+		--setattr=alloc-bypass.R="$(cat R.gpu)" \
+		--env=ROCR_VISIBLE_DEVICES=0 \
+		-o gpu-env=nvidia \
+		sh -c "echo \${ROCR_VISIBLE_DEVICES-unset}" >gpu-env-nvidia-unset.out &&
+	test "$(cat gpu-env-nvidia-unset.out)" = "unset"
+'
+test_expect_success 'flux-shell: gpu-env does not modify HIP_VISIBLE_DEVICES' '
+	flux run \
+		--setattr=alloc-bypass.R="$(cat R.gpu)" \
+		--env=HIP_VISIBLE_DEVICES=1 \
+		-o gpu-env=amd \
+		printenv HIP_VISIBLE_DEVICES >gpu-env-hip.out &&
+	test "$(cat gpu-env-hip.out)" = "1"
+'
+test_expect_success NO_GPUS 'flux-shell: gpu-env=auto warns if GPU vendor unknown' '
+	flux run \
+		--setattr=alloc-bypass.R="$(cat R.gpu)" \
+		-o gpu-env=auto \
+		true 2>gpu-env-unknown.err &&
+	test_debug "cat gpu-env-unknown.err" &&
+	grep "GPU vendor unknown or mixed, using nvidia" gpu-env-unknown.err
+'
+test_expect_success 'flux-shell: gpu-env=auto does not warn with no GPUs' '
+	flux run -o gpu-env=auto true 2>gpu-env-nogpu.err &&
+	test_debug "cat gpu-env-nogpu.err" &&
+	test_must_fail grep "GPU vendor unknown" gpu-env-nogpu.err
+'
+test_expect_success 'flux-shell: explicit gpu-env does not warn' '
+	flux run \
+		--setattr=alloc-bypass.R="$(cat R.gpu)" \
+		-o gpu-env=amd \
+		true 2>gpu-env-explicit.err &&
+	test_debug "cat gpu-env-explicit.err" &&
+	test_must_fail grep "GPU vendor unknown" gpu-env-explicit.err
+'
+test_expect_success 'flux-shell: gpu-affinity=off ignores gpu-env' '
+	flux run \
+		--setattr=alloc-bypass.R="$(cat R.gpu)" \
+		-o gpu-affinity=off \
+		-o gpu-env=amd \
+		sh -c "echo \${ROCR_VISIBLE_DEVICES-unset}" >gpu-env-off.out &&
+	test "$(cat gpu-env-off.out)" = "unset"
+'
+test_expect_success 'flux-shell: gpu-affinity=off ignores invalid gpu-env' '
+	flux run -o gpu-affinity=off -o gpu-env=foo true
+'
+test_expect_success 'flux-shell: invalid gpu-env value fails job' '
+	test_must_fail flux run -o gpu-env=foo true 2>gpu-env-bad.err &&
+	test_debug "cat gpu-env-bad.err" &&
+	grep "invalid gpu-env shell option: foo" gpu-env-bad.err
+'
+test_expect_success 'flux-shell: non-string gpu-env value fails job' '
+	test_must_fail flux run -o gpu-env=1 true 2>gpu-env-int.err &&
+	test_debug "cat gpu-env-int.err" &&
+	grep "gpu-env shell option must be a string" gpu-env-int.err
 '
 test_expect_success 'flux-shell: create multi-node multi-gpu R' '
 	cat >R2.gpu <<-EOF
