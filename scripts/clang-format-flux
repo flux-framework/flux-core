@@ -41,8 +41,6 @@ import re
 import subprocess
 import sys
 
-COLUMN_LIMIT = 80
-
 # .clang-format uses options first available in this version.
 MIN_VERSION = (23, 1)
 
@@ -51,6 +49,18 @@ TOPDIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # Always use the project style, even for files outside the source tree
 # (otherwise clang-format silently falls back to its LLVM default).
 STYLE_FILE = os.path.join(TOPDIR, ".clang-format")
+
+
+def style_column_limit():
+    """Return ColumnLimit from .clang-format so the fixup agrees with it."""
+    with open(STYLE_FILE) as f:
+        m = re.search(r"^ColumnLimit\s*:\s*(\d+)", f.read(), re.M)
+    if not m:
+        sys.exit("clang-format-flux: ColumnLimit not found in " + STYLE_FILE)
+    return int(m.group(1))
+
+
+COLUMN_LIMIT = style_column_limit()
 
 # Vendored code is listed in .clang-format-ignore, which clang-format
 # also reads, so editors and agents running clang-format directly skip it.
