@@ -24,6 +24,14 @@ test $(${CPUS_ALLOWED_COUNT}) = 1 || test_set_prereq MULTICORE
 
 echo >&2 "# Running tests on $($CPUS_ALLOWED_COUNT) cores"
 
+#  cpu-affinity=map:LIST uses physical PU ids. Get the first two PUs
+#  available to this test, which may not be PUs 0 and 1.
+PUS=$(hwloc-calc --physical-output --intersect pu $(hwloc-bind --get))
+PU0=$(echo $PUS | cut -d, -f1)
+PU1=$(echo $PUS | cut -d, -f2)
+PU0MASK=$(hwloc-calc --physical-input --taskset pu:$PU0)
+PU1MASK=$(hwloc-calc --physical-input --taskset pu:$PU1)
+
 test_expect_success 'flux-shell: affinity hwloc-calc works' '
 	hwloc-bind --get &&
 	hwloc-bind --get | hwloc-calc --number-of core &&
@@ -52,31 +60,31 @@ test_expect_success 'flux-shell: per-task affinity sanity check' '
 		hwloc-bind --get
 '
 test_expect_success MULTICORE 'flux-shell: map affinity works' '
-	flux run --label-io -o cpu-affinity="map:1;0" -n 2 \
+	flux run --label-io -o cpu-affinity="map:$PU1;$PU0" -n 2 \
 	hwloc-bind --get > map1.out &&
 	task0set=$(sed -n "s/^0: //p" map1.out) &&
 	task1set=$(sed -n "s/^1: //p" map1.out) &&
-	test_debug "echo checking ${task0set}=0x2 ${task1set}=0x1" &&
-	test "$(hwloc-calc --taskset $task0set)" = "0x2" &&
-	test "$(hwloc-calc --taskset $task1set)" = "0x1"
+	test_debug "echo checking ${task0set}=$PU1MASK ${task1set}=$PU0MASK" &&
+	test "$(hwloc-calc --taskset $task0set)" = "$PU1MASK" &&
+	test "$(hwloc-calc --taskset $task1set)" = "$PU0MASK"
 '
 test_expect_success MULTICORE 'flux-shell: map affinity reuses underspecified sets' '
-	flux run --label-io -o cpu-affinity=map:1 -n 2 \
+	flux run --label-io -o cpu-affinity=map:$PU1 -n 2 \
 	hwloc-bind --get > map2.out &&
 	task0set=$(sed -n "s/^0: //p" map2.out) &&
 	task1set=$(sed -n "s/^1: //p" map2.out) &&
-	test_debug "echo checking ${task0set}=0x2 ${task1set}=0x2" &&
-	test "$(hwloc-calc --taskset $task0set)" = "0x2" &&
-	test "$(hwloc-calc --taskset $task1set)" = "0x2"
+	test_debug "echo checking ${task0set}=$PU1MASK ${task1set}=$PU1MASK" &&
+	test "$(hwloc-calc --taskset $task0set)" = "$PU1MASK" &&
+	test "$(hwloc-calc --taskset $task1set)" = "$PU1MASK"
 '
 test_expect_success MULTICORE 'flux-shell: map affinity can use hex bitmasks' '
-	flux run --label-io -o cpu-affinity="map:0x1;0x2" -n 2 \
+	flux run --label-io -o cpu-affinity="map:$PU0MASK;$PU1MASK" -n 2 \
 	hwloc-bind --get > map3.out &&
 	task0set=$(sed -n "s/^0: //p" map3.out) &&
 	task1set=$(sed -n "s/^1: //p" map3.out) &&
-	test_debug "echo checking ${task0set}=0x1 ${task1set}=0x2" &&
-	test "$(hwloc-calc --taskset $task0set)" = "0x1" &&
-	test "$(hwloc-calc --taskset $task1set)" = "0x2"
+	test_debug "echo checking ${task0set}=$PU0MASK ${task1set}=$PU1MASK" &&
+	test "$(hwloc-calc --taskset $task0set)" = "$PU0MASK" &&
+	test "$(hwloc-calc --taskset $task1set)" = "$PU1MASK"
 '
 test_expect_success 'flux-shell: map affinity can use a mix of inputs' '
 	id=$(flux submit --label-io -o cpu-affinity="map:0xf,0xf;0-3" -n 2 \
@@ -160,7 +168,7 @@ test_expect_success MULTICORE 'flux-shell: issue #7174 reproducer with per-task'
 	flux run -N2 -n3 -c1 -o verbose -o cpu-affinity=verbose,per-task true \
 	    >7174-per-task.out 2>&1 &&
 	grep "adjusted cores from 0-1 to 0" 7174-per-task.out &&
-	grep "task 2: cpus: 0" 7174-per-task.out
+	grep -E "task 2: cpus: $PU0([^0-9]|\$)" 7174-per-task.out
 '
 test_expect_success MULTICORE 'flux-shell: issue #7281: #7174 workaround disabled with per-resource' '
 	flux alloc -N2 -n4 -o verbose -o cpu-affinity=verbose \
