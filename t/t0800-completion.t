@@ -127,6 +127,19 @@ test_expect_success 'top-level: completes flux options' '
     completion_has "--version"
 '
 
+test_expect_success 'command lookup does not treat current word as a glob' '
+    COMP_WORDS=(flux queue "q*") &&
+    COMP_CWORD=2 &&
+    cur="q*" &&
+    test "$(_flux_get_cmd)" = "queue"
+'
+test_expect_success 'subcommand lookup does not treat current word as a glob' '
+    COMP_WORDS=(flux job attach "*") &&
+    COMP_CWORD=3 &&
+    cur="*" &&
+    test "$(_flux_get_subcmd job)" = "attach"
+'
+
 #
 # flux-pkill
 #
