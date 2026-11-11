@@ -13,6 +13,7 @@ fluxmoddir=@fluxmoddir@
 fluxcmdhelpdir=@datadir@/flux/help.d
 fluxshellrcdir=@fluxconfdir@/shell
 fluxshellpluginpath=@fluxlibdir@/shell/plugins
+fluxbashcompletiondir=@fluxdatadir@/bash-completion
 
 Name: flux-core
 Description: Flux Resource Manager Framework Core

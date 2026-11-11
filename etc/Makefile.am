@@ -9,6 +9,7 @@ systemdsystemunit_DATA = \
 tmpfilesdir = $(prefix)/lib/tmpfiles.d
 crondailydir = $(sysconfdir)/cron.daily
 fluxrc1dir = $(fluxconfdir)/rc1.d
+fluxbashcompletiondir = $(fluxdatadir)/bash-completion
 
 tmpfiles_DATA = flux.conf
 
@@ -29,7 +30,9 @@ fluxlibexec_SCRIPTS = \
 # Install empty modprobe/*.d directories after rc1.py and rc3.py are installed
 # Install empty fluxlibexecdir/{prolog,epilog,housekeeping}.d directories
 # Install empty fluxlibexecdir/cli/plugins directory
+# Install empty fluxbashcompletiondir directory
 install-data-hook:
+	$(MKDIR_P) $(DESTDIR)$(fluxbashcompletiondir)
 	for dir in $(fluxconfdir) $(fluxdatadir); do \
 	  $(MKDIR_P) $(DESTDIR)$$dir/modprobe/modprobe.d; \
 	done
@@ -43,6 +46,7 @@ install-data-hook:
 
 # Remove empty modprobe/{prolog,epilog,housekeeping}.d directories on uninstall
 uninstall-hook:
+	rmdir $(DESTDIR)$(fluxbashcompletiondir) 2>/dev/null || :
 	for dir in $(fluxconfdir) $(fluxdatadir); do \
 	  rmdir $(DESTDIR)$$dir/modprobe/modprobe.d 2>/dev/null || :; \
 	done
@@ -98,7 +102,7 @@ EXTRA_DIST = \
 
 completions/flux: completions/flux.pre completions/get_builtins.sh
 	$(AM_V_GEN)test -d completions || mkdir completions && \
-	cp $< $@ && chmod +w $@ && \
+	$(SED) 's|@fluxbashcompletiondir@|$(fluxbashcompletiondir)|' $< > $@ && \
 	$(srcdir)/completions/get_builtins.sh \
 	$(top_srcdir)/src/cmd/builtin >> $@
 

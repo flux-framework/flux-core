@@ -610,6 +610,13 @@ MISCELLANEOUS
    plugins from those paths, with plugins in the ``flux.cli.plugins``
    namespace loaded last.
 
+.. envvar:: FLUX_BASH_COMPLETION_PATH
+
+   Set to a colon-separated list of directories to be searched for drop-in
+   bash completion files before the flux-core bash completion directory.
+   This variable is read by the interactive shell, not by :man1:`flux`.
+   See :man7:`flux-bash-completion`.
+
 .. envvar:: FLUX_IMP_EXEC_HELPER
 
    The IMP optionally takes its input from the output of an unprivileged

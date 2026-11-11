@@ -1277,3 +1277,12 @@ fluxkeys
 dstns
 srcns
 reconfigures
+COMPREPLY
+compgen
+esac
+fluxbashcompletiondir
+subcmd
+CWORD
+WORDBREAKS
+cword
+lang
