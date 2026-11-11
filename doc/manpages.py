@@ -395,4 +395,5 @@ man_pages = [
     ('man7/flux-shell-plugins', 'flux-shell-plugins', 'Flux shell plugin interfaces', [author], 7),
     ('man7/flux-shell-options', 'flux-shell-options', 'Flux shell built-in options', [author], 7),
     ('man7/flux-environment', 'flux-environment', 'Flux environment overview', [author], 7),
+    ('man7/flux-bash-completion', 'flux-bash-completion', 'Flux bash completion for external commands', [author], 7),
 ]
