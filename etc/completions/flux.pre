@@ -2558,23 +2558,25 @@ _flux_python3()
 
 # Complete a command not handled by flux-core using a drop-in file.
 # For command CMD, source the first file named CMD found in the
-# colon-separated FLUX_BASH_COMPLETION_PATH, unless _flux_ext_CMD is
-# already defined, then call _flux_ext_CMD. Dashes and dots in CMD are
-# replaced with underscores in the function name. Like a function
-# registered with complete -F, it is called with the command name, the
-# word being completed, and the previous word, and sets COMPREPLY.
+# colon-separated FLUX_BASH_COMPLETION_PATH or in the flux-core bash
+# completion directory, unless _flux_ext_CMD is already defined, then
+# call _flux_ext_CMD. Dashes and dots in CMD are replaced with underscores
+# in the function name. Like a function registered with complete -F, it
+# is called with the command name, the word being completed, and the
+# previous word, and sets COMPREPLY.
 # Returns 1 if no completion function is found.
 _flux_complete_ext()
 {
     local cmd=$1
-    local fn dir dirs
+    local fn dir dirs path
 
     # Refuse names that could escape the search path when used as a file name
     [[ $cmd =~ ^[[:alnum:]][[:alnum:]._-]*$ ]] || return 1
 
     fn="_flux_ext_${cmd//[-.]/_}"
     if ! declare -F "$fn" >/dev/null; then
-        IFS=: read -ra dirs <<< "$FLUX_BASH_COMPLETION_PATH"
+        path="$FLUX_BASH_COMPLETION_PATH:@fluxbashcompletiondir@"
+        IFS=: read -ra dirs <<< "$path"
         for dir in "${dirs[@]}"; do
             if [[ -n $dir && -f $dir/$cmd && -r $dir/$cmd ]]; then
                 . "$dir/$cmd"
