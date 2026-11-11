@@ -648,9 +648,12 @@ class UtilFormatter(Formatter):
             # if > 0, always round up to at least one second to
             #  avoid presenting a nonzero timedelta as zero
             try:
-                if 0 < value < 1:
-                    value = 1
-                value = str(timedelta(seconds=round(value)))
+                if math.isinf(value):
+                    value = "inf"
+                else:
+                    if 0 < value < 1:
+                        value = 1
+                    value = str(timedelta(seconds=round(value)))
             except TypeError:
                 if orig_value == "":
                     value = ""
