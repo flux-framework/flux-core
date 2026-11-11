@@ -2556,6 +2556,36 @@ _flux_python3()
     return 0
 }
 
+# Complete a command not handled by flux-core using a drop-in file.
+# For command CMD, source the first file named CMD found in the
+# colon-separated FLUX_BASH_COMPLETION_PATH, unless _flux_ext_CMD is
+# already defined, then call _flux_ext_CMD. Dashes and dots in CMD are
+# replaced with underscores in the function name. Like a function
+# registered with complete -F, it is called with the command name, the
+# word being completed, and the previous word, and sets COMPREPLY.
+# Returns 1 if no completion function is found.
+_flux_complete_ext()
+{
+    local cmd=$1
+    local fn dir dirs
+
+    # Refuse names that could escape the search path when used as a file name
+    [[ $cmd =~ ^[[:alnum:]][[:alnum:]._-]*$ ]] || return 1
+
+    fn="_flux_ext_${cmd//[-.]/_}"
+    if ! declare -F "$fn" >/dev/null; then
+        IFS=: read -ra dirs <<< "$FLUX_BASH_COMPLETION_PATH"
+        for dir in "${dirs[@]}"; do
+            if [[ -n $dir && -f $dir/$cmd && -r $dir/$cmd ]]; then
+                . "$dir/$cmd"
+                break
+            fi
+        done
+    fi
+    declare -F "$fn" >/dev/null || return 1
+    "$fn" "$cmd" "$cur" "$prev"
+}
+
 _flux_core()
 {
     FLUX_OPTS="-v --verbose -V --version -p --parent -r --root"
@@ -2719,6 +2749,13 @@ _flux_core()
         COMPREPLY=( $(compgen -W "${cmds}" -- "$cur") )
         ;;
     *)
+        # try a drop-in completion for commands not handled above.
+        # $cur = $cmd means the command name is still being typed, so
+        # fall through and complete the command name instead.
+        if [[ -n $cmd && $cur != "$cmd" ]] && _flux_complete_ext "$cmd"; then
+            return 0
+        fi
+
         # return with no suggestions for unknown subcommands:
         [[ "$prev" != "flux" && "$prev" != -* ]] && return
 
