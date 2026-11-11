@@ -419,6 +419,83 @@ test_expect_success 'submit: --queue completes queue names' '
     completion_has "batch"
 '
 
+#
+# Drop-in completions for commands not handled by flux-core
+#
+test_expect_success 'drop-in: create completion files' '
+    mkdir -p dropin1 dropin2 &&
+    cat >dropin2/ext-cmd <<-\EOF &&
+	ext_cmd_loaded=$((ext_cmd_loaded+1))
+	_flux_ext_ext_cmd() {
+	    ext_cmd_args="$1|$2|$3"
+	    COMPREPLY=( $(compgen -W "--alpha --beta" -- "$2") )
+	}
+	EOF
+    cat >dropin1/first <<-\EOF &&
+	_flux_ext_first() { COMPREPLY=(dropin1); }
+	EOF
+    cat >dropin2/first <<-\EOF &&
+	_flux_ext_first() { COMPREPLY=(dropin2); }
+	EOF
+    cat >dropin1/jobs <<-\EOF &&
+	_flux_ext_jobs() { COMPREPLY=(dropin1); }
+	EOF
+    cat >dropin1/nofunc <<-\EOF &&
+	nofunc_loaded=1
+	EOF
+    cat >dropin1/jo <<-\EOF
+	_flux_ext_jo() { COMPREPLY=(dropin1); }
+	EOF
+'
+test_expect_success 'drop-in: completes from FLUX_BASH_COMPLETION_PATH' '
+    FLUX_BASH_COMPLETION_PATH=$(pwd)/dropin1:$(pwd)/dropin2 &&
+    run_completion "flux ext-cmd --" &&
+    completion_has "--alpha" &&
+    completion_has "--beta"
+'
+test_expect_success 'drop-in: function gets command, current, previous word' '
+    run_completion "flux ext-cmd foo --b" &&
+    test "$ext_cmd_args" = "ext-cmd|--b|foo" &&
+    completion_has "--beta" &&
+    completion_lacks "--alpha"
+'
+test_expect_success 'drop-in: file is sourced only once' '
+    test "$ext_cmd_loaded" -eq 1
+'
+test_expect_success 'drop-in: first file found in path is used' '
+    run_completion "flux first " &&
+    completion_has "dropin1" &&
+    completion_lacks "dropin2"
+'
+test_expect_success 'drop-in: command name being typed is still completed' '
+    run_completion "flux jo" &&
+    completion_has "jobs" &&
+    completion_lacks "dropin1"
+'
+test_expect_success 'drop-in: not called while typing its own command name' '
+    run_completion "flux first" &&
+    completion_lacks "dropin1"
+'
+test_expect_success 'drop-in: built-in completion takes precedence' '
+    run_completion "flux jobs --" &&
+    completion_has "--filter=" &&
+    completion_lacks "dropin1"
+'
+test_expect_success 'drop-in: file without completion function is ignored' '
+    run_completion "flux nofunc " &&
+    test "$nofunc_loaded" = 1 &&
+    completion_empty
+'
+test_expect_success 'drop-in: unsafe command names are rejected' '
+    run_completion "flux ../dropin1/first " &&
+    completion_empty &&
+    run_completion "flux .hidden " &&
+    completion_empty
+'
+test_expect_success 'drop-in: unset search path' '
+    unset FLUX_BASH_COMPLETION_PATH
+'
+
 # -----------------------------------------------------------------------
 # Dynamic tests: use the real flux instance started by test_under_flux.
 # Remove the stub so completion functions call the real flux binary.
