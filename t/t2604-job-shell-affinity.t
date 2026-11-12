@@ -24,6 +24,14 @@ test $(${CPUS_ALLOWED_COUNT}) = 1 || test_set_prereq MULTICORE
 
 echo >&2 "# Running tests on $($CPUS_ALLOWED_COUNT) cores"
 
+#  cpu-affinity=map:LIST uses physical PU ids. Get the first two PUs
+#  available to this test, which may not be PUs 0 and 1.
+PUS=$(hwloc-calc --physical-output --intersect pu $(hwloc-bind --get))
+PU0=$(echo $PUS | cut -d, -f1)
+PU1=$(echo $PUS | cut -d, -f2)
+PU0MASK=$(hwloc-calc --physical-input --taskset pu:$PU0)
+PU1MASK=$(hwloc-calc --physical-input --taskset pu:$PU1)
+
 test_expect_success 'flux-shell: affinity hwloc-calc works' '
 	hwloc-bind --get &&
 	hwloc-bind --get | hwloc-calc --number-of core &&
@@ -52,31 +60,31 @@ test_expect_success 'flux-shell: per-task affinity sanity check' '
 		hwloc-bind --get
 '
 test_expect_success MULTICORE 'flux-shell: map affinity works' '
-	flux run --label-io -o cpu-affinity="map:1;0" -n 2 \
+	flux run --label-io -o cpu-affinity="map:$PU1;$PU0" -n 2 \
 	hwloc-bind --get > map1.out &&
 	task0set=$(sed -n "s/^0: //p" map1.out) &&
 	task1set=$(sed -n "s/^1: //p" map1.out) &&
-	test_debug "echo checking ${task0set}=0x2 ${task1set}=0x1" &&
-	test "$(hwloc-calc --taskset $task0set)" = "0x2" &&
-	test "$(hwloc-calc --taskset $task1set)" = "0x1"
+	test_debug "echo checking ${task0set}=$PU1MASK ${task1set}=$PU0MASK" &&
+	test "$(hwloc-calc --taskset $task0set)" = "$PU1MASK" &&
+	test "$(hwloc-calc --taskset $task1set)" = "$PU0MASK"
 '
 test_expect_success MULTICORE 'flux-shell: map affinity reuses underspecified sets' '
-	flux run --label-io -o cpu-affinity=map:1 -n 2 \
+	flux run --label-io -o cpu-affinity=map:$PU1 -n 2 \
 	hwloc-bind --get > map2.out &&
 	task0set=$(sed -n "s/^0: //p" map2.out) &&
 	task1set=$(sed -n "s/^1: //p" map2.out) &&
-	test_debug "echo checking ${task0set}=0x2 ${task1set}=0x2" &&
-	test "$(hwloc-calc --taskset $task0set)" = "0x2" &&
-	test "$(hwloc-calc --taskset $task1set)" = "0x2"
+	test_debug "echo checking ${task0set}=$PU1MASK ${task1set}=$PU1MASK" &&
+	test "$(hwloc-calc --taskset $task0set)" = "$PU1MASK" &&
+	test "$(hwloc-calc --taskset $task1set)" = "$PU1MASK"
 '
 test_expect_success MULTICORE 'flux-shell: map affinity can use hex bitmasks' '
-	flux run --label-io -o cpu-affinity="map:0x1;0x2" -n 2 \
+	flux run --label-io -o cpu-affinity="map:$PU0MASK;$PU1MASK" -n 2 \
 	hwloc-bind --get > map3.out &&
 	task0set=$(sed -n "s/^0: //p" map3.out) &&
 	task1set=$(sed -n "s/^1: //p" map3.out) &&
-	test_debug "echo checking ${task0set}=0x1 ${task1set}=0x2" &&
-	test "$(hwloc-calc --taskset $task0set)" = "0x1" &&
-	test "$(hwloc-calc --taskset $task1set)" = "0x2"
+	test_debug "echo checking ${task0set}=$PU0MASK ${task1set}=$PU1MASK" &&
+	test "$(hwloc-calc --taskset $task0set)" = "$PU0MASK" &&
+	test "$(hwloc-calc --taskset $task1set)" = "$PU1MASK"
 '
 test_expect_success 'flux-shell: map affinity can use a mix of inputs' '
 	id=$(flux submit --label-io -o cpu-affinity="map:0xf,0xf;0-3" -n 2 \
@@ -160,7 +168,7 @@ test_expect_success MULTICORE 'flux-shell: issue #7174 reproducer with per-task'
 	flux run -N2 -n3 -c1 -o verbose -o cpu-affinity=verbose,per-task true \
 	    >7174-per-task.out 2>&1 &&
 	grep "adjusted cores from 0-1 to 0" 7174-per-task.out &&
-	grep "task 2: cpus: 0" 7174-per-task.out
+	grep -E "task 2: cpus: $PU0([^0-9]|\$)" 7174-per-task.out
 '
 test_expect_success MULTICORE 'flux-shell: issue #7281: #7174 workaround disabled with per-resource' '
 	flux alloc -N2 -n4 -o verbose -o cpu-affinity=verbose \
@@ -177,6 +185,24 @@ test_expect_success MULTICORE 'flux-shell: issue #7281: #7174 workaround disable
 #
 # GPU tests:
 #
+test "$(flux resource list -no {ngpus})" = 0 && test_set_prereq NO_GPUS
+test_expect_success NO_GPUS 'flux-shell: gpu-env=auto selects nvidia without GPUs' '
+	flux run sh -c "echo \${CUDA_VISIBLE_DEVICES-unset} \
+		\${ROCR_VISIBLE_DEVICES-unset}" >gpu-env-auto.out &&
+	test_debug "cat gpu-env-auto.out" &&
+	test "$(cat gpu-env-auto.out)" = "-1 unset"
+'
+#  The tests below expect gpu-env=nvidia, but gpu-env=auto selects amd
+#  on a test host with AMD GPUs. Set gpu-env=nvidia by default.
+test_expect_success 'flux-shell: set gpu-env=nvidia default in initrc' '
+	cat >gpu-env-initrc.lua <<-EOF &&
+	source ("$(flux getattr conf.shell_initrc)")
+	if not shell.options["gpu-env"] then
+	    shell.options["gpu-env"] = "nvidia"
+	end
+	EOF
+	flux exec flux setattr conf.shell_initrc $(pwd)/gpu-env-initrc.lua
+'
 test_expect_success 'flux-shell: CUDA_VISIBLE_DEVICES=-1 set by default' '
 	flux run printenv CUDA_VISIBLE_DEVICES >default-gpubind.out 2>&1 &&
 	test_debug "cat default-gpubind.out" &&
@@ -401,6 +427,128 @@ test_expect_success 'flux-shell: constrained job with no GPUs still gets -1' '
 		printenv CUDA_VISIBLE_DEVICES >${name}.out 2>&1 &&
 	test_debug "cat ${name}.out" &&
 	grep "^-1" ${name}.out
+'
+test_expect_success 'flux-shell: gpu-env=amd sets ROCR_VISIBLE_DEVICES' '
+	name=gpu-env-amd &&
+	flux run -N1 -n2 \
+		--label-io \
+		--setattr=alloc-bypass.R="$(cat R.gpu)" \
+		-o gpu-env=amd \
+		sh -c "echo \$ROCR_VISIBLE_DEVICES \${CUDA_VISIBLE_DEVICES-unset}" \
+		>${name}.output 2>${name}.err &&
+	cat >${name}.expected <<-EOF  &&
+	0: 0,1,2,3 unset
+	1: 0,1,2,3 unset
+	EOF
+	test_debug "cat ${name}.output ${name}.err" &&
+	sort -k1,1n ${name}.output > ${name}.out &&
+	test_cmp ${name}.expected ${name}.out
+'
+test_expect_success 'flux-shell: gpu-env=amd works with gpu-affinity=per-task' '
+	name=gpu-env-amd-per-task &&
+	flux run -N1 -n2 \
+		--label-io \
+		--setattr=alloc-bypass.R="$(cat R.gpu)" \
+		-o gpu-env=amd \
+		-o gpu-affinity=per-task \
+		sh -c "echo \$ROCR_VISIBLE_DEVICES \${CUDA_VISIBLE_DEVICES-unset}" \
+		>${name}.output 2>${name}.err &&
+	cat >${name}.expected <<-EOF  &&
+	0: 0,1 unset
+	1: 2,3 unset
+	EOF
+	test_debug "cat ${name}.output ${name}.err" &&
+	sort -k1,1n ${name}.output > ${name}.out &&
+	test_cmp ${name}.expected ${name}.out
+'
+test_expect_success 'flux-shell: gpu-env=amd works with gpu-affinity=map' '
+	name=gpu-env-amd-map &&
+	flux run -N1 -n2 \
+		--label-io \
+		--setattr=alloc-bypass.R="$(cat R.gpu)" \
+		-o gpu-env=amd \
+		-o gpu-affinity="map:3;0-1" \
+		printenv ROCR_VISIBLE_DEVICES >${name}.output 2>${name}.err &&
+	cat >${name}.expected <<-EOF  &&
+	0: 3
+	1: 0,1
+	EOF
+	test_debug "cat ${name}.output ${name}.err" &&
+	sort -k1,1n ${name}.output > ${name}.out &&
+	test_cmp ${name}.expected ${name}.out
+'
+test_expect_success 'flux-shell: gpu-env=amd sets -1 when no GPUs assigned' '
+	flux run -o gpu-env=amd \
+		sh -c "echo \$ROCR_VISIBLE_DEVICES \${CUDA_VISIBLE_DEVICES-unset}" \
+		>gpu-env-amd-none.out &&
+	test_debug "cat gpu-env-amd-none.out" &&
+	test "$(cat gpu-env-amd-none.out)" = "-1 unset"
+'
+test_expect_success 'flux-shell: gpu-env=amd unsets inherited CUDA_VISIBLE_DEVICES' '
+	flux run \
+		--setattr=alloc-bypass.R="$(cat R.gpu)" \
+		--env=CUDA_VISIBLE_DEVICES=0 \
+		-o gpu-env=amd \
+		sh -c "echo \${CUDA_VISIBLE_DEVICES-unset}" >gpu-env-amd-unset.out &&
+	test "$(cat gpu-env-amd-unset.out)" = "unset"
+'
+test_expect_success 'flux-shell: gpu-env=nvidia unsets inherited ROCR_VISIBLE_DEVICES' '
+	flux run \
+		--setattr=alloc-bypass.R="$(cat R.gpu)" \
+		--env=ROCR_VISIBLE_DEVICES=0 \
+		-o gpu-env=nvidia \
+		sh -c "echo \${ROCR_VISIBLE_DEVICES-unset}" >gpu-env-nvidia-unset.out &&
+	test "$(cat gpu-env-nvidia-unset.out)" = "unset"
+'
+test_expect_success 'flux-shell: gpu-env does not modify HIP_VISIBLE_DEVICES' '
+	flux run \
+		--setattr=alloc-bypass.R="$(cat R.gpu)" \
+		--env=HIP_VISIBLE_DEVICES=1 \
+		-o gpu-env=amd \
+		printenv HIP_VISIBLE_DEVICES >gpu-env-hip.out &&
+	test "$(cat gpu-env-hip.out)" = "1"
+'
+test_expect_success NO_GPUS 'flux-shell: gpu-env=auto warns if GPU vendor unknown' '
+	flux run \
+		--setattr=alloc-bypass.R="$(cat R.gpu)" \
+		-o gpu-env=auto \
+		true 2>gpu-env-unknown.err &&
+	test_debug "cat gpu-env-unknown.err" &&
+	grep "GPU vendor unknown or mixed, using nvidia" gpu-env-unknown.err
+'
+test_expect_success 'flux-shell: gpu-env=auto does not warn with no GPUs' '
+	flux run -o gpu-env=auto true 2>gpu-env-nogpu.err &&
+	test_debug "cat gpu-env-nogpu.err" &&
+	test_must_fail grep "GPU vendor unknown" gpu-env-nogpu.err
+'
+test_expect_success 'flux-shell: explicit gpu-env does not warn' '
+	flux run \
+		--setattr=alloc-bypass.R="$(cat R.gpu)" \
+		-o gpu-env=amd \
+		true 2>gpu-env-explicit.err &&
+	test_debug "cat gpu-env-explicit.err" &&
+	test_must_fail grep "GPU vendor unknown" gpu-env-explicit.err
+'
+test_expect_success 'flux-shell: gpu-affinity=off ignores gpu-env' '
+	flux run \
+		--setattr=alloc-bypass.R="$(cat R.gpu)" \
+		-o gpu-affinity=off \
+		-o gpu-env=amd \
+		sh -c "echo \${ROCR_VISIBLE_DEVICES-unset}" >gpu-env-off.out &&
+	test "$(cat gpu-env-off.out)" = "unset"
+'
+test_expect_success 'flux-shell: gpu-affinity=off ignores invalid gpu-env' '
+	flux run -o gpu-affinity=off -o gpu-env=foo true
+'
+test_expect_success 'flux-shell: invalid gpu-env value fails job' '
+	test_must_fail flux run -o gpu-env=foo true 2>gpu-env-bad.err &&
+	test_debug "cat gpu-env-bad.err" &&
+	grep "invalid gpu-env shell option: foo" gpu-env-bad.err
+'
+test_expect_success 'flux-shell: non-string gpu-env value fails job' '
+	test_must_fail flux run -o gpu-env=1 true 2>gpu-env-int.err &&
+	test_debug "cat gpu-env-int.err" &&
+	grep "gpu-env shell option must be a string" gpu-env-int.err
 '
 test_expect_success 'flux-shell: create multi-node multi-gpu R' '
 	cat >R2.gpu <<-EOF

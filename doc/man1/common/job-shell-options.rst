@@ -14,6 +14,10 @@
    * - :option:`gpu-affinity`
      - Set task affinity to GPUs (:option:`off|per-task|map:LIST|on`)
 
+   * - :option:`gpu-env`
+     - Select the GPU visibility environment variable
+       (:option:`auto|nvidia|amd`)
+
    * - :option:`verbose`
      - Increase shell log verbosity (1 or 2).
 

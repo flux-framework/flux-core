@@ -61,7 +61,7 @@ devices see only the subset available to the job and index them from zero,
 so those ids are not valid indices within the library. A plugin that
 translates resource ids from :var:`R` into identifiers for use outside
 Flux must account for this. For example, the builtin ``gpu-affinity``
-plugin sets :envvar:`CUDA_VISIBLE_DEVICES` to the position of each allocated
+plugin sets its GPU visibility variable to the position of each allocated
 GPU within the rank's allocation rather than to its id from :var:`R`.
 
 :func:`flux_shell_get_rank_info` returns shell rank information as a json
