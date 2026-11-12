@@ -14,6 +14,7 @@
 #include <errno.h>
 #include <string.h>
 #include <stdbool.h>
+#include <unistd.h>
 
 #include "src/common/libtap/tap.h"
 #include "src/common/libresourcecount/resourcecount.h"
@@ -274,21 +275,29 @@ void test_codec (void)
 }
 
 struct inout test_iteration_inputs[] = {
-    /* wrap the JSON in an array to also allow integer and string types */
-    { "[1]",              0, "1" },
-    { "[\"13\"]",         0, "13" },
-    { "[\"5,7,13\"]",     0, "5,7,13" },
-    { "[\"5-20:2:^\"]",   0, "9,16" },
-    { "[\"10-100:2:^\"]", 0, "16,25,36,49,64,81,100" },
-    { "[\"9-100:3:^\"]",  0, "27,64" },
-    { "[{\"min\": 4, \"max\": 6}]", 0, "4,5,6" },
-    { "[{\"min\": 1, \"max\": 3, \"operand\": 2}]", 0, "1,3" },
-    { "[{\"min\": 4, \"max\": 6, \"operand\": 1, \"operator\": \"+\"}]",   0, "4,5,6" },
-    { "[{\"min\": 1, \"max\": 3, \"operand\": 2, \"operator\": \"+\"}]",   0, "1,3" },
-    { "[{\"min\": 2, \"max\": 16, \"operand\": 2, \"operator\": \"*\"}]",  0, "2,4,8,16" },
-    { "[{\"min\": 2, \"max\": 16, \"operand\": 2, \"operator\": \"^\"}]",  0, "4,9,16" },
-    { "[{\"min\": 1, \"max\": 16, \"operand\": 2, \"operator\": \"^\"}]",  0, "1,4,9,16" },
-    { "[{\"min\": 2, \"max\": 100, \"operand\": 3, \"operator\": \"^\"}]", 0, "8,27,64" },
+    /* wrap the JSON in an array to also allow integer and string types
+     * and use flags member to store last value 
+     */
+    { "[1]",              1,   "1" },
+    { "[\"13\"]",         13,  "13" },
+    { "[\"5,7,13\"]",     13,  "5,7,13" },
+    { "[\"1-8\"]",        8,   "1,2,3,4,5,6,7,8" },
+    { "[\"1-10:3\"]",     10,  "1,4,7,10" },
+    { "[\"1-9:3\"]",      7,   "1,4,7" },
+    { "[\"2-16:2:*\"]",   16,  "2,4,8,16" },
+    { "[\"2-16:3:*\"]",   6,   "2,6" },
+    { "[\"5-20:2:^\"]",   16,  "9,16" },
+    { "[\"10-100:2:^\"]", 100, "16,25,36,49,64,81,100" },
+    { "[\"9-100:3:^\"]",  64,  "27,64" },
+    { "[\"1-100:4:^\"]",  81,  "1,16,81" },
+    { "[{\"min\": 4, \"max\": 6}]", 6, "4,5,6" },
+    { "[{\"min\": 1, \"max\": 3, \"operand\": 2}]", 3, "1,3" },
+    { "[{\"min\": 4, \"max\": 6, \"operand\": 1, \"operator\": \"+\"}]",   6, "4,5,6" },
+    { "[{\"min\": 1, \"max\": 3, \"operand\": 2, \"operator\": \"+\"}]",   3, "1,3" },
+    { "[{\"min\": 2, \"max\": 16, \"operand\": 2, \"operator\": \"*\"}]",  16, "2,4,8,16" },
+    { "[{\"min\": 2, \"max\": 16, \"operand\": 2, \"operator\": \"^\"}]",  16, "4,9,16" },
+    { "[{\"min\": 1, \"max\": 16, \"operand\": 2, \"operator\": \"^\"}]",  16, "1,4,9,16" },
+    { "[{\"min\": 2, \"max\": 100, \"operand\": 3, \"operator\": \"^\"}]", 64, "8,27,64" },
 
     /* expected failures */
     { "[-1]",      0, NULL },
@@ -335,7 +344,12 @@ void test_iteration (void)
                     "resourcecount iteration '%s'->'%s' works",
                     ip->in, ip->out);
                 if (!match) {
-                    diag ("%s", s);
+                    diag ("instead got %s", s);
+                }
+                match = resourcecount_last (count) == ip->flags;
+                ok (count && match, "resourcecount_last '%s' -> %u works", ip->in, ip->flags);
+                if (!match) {
+                    diag ("instead got resourcecount_last() = %u", resourcecount_last (count));
                 }
             }
         }
@@ -349,50 +363,47 @@ void test_iteration (void)
         "resourcecount_first (NULL) == RESOURCECOUNT_INVALID_VALUE works");
     ok (resourcecount_next (NULL, 2) == RESOURCECOUNT_INVALID_VALUE,
         "resourcecount_next (NULL, ...) == RESOURCECOUNT_INVALID_VALUE works");
+    ok (resourcecount_last (NULL) == RESOURCECOUNT_INVALID_VALUE,
+        "resourcecount_last (NULL) == RESOURCECOUNT_INVALID_VALUE works");
 }
 
 struct inout_uint test_last_inputs[] = {
-    { "1",                1 },
-    { "17",               17 },
-    { "5,7,13",           13 },
-    { "1-8",              8 },
-    { "1-10:3",           10 },
-    { "1-9:3",            7 },
-    { "1-4294967292:2",   4294967291 },
-    { "2-16:2:*",         16 },
-    { "2-16:3:*",         6 },
-    { "2-100:2:^",        100 },
-    { "3-100:2:^",        100 },
-    { "2-50:2:^",         49 },
-    { "1-100:3:^",        64 },
+    { "1-4294967292:2:+", 4294967291 },
+    { "1-4294967292:2:*", 2147483648 },
     { "2-4294967293:2:^", 4294836225 },
     { "2+",               RESOURCECOUNT_MAX },
 
     { NULL, 0 },
 };
 
-void test_last (void)
+void test_last_timeout (void)
 {
     struct inout_uint *ip;
 
     for (ip = &test_last_inputs[0]; ip->in != NULL; ip++) {
         struct resourcecount *count;
+        unsigned int last = RESOURCECOUNT_INVALID_VALUE;
 
         errno = 0;
         count = resourcecount_decode (ip->in);
-        bool match = resourcecount_last (count) == ip->out;
+        lives_ok (
+            {
+                ualarm (500, 0);
+                last = resourcecount_last (count);
+                ualarm (0, 0);
+            },
+            "resourcecount_last '%s' -> works in <0.5s",
+            ip->in);
+        bool match = last == ip->out;
         ok (count && match, "resourcecount_last '%s' -> %u works", ip->in, ip->out);
         if (!count) {
             diag ("resourcecount_decode '%s' failed with error %s",
                   ip->in, strerror(errno));
         } else if (!match) {
-            diag ("instead got resourcecount_last() = %u", resourcecount_last (count));
+            diag ("instead got resourcecount_last() = %u", last);
         }
         resourcecount_destroy (count);
     }
-
-    ok (resourcecount_last (NULL) == RESOURCECOUNT_INVALID_VALUE,
-        "resourcecount_last (NULL) == RESOURCECOUNT_INVALID_VALUE works");
 }
 
 void test_bounded_last (void)
@@ -512,7 +523,7 @@ int main (int argc, char *argv[])
 
     test_codec ();
     test_iteration ();
-    test_last ();
+    test_last_timeout ();
     test_bounded_last ();
     test_boolean_accessors ();
     test_overflow ();
