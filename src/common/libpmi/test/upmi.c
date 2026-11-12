@@ -20,6 +20,7 @@
 #include "src/common/libtap/tap.h"
 #include "ccan/str/str.h"
 #include "src/common/libpmi/upmi.h"
+#include "src/common/libpmi/upmi_plugin.h"
 
 void diag_trace (void *arg, const char *text)
 {
@@ -268,6 +269,31 @@ void test_config (void)
     json_decref (config);
 }
 
+static void test_missing_jobid (void)
+{
+    ok (upmi_name_missing_jobid ("kvs_", 1),
+        "cray name without an apid is missing its job id");
+    ok (upmi_name_missing_jobid ("0.0", 1),
+        "slurm name without a job id is missing its job id");
+
+    /* A real job's name has a job id in it, so it must not match.  A
+     * prefix match here would demote a live job to a singleton.
+     */
+    ok (!upmi_name_missing_jobid ("kvs_1234", 1),
+        "cray name with an apid has its job id");
+    ok (!upmi_name_missing_jobid ("767.0", 1),
+        "slurm name with a job id has its job id");
+    /* A resource manager could assign job id 0.0 to a real job, such as
+     * the first job on a system.  Size keeps that job from being matched.
+     */
+    ok (!upmi_name_missing_jobid ("0.0", 2),
+        "a real multi-node job named 0.0 has its job id");
+    ok (!upmi_name_missing_jobid ("single-1234", 1),
+        "singleton name does not match");
+    ok (!upmi_name_missing_jobid (NULL, 1),
+        "NULL name does not match");
+}
+
 int main (int argc, char **argv)
 {
     plan (NO_PLAN);
@@ -280,6 +306,7 @@ int main (int argc, char **argv)
     test_dso ();
     test_env ();
     test_config ();
+    test_missing_jobid ();
 
     done_testing ();
     return 0;
