@@ -12,6 +12,7 @@
 #define _LIBPMI_UPMI_PLUGIN_H 1
 
 #include <stdarg.h>
+#include <stdbool.h>
 #include <flux/core.h>
 
 int upmi_seterror (flux_plugin_t *p,
@@ -19,6 +20,11 @@ int upmi_seterror (flux_plugin_t *p,
                    const char *fmt,
                    ...)
 __attribute__ ((format (printf, 3, 4)));
+
+/* Return true if 'name' is a known PMI job identity with an empty job
+ * portion, indicating the library initialized outside of a job.
+ */
+bool upmi_name_missing_jobid (const char *name, int size);
 
 
 #endif /* !_LIBPMI_UPMI_PLUGIN_H */

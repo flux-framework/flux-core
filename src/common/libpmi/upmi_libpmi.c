@@ -321,6 +321,15 @@ static int op_preinit (flux_plugin_t *p,
     result = ctx->get_size (&ctx->size);
     if (result != PMI_SUCCESS)
         goto error;
+    /* N.B. slurm's libpmi succeeds above outside of a job, returning a kvs
+     * name with the job id missing.  Decline so upmi tries the next method.
+     */
+    if (upmi_name_missing_jobid (ctx->kvsname, ctx->size)) {
+        return upmi_seterror (p,
+                              args,
+                              "%s: initialized outside of a job",
+                              name);
+    }
 
     char note[1024];
     snprintf (note, sizeof (note), "using %s", name);
