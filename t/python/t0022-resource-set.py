@@ -813,6 +813,81 @@ class TestScheduling(unittest.TestCase):
         self.assertEqual(rset2.impl.scheduling, sched)
 
 
+class TestSlots(unittest.TestCase):
+    """RFC 20 task slots in R are ignored by ResourceSet."""
+
+    R = {
+        "version": 1,
+        "execution": {
+            "R_lite": [
+                {
+                    "rank": "0-1",
+                    "children": {"core": "0-3", "gpu": "0"},
+                    "slots": {
+                        "cpu": {"count": 1, "core": "0-1"},
+                        "gpu": {"count": 2, "core": "2-3", "gpu": "0"},
+                    },
+                },
+                {
+                    "rank": "2",
+                    "children": {"core": "0-1"},
+                    "slots": {"cpu": {"count": 2, "core": "0-1"}},
+                },
+            ],
+            "nslots": 8,
+            "starttime": 0,
+            "expiration": 0,
+            "nodelist": ["foo[0-2]"],
+        },
+    }
+
+    @staticmethod
+    def without_slots(R):
+        R = json.loads(json.dumps(R))
+        for entry in R["execution"]["R_lite"]:
+            del entry["slots"]
+        return R
+
+    def test_counts(self):
+        rset = ResourceSet(self.R)
+        self.assertEqual(rset.nnodes, 3)
+        self.assertEqual(rset.ncores, 10)
+        self.assertEqual(rset.ngpus, 2)
+        self.assertEqual(str(rset.ranks), "0-2")
+        self.assertEqual(str(rset.nodelist), "foo[0-2]")
+
+    def test_slots_ignored(self):
+        expected = ResourceSet(self.without_slots(self.R))
+        rset = ResourceSet(self.R)
+        self.assertEqual(rset.encode(), expected.encode())
+        self.assertEqual(rset.dumps(), expected.dumps())
+        for entry in json.loads(rset.encode())["execution"]["R_lite"]:
+            self.assertNotIn("slots", entry)
+
+    def test_slots_ignored_by_operations(self):
+        rset = ResourceSet(self.R)
+        other = ResourceSet(self.without_slots(self.R))
+        results = [
+            rset.copy(),
+            rset.copy_ranks("1-2"),
+            rset.union(other),
+            rset.diff(other.copy_ranks("0")),
+            rset.intersect(other.copy_ranks("1")),
+            rset.copy_constraint({"hostlist": ["foo1"]}),
+        ]
+        rset.set_property("bar", "0")
+        rset.remove_ranks("2")
+        results.append(rset)
+        for result in results:
+            for entry in json.loads(result.encode())["execution"]["R_lite"]:
+                self.assertNotIn("slots", entry)
+
+    def test_invalid_slots_ignored(self):
+        R = json.loads(json.dumps(self.R))
+        R["execution"]["R_lite"][0]["slots"] = {"cpu": {"count": 0}}
+        self.assertEqual(ResourceSet(R).ncores, 10)
+
+
 if __name__ == "__main__":
     unittest.main(testRunner=TAPTestRunner())
 

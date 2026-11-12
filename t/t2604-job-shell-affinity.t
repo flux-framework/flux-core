@@ -455,4 +455,84 @@ test_expect_success 'flux-shell: gpu-affinity uneven distribution node-exclusive
 	sort -k1,1n ${name}.output > ${name}.out &&
 	test_cmp ${name}.expected ${name}.out
 '
+#
+# GPU affinity with RFC 20 slots in R
+#
+test_expect_success 'flux-shell: create R with cpu and gpu slots' '
+	flux R encode -r 0 -c 0-7 -g 4-7 -H $(hostname) | \
+	    jq -c ".execution.R_lite[0].slots = {
+		\"cpu\": {\"count\": 2, \"core\": \"0-3\"},
+		\"gpu\": {\"count\": 2, \"core\": \"4-7\", \"gpu\": \"4-7\"}}" \
+	    >R.slots
+'
+# Usage: gpu_slots_check NAME EXPECTED ARGS...
+gpu_slots_check() {
+	name=$1 &&
+	expected="$2" &&
+	shift 2 &&
+	flux run --label-io --setattr=alloc-bypass.R="$(cat R.slots)" "$@" \
+		printenv CUDA_VISIBLE_DEVICES >${name}.output 2>${name}.err &&
+	echo "$expected" | tr ";" "\n" >${name}.expected &&
+	test_debug "cat ${name}.output ${name}.err" &&
+	sort -k1,1n ${name}.output > ${name}.out &&
+	test_cmp ${name}.expected ${name}.out
+}
+test_expect_success 'flux-shell: gpu-affinity=per-task uses slot gpus' '
+	gpu_slots_check gpu-slots "0: -1;1: -1;2: 4,5;3: 6,7" \
+		-n4 -o gpu-affinity=per-task
+'
+test_expect_success 'flux-shell: gpu-affinity=per-task slot gpus are reindexed when constrained' '
+	gpu_slots_check gpu-slots-constrained "0: -1;1: -1;2: 0,1;3: 2,3" \
+		-n4 -o gpu-affinity=per-task \
+		--setattr=exec.bulkexec.test-constrained-resources=1
+'
+test_expect_success 'flux-shell: gpu-affinity=on ignores slots' '
+	gpu_slots_check gpu-slots-on \
+		"0: 4,5,6,7;1: 4,5,6,7;2: 4,5,6,7;3: 4,5,6,7" -n4
+'
+test_expect_success 'flux-shell: gpu-affinity=map: ignores slots' '
+	gpu_slots_check gpu-slots-map "0: 0;1: 1;2: 2;3: 3" \
+		-n4 -o "gpu-affinity=map:0;1;2;3"
+'
+test_expect_success 'flux-shell: gpu-affinity=per-task tasks sharing a slot share gpus' '
+	name=gpu-slots-shared &&
+	flux run --dry-run -n8 --label-io \
+		--setattr=alloc-bypass.R="$(cat R.slots)" \
+		-o gpu-affinity=per-task \
+		printenv CUDA_VISIBLE_DEVICES | \
+		jq ".tasks[0].count = {\"total\": 8}" >${name}.json &&
+	flux job attach --label-io $(flux job submit ${name}.json) \
+		>${name}.output &&
+	cat >${name}.expected <<-EOF &&
+	0: -1
+	1: -1
+	2: 4,5
+	3: 6,7
+	4: -1
+	5: -1
+	6: 4,5
+	7: 6,7
+	EOF
+	test_debug "cat ${name}.output" &&
+	sort -k1,1n ${name}.output > ${name}.out &&
+	test_cmp ${name}.expected ${name}.out
+'
+test_expect_success 'flux-shell: gpu-affinity=per-task with gpu slot label' '
+	name=gpu-slots-label &&
+	flux run --dry-run -n2 --label-io \
+		--setattr=alloc-bypass.R="$(cat R.slots)" \
+		-o gpu-affinity=per-task \
+		printenv CUDA_VISIBLE_DEVICES | \
+		jq ".resources[0].label = \"gpu\" | .tasks[0].slot = \"gpu\"" \
+		>${name}.json &&
+	flux job attach --label-io $(flux job submit ${name}.json) \
+		>${name}.output &&
+	cat >${name}.expected <<-EOF &&
+	0: 4,5
+	1: 6,7
+	EOF
+	test_debug "cat ${name}.output" &&
+	sort -k1,1n ${name}.output > ${name}.out &&
+	test_cmp ${name}.expected ${name}.out
+'
 test_done

@@ -650,8 +650,10 @@ static json_t *flux_shell_get_rank_info_object (flux_shell_t *shell, int rank)
     json_error_t error;
     char key [128];
     char *taskids = NULL;
+    char *cores = NULL;
+    char *gpus = NULL;
     struct taskmap *map;
-    struct rcalc_rankinfo rankinfo;
+    struct slotmap_rankinfo rankinfo;
     struct hostlist *hl;
     const char *nodename;
 
@@ -675,16 +677,20 @@ static json_t *flux_shell_get_rank_info_object (flux_shell_t *shell, int rank)
     if (!(taskids = get_rank_task_idset (map, rank)))
         return NULL;
 
-    if (rcalc_get_nth (shell->info->rcalc, rank, &rankinfo) < 0)
-        return NULL;
-
     /* Note: Drop const on `struct hostlist *` here. The cursor will be
      * moved, but this should be fine here since the hostlist itself is not
      * changing.
      */
-    if (!(hl = (struct hostlist *) flux_shell_get_hostlist (shell))
-        || !(nodename = hostlist_nth (hl, rank)))
+    if (slotmap_get_nth (shell->info->slotmap, rank, &rankinfo) < 0
+        || !(cores = slotmap_cores (shell->info->slotmap, rank))
+        || !(gpus = slotmap_gpus (shell->info->slotmap, rank))
+        || !(hl = (struct hostlist *) flux_shell_get_hostlist (shell))
+        || !(nodename = hostlist_nth (hl, rank))) {
+        free (taskids);
+        free (cores);
+        free (gpus);
         return NULL;
+    }
 
     o = json_pack_ex (&error,
                       0,
@@ -696,12 +702,24 @@ static json_t *flux_shell_get_rank_info_object (flux_shell_t *shell, int rank)
                       "taskids", taskids,
                       "resources",
                        "ncores", rankinfo.ncores,
-                       "cores", rankinfo.cores,
-                       "gpus",  rankinfo.gpus);
+                       "cores", cores,
+                       "gpus",  gpus);
     free (taskids);
+    free (cores);
+    free (gpus);
 
     if (o == NULL)
         return NULL;
+
+    /* Add RFC 20 slots if they were provided in R
+     */
+    if (slotmap_has_slots (shell->info->slotmap)) {
+        json_t *slots = slotmap_slots_json (shell->info->slotmap, rank);
+        if (!slots || json_object_set_new (o, "slots", slots) < 0) {
+            json_decref (o);
+            return NULL;
+        }
+    }
 
     if (flux_shell_aux_set (shell, key, o, (flux_free_f) json_decref) < 0) {
         json_decref (o);
@@ -1740,62 +1758,52 @@ out:
 }
 
 /* Fix jobspec v1 quirk with uneven distribution of tasks to nodes (#7174)
- *
- * With jobspec v1 and an unequal distribution of tasks to nodes when
- * nodes have been explicitly requested (e.g. `flux run -N2 -n3 ...`)
- * extra slots are requested in jobspec due to the v1 requirement that
- * there can only be one `node` resource in the jobspec resources array.
- *
- * This function fixes this case by removing the extra slot from affected
- * ranks in the rcalc rankinfo. This then ensures each task has an equal
- * count of cores/gpus assigned, at the expense of wasting a slot.
- *
- * Apply this fix as narrowly as possible by ensuring the following:
- * - jobspec version is 1
- * - the jobspec did not specify node exclusive allocation
- * - the jobspec did not specify a per-resource object
- * - number of nodes allocated > 1
- * - there are more total slots than tasks
- *
+ * by removing the resources of unused slots from each rank.
+ * See shell_info_need_normalize().
  */
 static int shell_adjust_resources_per_task (flux_shell_t *shell)
 {
     struct shell_info *info = shell->info;
-    struct jobspec *jobspec = info->jobspec;
 
-    if (jobspec->version == 1
-        && !jobspec->node_exclusive
-        && !jobspec->per_resource
-        && jobspec->node_count > 1
-        && jobspec->slot_count > info->total_ntasks) {
-        struct rcalc_rankinfo ri;
+    if (shell_info_need_normalize (info)) {
+        struct slotmap *sm = info->slotmap;
+        int rank = info->shell_rank;
+        char *cores = slotmap_cores (sm, rank);
+        char *gpus = slotmap_gpus (sm, rank);
+        char *new_cores = NULL;
+        char *new_gpus = NULL;
+        int rc = -1;
 
-        if (rcalc_normalize_resources_per_task (info->rcalc,
-                                                jobspec->cores_per_slot,
-                                                jobspec->gpus_per_slot) < 0) {
+        if (!cores
+            || !gpus
+            || slotmap_normalize (sm,
+                                  info->jobspec->cores_per_slot,
+                                  info->jobspec->gpus_per_slot) < 0
+            || !(new_cores = slotmap_cores (sm, rank))
+            || !(new_gpus = slotmap_gpus (sm, rank))
+            || slotmap_get_nth (sm, rank, &info->rankinfo) < 0) {
             shell_log_error ("error normalizing resources per task");
-            return -1;
+            goto out;
         }
-        /* Now update stored rcalc rankinfo. Compare old and new values and
-         * emit a warning to user if something changed.
+        /* Emit a warning to the user if something changed.
          */
-        if (rcalc_get_nth (info->rcalc, info->shell_rank, &ri) < 0) {
-            shell_log_error ("error getting adjusted rcalc rank info");
-            return -1;
-        }
-        if (!streq (info->rankinfo.cores, ri.cores))
+        if (!streq (cores, new_cores))
             shell_warn ("%s: adjusted cores from %s to %s",
                         shell->hostname,
-                        info->rankinfo.cores,
-                        ri.cores);
-        if (!streq (info->rankinfo.gpus, ri.gpus))
+                        cores,
+                        new_cores);
+        if (!streq (gpus, new_gpus))
             shell_warn ("%s: adjusted gpus from %s to %s",
                         shell->hostname,
-                        info->rankinfo.gpus,
-                        ri.gpus);
-        /* Update rank info
-         */
-        info->rankinfo = ri;
+                        gpus,
+                        new_gpus);
+        rc = 0;
+out:
+        free (cores);
+        free (gpus);
+        free (new_cores);
+        free (new_gpus);
+        return rc;
     }
     return 0;
 }
@@ -1860,6 +1868,7 @@ static void shell_log_info (flux_shell_t *shell)
         struct shell_info *info = shell->info;
         char *taskids = idset_encode (info->taskids,
                                       IDSET_FLAG_RANGE | IDSET_FLAG_BRACKETS);
+        char *cores = slotmap_cores (info->slotmap, info->shell_rank);
 
         if (info->shell_rank == 0)
             shell_debug ("0: task_count=%d slot_count=%d "
@@ -1872,8 +1881,9 @@ static void shell_log_info (flux_shell_t *shell)
                      info->shell_rank,
                      idset_count (info->taskids) > 1 ? "s" : "",
                      taskids ? taskids : "[unknown]",
-                     info->rankinfo.cores);
+                     cores ? cores : "[unknown]");
         free (taskids);
+        free (cores);
     }
 }
 

@@ -420,4 +420,49 @@ test_expect_success 'flux R parse-config detects bad scheduling key' '
 	EOF
 	test_must_fail flux R parse-config conf4
 '
+#
+# RFC 20 task slots in R are ignored
+#
+test_expect_success 'create R with slots' '
+	flux R encode -r 0-1 -c 0-3 -g 0 -H foo[0-1] | \
+	    jq -c ".execution.R_lite[0].slots = {
+		\"cpu\": {\"count\": 1, \"core\": \"0-1\"},
+		\"gpu\": {\"count\": 1, \"core\": \"2-3\", \"gpu\": \"0\"}}" \
+	    >R.slots &&
+	flux R encode -r 1-2 -c 0-1 -H foo[1-2] | \
+	    jq -c ".execution.R_lite[0].slots = {
+		\"task\": {\"count\": 2, \"core\": \"0-1\"}}" \
+	    >R2.slots &&
+	flux R encode -r 0-1 -c 0-3 -g 0 -H foo[0-1] >R.noslots
+'
+test_expect_success 'flux R decode ignores slots' '
+	flux R decode --short <R.slots >decode-slots.out &&
+	flux R decode --short <R.noslots >decode-noslots.out &&
+	test_cmp decode-noslots.out decode-slots.out &&
+	flux R decode <R.slots | jq -e ".execution.R_lite[0] | has(\"slots\") | not"
+'
+for cmd in "append" "diff" "intersect"; do
+	test_expect_success "flux R $cmd ignores slots" '
+		cat R.slots R2.slots >$cmd-slots.in &&
+		test_might_fail flux R $cmd <$cmd-slots.in >$cmd-slots.out 2>&1 &&
+		test_debug "cat $cmd-slots.out" &&
+		test_must_fail grep -i slot $cmd-slots.out
+	'
+done
+test_expect_success 'flux R verify ignores slots' '
+	flux R encode -r 0 -c 0-3 | \
+	    jq -c ".execution.R_lite[0].slots = {
+		\"task\": {\"count\": 4, \"core\": \"0-3\"}}" >R1.slots &&
+	flux R encode -r 0 -c 0-3 >R1.noslots &&
+	cat R1.slots R1.noslots | flux R verify
+'
+test_expect_success 'flux R set-property ignores slots' '
+	flux R set-property foo:0 <R.slots | \
+	    jq -e ".execution.properties.foo == \"0\"" &&
+	flux R set-property foo:0 <R.slots | test_must_fail grep slots
+'
+test_expect_success 'flux R rerank and remap ignore slots' '
+	flux R rerank foo[0-1] <R.slots | test_must_fail grep slots &&
+	flux R remap <R.slots | test_must_fail grep slots
+'
 test_done

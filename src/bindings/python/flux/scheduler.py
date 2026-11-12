@@ -419,6 +419,8 @@ class Scheduler(BrokerModule):
                         f"log-level={name!r} is invalid: "
                         f"expected one of {', '.join(BrokerLogger.LEVEL_NAMES)}"
                     )
+            elif arg == "slots":
+                self.pool_kwargs["slots"] = True
             elif arg.startswith("pool-class="):
                 uri = arg[len("pool-class=") :]
                 cls = _pool_class_from_uri(uri)
@@ -437,7 +439,7 @@ class Scheduler(BrokerModule):
         if self._pending_args:
             raise ValueError(
                 f"unknown argument {self._pending_args[0]!r}: "
-                f"built-in options are queue-depth, log-level, pool-class"
+                f"built-in options are queue-depth, log-level, pool-class, slots"
             )
 
     # ------------------------------------------------------------------

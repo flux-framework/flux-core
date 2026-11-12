@@ -155,7 +155,7 @@ void shell_svc_destroy (struct shell_svc *svc)
 struct shell_svc *shell_svc_create (flux_shell_t *shell)
 {
     struct shell_svc *svc;
-    struct rcalc_rankinfo ri;
+    struct slotmap_rankinfo ri;
     int shell_size = shell->info->shell_size;
     flux_future_t *f;
     int i;
@@ -167,7 +167,7 @@ struct shell_svc *shell_svc_create (flux_shell_t *shell)
     if (!(svc->rank_table = calloc (shell_size, sizeof (*svc->rank_table))))
         goto error;
     for (i = 0; i < shell_size; i++) {
-        if (rcalc_get_nth (shell->info->rcalc, i, &ri) < 0)
+        if (slotmap_get_nth (shell->info->slotmap, i, &ri) < 0)
             goto error;
         svc->rank_table[i] = ri.rank;
     }

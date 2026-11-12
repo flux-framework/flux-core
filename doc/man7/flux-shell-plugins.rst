@@ -726,6 +726,14 @@ Task-related callbacks can access task information via
       return 0;
   }
 
+If the scheduler assigned RFC 20 task slots in *R*, task info also has a
+``slot`` key that describes the resources of the slot to which the task is
+assigned, and rank info has a ``slots`` key that lists the slots on a shell
+rank. Plugins that bind tasks to resources, such as the builtin
+``cpu-affinity`` and ``gpu-affinity`` plugins with ``per-task``, should use
+these keys when present. See :man3:`flux_shell_task_get_info` and
+:man3:`flux_shell_get_info`.
+
 Storing Plugin State
 --------------------
 

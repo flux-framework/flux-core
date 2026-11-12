@@ -64,6 +64,7 @@ void shell_task_destroy (struct shell_task *task)
     if (task) {
         int saved_errno = errno;
         aux_destroy (&task->aux);
+        json_decref (task->slot);
         flux_cmd_destroy (task->cmd);
         flux_subprocess_destroy (task->proc);
         zhashx_destroy (&task->subscribers);
@@ -86,6 +87,25 @@ error:
     return NULL;
 }
 
+/*  Return the command of the first jobspec task bound to the label of the
+ *  slot of `task`. Use the first task's command if R has no slots, or if
+ *  no jobspec task is bound to the label. The latter happens when no slots
+ *  in R match a jobspec task, in which case tasks are distributed over all
+ *  slots.
+ */
+static json_t *task_command (struct shell_info *info,
+                             struct shell_task *task)
+{
+    const char *label = NULL;
+    json_t *command;
+
+    if (task->slot
+        && json_unpack (task->slot, "{s:s}", "label", &label) == 0
+        && (command = jobspec_task_command (info->jobspec, label)))
+        return command;
+    return info->jobspec->command;
+}
+
 struct shell_task *shell_task_create (flux_shell_t *shell,
                                       int index,
                                       int taskid)
@@ -93,6 +113,7 @@ struct shell_task *shell_task_create (flux_shell_t *shell,
     struct shell_info *info = shell->info;
     struct shell_task *task;
     const char *key;
+    json_t *command;
     json_t *entry;
     size_t i;
 
@@ -102,6 +123,9 @@ struct shell_task *shell_task_create (flux_shell_t *shell,
     task->index = index;
     task->rank = taskid;
     task->size = info->total_ntasks;
+    if (slotmap_has_slots (info->slotmap)
+        && !(task->slot = slotmap_task_slot_json (info->slotmap, taskid)))
+        goto error;
     if (!(task->cmd = flux_cmd_create (0, NULL, NULL)))
         goto error;
     /* Set larger stdin buffer to handle bursty input from batching.
@@ -112,7 +136,8 @@ struct shell_task *shell_task_create (flux_shell_t *shell,
      */
     if (flux_cmd_setopt (task->cmd, "stdin_BUFSIZE", "32M") < 0)
         goto error;
-    json_array_foreach (info->jobspec->command, i, entry) {
+    command = task_command (info, task);
+    json_array_foreach (command, i, entry) {
         if (flux_cmd_argv_append (task->cmd, json_string_value (entry)) < 0)
             goto error;
     }
@@ -360,7 +385,8 @@ static json_t *get_task_object (flux_shell_task_t *task)
                                      "state", task_state (task))))
         return NULL;
 
-    if ((task->proc && add_process_info_to_json (task->proc, o) < 0)
+    if ((task->slot && json_object_set (o, "slot", task->slot) < 0)
+        || (task->proc && add_process_info_to_json (task->proc, o) < 0)
         || aux_set (&task->aux, key, o, (flux_free_f) json_decref) < 0) {
         json_decref (o);
         return NULL;
