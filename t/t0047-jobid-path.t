@@ -30,6 +30,22 @@ test_expect_success 'two singleton instances get different names' '
 	test_must_fail test_cmp single.out single2.out
 '
 
+# The tests above reach the singleton method only because no other method
+# accepts the environment.  Force the method so that a PMI library showing
+# up in the loader path cannot quietly take this coverage away.
+test_expect_success 'forced singleton is named for the broker pid' '
+	FLUX_PMI_CLIENT_METHODS=single flux start ${ARGS} \
+	    flux getattr jobid-path >forced.out &&
+	test_debug "cat forced.out" &&
+	grep -E "^/single-[0-9]+$" forced.out
+'
+
+test_expect_success 'two forced singleton instances get different names' '
+	FLUX_PMI_CLIENT_METHODS=single flux start ${ARGS} \
+	    flux getattr jobid-path >forced2.out &&
+	test_must_fail test_cmp forced.out forced2.out
+'
+
 #
 # flux-start test bootstrap
 #
