@@ -78,7 +78,7 @@ unsigned int resourcecount_bounded_last (const struct resourcecount *count,
  */
 unsigned int resourcecount_last (const struct resourcecount *count);
 
-/* Returns true if count is a simple integer, i.e. count->integer > 0.
+/* Returns true if count is a simple integer.
  * Returns false otherwise, or if count is NULL.
  */
 bool resourcecount_is_integer (const struct resourcecount *count);
