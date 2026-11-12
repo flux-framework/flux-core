@@ -7,6 +7,7 @@ This covers MPI sessions support in MPICH + PMI-1.2 + jobdict.
 flux-pmix covers MPI sessions support in {MPICH, OpenMPI} + PMIx + jobdict.
 
 MPICH >= 5 uses the group barrier IFF:
+ - The ch4 device is selected
  - MPIR_CVAR_PMI_DISABLE_GROUP == 0
  - HAVE_PMI_BARRIER_GROUP is defined to 1
 
@@ -41,13 +42,17 @@ if ! ${SESSIONS} --probe; then
     test_done
 fi
 
-# MPICH >= 5.0 has PMI_Barrier_group and true Sessions (see above).
+# MPICH >= 5.0 on the ch4 device uses the group barrier (see above).
 MPICH_MAJOR=$(${VERSION} | sed -n 's/^MPICH Version:[ \t]*\([0-9]*\).*/\1/p')
-if test "${MPICH_MAJOR:-0}" -ge 5; then
-    test_set_prereq GROUP_BARRIER
-else
+MPICH_DEVICE=$(${VERSION} | sed -n 's/^MPICH Device:[ \t]*\([^: \t]*\).*/\1/p')
+if test "${MPICH_MAJOR:-0}" -lt 5; then
     echo "# MPICH ${MPICH_MAJOR}.x: the group barrier is exercised only" \
          "with MPICH >= 5"
+elif test "${MPICH_DEVICE:-unknown}" != ch4; then
+    echo "# MPICH device ${MPICH_DEVICE:-unknown}: the group barrier is" \
+         "exercised only with ch4"
+else
+    test_set_prereq GROUP_BARRIER
 fi
 
 # work around https://github.com/open-mpi/ompi/issues/7701 and similar in mpich
@@ -100,8 +105,8 @@ test_expect_success GROUP_BARRIER 'even subset sent an ascending rank list' '
 test_expect_success GROUP_BARRIER 'descending subset sent a descending rank list' '
 	grep "cmd=barrier_in group=3,1:" trace12.err
 '
-# On MPICH 4.x a group barrier would mean the version check is wrong.
-test_expect_success !GROUP_BARRIER 'MPICH 4.x client used only 1.1 barriers' '
+# On MPICH 4.x or ch3, a group barrier would mean the prereq is wrong.
+test_expect_success !GROUP_BARRIER 'client without group barrier used only 1.1 barriers' '
 	grep "cmd=barrier_in" trace12.err &&
 	test_must_fail grep "cmd=barrier_in group=" trace12.err
 '
