@@ -3,29 +3,17 @@
 
 test_description='Test MPI-4 Sessions over Flux PMI
 
-An MPI Session program builds a communicator from the WORLD process set
-and from an even-rank subset.  MPICH >= 5.0 implements true Sessions
-and bootstraps the subset communicator with a PMI-1.2 group barrier when
-the process manager offers PMI-1.2, falling back to whole-job barriers
-otherwise.  MPICH 4.x builds an internal MPI_COMM_WORLD behind the
-Sessions API and always uses whole-job barriers.
+This covers MPI sessions support in MPICH + PMI-1.2 + jobdict.
+flux-pmix covers MPI sessions support in {MPICH, OpenMPI} + PMIx + jobdict.
 
-This test runs a Sessions program against the server pinned to PMI-1.1
-with pmi-simple.version=1.1, then against the default PMI-1.2 server,
-and traces the wire to check what the subset communicator used: only
-whole-job barriers against 1.1, and on MPICH >= 5 a tagged group
-barrier against 1.2.
+MPICH >= 5 uses the group barrier IFF:
+ - MPIR_CVAR_PMI_DISABLE_GROUP == 0
+ - HAVE_PMI_BARRIER_GROUP is defined to 1
 
-Skipped unless FLUX_TEST_MPI is set, the MPI is MPICH, and MPI-4
-Sessions are available.
-
-N.B. Two MPICH details affect whether MPICH >= 5 uses the group barrier
-at all, and the wire assertion guards against both:
- - MPICH 5.0.x configure only enables PMI_Barrier_group when linking a
-   third party libpmi, so a build with its own embedded libpmi needs
-   CPPFLAGS=-DHAVE_PMI_BARRIER_GROUP=1 (see scripts/fetch-and-build-mpich.sh).
- - MPICH main after v5.0.2 defaults MPIR_CVAR_PMI_DISABLE_GROUP to 1.
-   The test sets it to 0 explicitly.
+MPICH 5.0.x leaves HAVE_PMI_BARRIER_GROUP undefined when built with
+its embedded libpmi, and main after 5.0.2 defaults
+MPIR_CVAR_PMI_DISABLE_GROUP to 1.  See pmodels/mpich#8056 and
+scripts/fetch-and-build-mpich.sh.
 '
 
 . `dirname $0`/sharness.sh
