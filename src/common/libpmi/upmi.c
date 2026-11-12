@@ -669,4 +669,36 @@ int upmi_seterror (flux_plugin_t *p,
     return -1;
 }
 
+/* Some foreign PMI libraries succeed in init when there is no job.  They
+ * report rank 0, size 1, and a name with the job id missing.  The name is
+ * the same every time, so all instances on a node share it, but the broker
+ * needs a name that is unique on the node.
+ *
+ * A PMI library cannot be asked if a job exists, so match the names instead.
+ * Match the whole name, not a prefix: a prefix match on "kvs_" would also
+ * match a real cray name like kvs_1234 and demote a live job to a singleton.
+ *
+ * Also require size 1, because a resource manager could assign one of these
+ * names to a real job, such as job 0.0, the first job on a system.  The size
+ * test limits the error to a single node job.  Such a job still bootstraps
+ * correctly as a singleton.  Only its jobid-path root differs.
+ *
+ * A name that is not in the table is not matched, and nothing changes.
+ */
+bool upmi_name_missing_jobid (const char *name, int size)
+{
+    static const char *names[] = {
+        "kvs_",     // cray: kvs_<apid> without the apid
+        "0.0",      // slurm: <jobid>.<stepid> without the job
+    };
+
+    if (!name || size != 1)
+        return false;
+    for (int i = 0; i < ARRAY_SIZE (names); i++) {
+        if (streq (name, names[i]))
+            return true;
+    }
+    return false;
+}
+
 // vi:ts=4 sw=4 expandtab

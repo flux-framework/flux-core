@@ -427,6 +427,15 @@ static int op_preinit (flux_plugin_t *p,
     result = ctx->job_getid (ctx->jobid, sizeof (ctx->jobid));
     if (result != PMI2_SUCCESS)
         goto error;
+    /* N.B. cray's libpmi2 succeeds here outside of a job, returning a job
+     * id with the apid missing.  Decline so upmi tries the next method.
+     */
+    if (upmi_name_missing_jobid (ctx->jobid, ctx->size)) {
+        return upmi_seterror (p,
+                              args,
+                              "%s: initialized outside of a job",
+                              name);
+    }
 
     char note[1024];
     snprintf (note,
