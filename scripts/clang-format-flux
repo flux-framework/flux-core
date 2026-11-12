@@ -34,19 +34,33 @@ file with changes.  This is
 the intended mode for day to day use: new and modified code is held to
 RFC 7 while untouched (often older, non-conforming) code is left alone.
 """
+
 import difflib
 import os
 import re
 import subprocess
 import sys
 
-COLUMN_LIMIT = 80
+# .clang-format uses options first available in this version.
+MIN_VERSION = (23, 1)
 
 TOPDIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # Always use the project style, even for files outside the source tree
 # (otherwise clang-format silently falls back to its LLVM default).
 STYLE_FILE = os.path.join(TOPDIR, ".clang-format")
+
+
+def style_column_limit():
+    """Return ColumnLimit from .clang-format so the fixup agrees with it."""
+    with open(STYLE_FILE) as f:
+        m = re.search(r"^ColumnLimit\s*:\s*(\d+)", f.read(), re.M)
+    if not m:
+        sys.exit("clang-format-flux: ColumnLimit not found in " + STYLE_FILE)
+    return int(m.group(1))
+
+
+COLUMN_LIMIT = style_column_limit()
 
 # Vendored code is listed in .clang-format-ignore, which clang-format
 # also reads, so editors and agents running clang-format directly skip it.
@@ -234,6 +248,28 @@ def reattach(text, original=None):
     return "\n".join(out)
 
 
+def check_version():
+    """Exit with a clear message if clang-format is missing or too old."""
+    try:
+        r = subprocess.run(
+            ["clang-format", "--version"], capture_output=True, text=True
+        )
+    except FileNotFoundError:
+        sys.exit(
+            "clang-format-flux: clang-format not found"
+            " (pip install -r scripts/requirements-dev.txt)"
+        )
+    m = re.search(r"(\d+)\.(\d+)", r.stdout)
+    if not m or (int(m.group(1)), int(m.group(2))) < MIN_VERSION:
+        sys.exit(
+            "clang-format-flux: {} but {}.{}+ is required"
+            " (pip install -r scripts/requirements-dev.txt)".format(
+                r.stdout.strip() or "cannot determine clang-format version",
+                *MIN_VERSION,
+            )
+        )
+
+
 def resolve_base(base):
     """Resolve "auto" to the merge-base of HEAD with upstream master."""
     if base != "auto":
@@ -248,7 +284,11 @@ def resolve_base(base):
 
 
 def changed_files(base):
-    """C sources changed relative to base (plus untracked ones)."""
+    """C sources changed relative to base, as reported by git diff.
+
+    Untracked files are not included; a new file is checked once it is
+    staged or committed, or when named explicitly.
+    """
     rev = [base] if base != "--cached" else ["--cached"]
     out = subprocess.run(
         ["git", "diff", "--name-only", "--diff-filter=d", *rev],
@@ -256,21 +296,14 @@ def changed_files(base):
         text=True,
         check=True,
     ).stdout.split()
-    if base != "--cached":
-        out += subprocess.run(
-            ["git", "ls-files", "--others", "--exclude-standard"],
-            capture_output=True,
-            text=True,
-            check=True,
-        ).stdout.split()
     return sorted(set(f for f in out if f.endswith((".c", ".h"))))
 
 
 def changed_ranges(path, base):
     """Return [(first, last), ...] lines of path changed relative to git base.
 
-    base is a commit-ish, or "--cached" for staged changes.  New (untracked)
-    files are treated as entirely changed.
+    base is a commit-ish, or "--cached" for staged changes.  An untracked
+    file named explicitly is treated as entirely changed.
     """
     rev = [base] if base != "--cached" else ["--cached"]
     r = subprocess.run(
@@ -302,17 +335,14 @@ def format_text(path, text, ranges=None):
         if not ranges:
             return text
         cmd += ["--lines={}:{}".format(a, b) for a, b in ranges]
-    r = subprocess.run(
-        cmd,
-        input=text,
-        capture_output=True,
-        text=True,
-        check=True,
-    )
+    r = subprocess.run(cmd, input=text, capture_output=True, text=True)
+    if r.returncode != 0:
+        sys.exit("clang-format-flux: {}: {}".format(path, r.stderr.strip()))
     return reattach(r.stdout, text if ranges is not None else None)
 
 
 def main():
+    check_version()
     args = sys.argv[1:]
     check = False
     base = None
