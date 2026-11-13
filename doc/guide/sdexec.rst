@@ -113,10 +113,19 @@ ACTIVE / EXITED with ExecMainCode available
    Send finished response with wait status; call StopUnit.
 
 FAILED
-   Send error response with systemd result code.
+   Send error response with systemd result code; call ResetFailedUnit.
 
 After ``StopUnit`` is called, sdexec waits for stdout and stderr to reach EOF,
 then sends ``ENODATA`` to close the exec stream.
+
+A *waitable* background process's finished unit is not stopped (or reset)
+until a waiter attaches.  While the unit stays loaded, systemd retains the
+exit status - ``RemainAfterExit`` holds a successful unit in the *exited*
+substate, and a nonzero exit or signal death is retained in the failed state
+- so the status survives any number of module restarts until the wait that
+consumes it, at which point the unit is reaped.  The corollary is that a
+status nobody collects persists as a loaded unit in the user systemd
+instance rather than dying with the module.
 
 Stop Timer and Kill Escalation
 ===============================
@@ -179,7 +188,9 @@ Its handling depends on the process state:
 If the client sending a parked ``wait`` disconnects, the parked request is
 dropped, but the process remains waitable so its status is not lost and a
 subsequent ``wait`` can still collect it.  A waitable process that is never
-waited on is retained until the module is unloaded.
+waited on is retained until the module is unloaded; its finished unit stays
+loaded in systemd even then (see `Unit Lifecycle`_ above and `Recovery After
+a Module Restart`_ below).
 
 Inspecting and Signaling Processes
 ==================================
@@ -189,6 +200,46 @@ its pid, command, label, and state (``R`` while the unit is running, ``Z``
 once it has finished but is retained awaiting a ``wait``).  The
 ``sdexec.kill`` RPC signals a process identified by ``pid`` or, if given,
 ``label``.  Both are surfaced by :man1:`flux-sproc` with ``--service sdexec``.
+
+Recovery After a Module Restart
+===============================
+
+Transient units keep running when the sdexec module is unloaded, so a module
+(or broker) restart can leave units behind.  At startup, sdexec sweeps the
+user systemd instance for leftover units ending in its own name suffix (see
+`Unit Naming`_ above), which finds this instance's units on this rank and no
+others, and adopts each running or failed one as an ordinary tracked
+process, monitored by the same per-unit property watch as a live unit.  A
+recovered process's label is its unit name with the suffix removed, so it is
+the same label the unit was started with.  Its state is seeded from the unit
+list; a ``GetAll`` snapshot then supplies the exit status of a unit that has
+already exited, whether it succeeded (held in the *exited* substate by
+``RemainAfterExit``) or failed (retained by systemd until the unit is
+reset).  Every adopted unit is treated as waitable and is held loaded
+until it is waited (see `Unit Lifecycle`_ above), so its status survives
+repeated restarts.  This is safe because module unload kills and reaps
+every non-waitable unit, bounded by a deadline, so a clean unload leaves
+only waitable units behind.  This mirrors the rexec subprocess server,
+which kills all of its processes at shutdown; sdexec diverges only for
+waitable units, which systemd can hold across a module restart.  After a
+crash that skips the unload path, non-waitable leftovers may remain;
+they are adopted on the same terms and, once exited, are held as visible
+residue until a client waits on them by label or an administrator resets
+them.
+
+The sweep completes before the module finishes loading, so a loaded
+sdexec always answers ``wait`` requests from an authoritative process
+table: a *not found* error means the process does not exist, never that
+it has not been swept yet.  If the unit list cannot be obtained within a
+deadline, the module load fails (failing rc1 at broker startup) rather
+than leaving the sweep wedged behind an unresponsive user bus.
+
+job-exec reclaims a recovered process with a ``wait`` request by label.
+Because the stdio channels died with the previous module instance, no output
+can be retained: the ``wait`` response carries the exit status only.  The
+command line is recovered from the unit's ``ExecStart`` property so
+``sdexec.list`` output remains meaningful; if that property cannot be
+parsed, the unit name is reported in its place.
 
 ********************
 sdexec-mapper Module
