@@ -262,6 +262,10 @@ class TestUtilFormatter(unittest.TestCase):
         # nonzero values < 1 are rounded up to 1s, not down to zero
         self.assertEqual(self.format("{0!H}", 0.1), "0:00:01")
         self.assertEqual(self.format("{0!H}", 0.9), "0:00:01")
+        # infinity renders as "inf" (issue #7912)
+        self.assertEqual(self.format("{0!H}", math.inf), "inf")
+        self.assertEqual(self.format("{0!H:>8}", math.inf), "     inf")
+        self.assertEqual(self.format("{0!H:h}", math.inf), "inf")
         # empty string renders as empty string, or "-" with the h suffix
         self.assertEqual(self.format("{0!H}", ""), "")
         self.assertEqual(self.format("{0!H:h}", ""), "-")
