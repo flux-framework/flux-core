@@ -117,6 +117,14 @@ test_expect_success 'flux-queue: fsd of infinity is infinity' '
 	test_cmp empty_config_fsd.exp empty_config_fsd.out
 '
 
+test_expect_success 'flux-queue: timedelta of infinity is infinity' '
+	flux queue list -n \
+		-o "{defaults.timelimit!H},{limits.timelimit!H}" \
+		> empty_config_timedelta.out &&
+	echo "inf,inf" > empty_config_timedelta.exp &&
+	test_cmp empty_config_timedelta.exp empty_config_timedelta.out
+'
+
 # N.B. job-size.max.ngpus left out to test default of infinity
 test_expect_success 'config flux with policy defaults' '
 	flux config load <<EOT
