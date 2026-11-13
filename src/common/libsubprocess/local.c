@@ -487,8 +487,26 @@ static void sigchld_cb (pid_t pid, int status, void *arg)
     p->status = status;
 
     if (WIFSTOPPED (p->status)) {
-        sigchld_set (p, FLUX_SUBPROCESS_SIGCHLD_STOPPED);
-        sigchld_notify_start (p);
+        /* discard SIGCONT if it is not reported yet */
+        if (p->sigchld_pending == FLUX_SUBPROCESS_SIGCHLD_CONTINUED) {
+            p->sigchld_pending = 0;
+            sigchld_notify_stop (p);
+        }
+        else {
+            sigchld_set (p, FLUX_SUBPROCESS_SIGCHLD_STOPPED);
+            sigchld_notify_start (p);
+        }
+    }
+    else if (WIFCONTINUED (p->status)) {
+        /* discard SIGSTOP if it is not reported yet */
+        if (p->sigchld_pending == FLUX_SUBPROCESS_SIGCHLD_STOPPED) {
+            p->sigchld_pending = 0;
+            sigchld_notify_stop (p);
+        }
+        else {
+            sigchld_set (p, FLUX_SUBPROCESS_SIGCHLD_CONTINUED);
+            sigchld_notify_start (p);
+        }
     }
 
     if (WIFEXITED (p->status) || WIFSIGNALED (p->status)) {

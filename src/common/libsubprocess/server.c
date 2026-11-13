@@ -814,6 +814,13 @@ static void proc_sigchld_cb (flux_subprocess_t *p,
                                     "{s:s}",
                                     "type", "stopped");
     }
+    else if (sigchld == FLUX_SUBPROCESS_SIGCHLD_CONTINUED) {
+        if (client_listening (p))
+            rc = flux_respond_pack (s->h,
+                                    request,
+                                    "{s:s}",
+                                    "type", "continued");
+    }
     else {
         errno = EPROTO;
         llog_error (s, "subprocess received unexpected sigchld %d", sigchld);

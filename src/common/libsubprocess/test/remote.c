@@ -632,9 +632,10 @@ void local_unbuf_multiline_test (flux_t *h)
 }
 
 /* In SIGSTOP test, a 'cat' subprocess is sent SIGSTOP upon starting.
- * If remote SIGSTOP handling works, the sigchld callback is called again
- * with sigchld == STOPPED, which triggers closure of stdin and natural
- * termination of the process, which causes the reactor to exit.
+ * If remote SIGSTOP handling works, the sigchld callback is called
+ * with sigchld == STOPPED, stdin will be closed, and natural
+ * termination of the process occurs, which causes the reactor to
+ * exit.
  */
 
 static void stop_state_cb (flux_subprocess_t *p,
@@ -666,6 +667,7 @@ static void stop_output_cb (flux_subprocess_t *p, const char *stream)
 }
 
 static int sigchld_stopped_count;
+static int sigchld_continued_count;
 
 static void sigchld_stop_cb (flux_subprocess_t *p,
                              flux_subprocess_sigchld_t sigchld)
@@ -674,19 +676,26 @@ static void sigchld_stop_cb (flux_subprocess_t *p,
     pid_t pid = flux_subprocess_pid (p);
     diag ("sigchld callback sigchld=%s",
           flux_subprocess_sigchld_string (sigchld));
-    ok (sigchld == FLUX_SUBPROCESS_SIGCHLD_STOPPED,
-        "sigchld callback sigchld == STOPPED");
     ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
         "sigchld returned when job was running");
-    if (pid < 0 || kill (pid, SIGCONT) < 0) {
-        diag ("could not continue test proc: %s", strerror (errno));
-        flux_reactor_stop_error (r);
+    if (sigchld == FLUX_SUBPROCESS_SIGCHLD_STOPPED) {
+        ok (sigchld == FLUX_SUBPROCESS_SIGCHLD_STOPPED,
+            "sigchld callback sigchld == STOPPED");
+        if (pid < 0 || kill (pid, SIGCONT) < 0) {
+            diag ("could not continue test proc: %s", strerror (errno));
+            flux_reactor_stop_error (r);
+        }
+        sigchld_stopped_count++;
     }
-    if (flux_subprocess_close (p, "stdin") < 0) {
-        diag ("could not close remote stdin");
-        flux_reactor_stop_error (r);
+    else if (sigchld == FLUX_SUBPROCESS_SIGCHLD_CONTINUED) {
+        ok (sigchld == FLUX_SUBPROCESS_SIGCHLD_CONTINUED,
+            "sigchld callback sigchld == CONTINUED");
+        if (flux_subprocess_close (p, "stdin") < 0) {
+            diag ("could not close remote stdin");
+            flux_reactor_stop_error (r);
+        }
+        sigchld_continued_count++;
     }
-    sigchld_stopped_count++;
 }
 
 flux_subprocess_ops_t sigchld_stoptest_ops = {
@@ -708,6 +717,7 @@ void sigchld_sigstop_test (flux_t *h)
         BAIL_OUT ("flux_cmd_create failed");
 
     sigchld_stopped_count = 0;
+    sigchld_continued_count = 0;
 
     p = flux_rexec_ex (h,
                        SERVER_NAME,
@@ -727,6 +737,8 @@ void sigchld_sigstop_test (flux_t *h)
         "sigchld stoptest: reactor ran successfully");
     ok (sigchld_stopped_count == 1,
         "sigchld stoptest: on_sigchld called once with STOPPED");
+    ok (sigchld_continued_count == 1,
+        "sigchld stoptest: on_sigchld called once with CONTINUED");
 
     flux_subprocess_destroy (p);
     flux_cmd_destroy (cmd);
@@ -1236,7 +1248,14 @@ int main (int argc, char *argv[])
     diag ("local_unbuf_multiline_test");
     local_unbuf_multiline_test (h);
     diag ("sigchld_sigstop_test");
+    /* macOS does not send SIGCHLD to the parent when a stopped child is
+     * continued, so the CONTINUED sigchld notification is never generated.
+     */
+#if __APPLE__
+    tap_skip (8, "SIGCONT does not generate SIGCHLD on macOS");
+#else
     sigchld_sigstop_test (h);
+#endif
     diag ("background_test");
     background_waitable_test (h);
     diag ("background_output_test");
