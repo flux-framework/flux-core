@@ -11,6 +11,7 @@
 ###############################################################
 
 import argparse
+import math
 import os
 import sys
 import time
@@ -25,6 +26,7 @@ from flux.util import (
     DisplayValue,
     OutputFormat,
     UtilDatetime,
+    UtilFormatter,
     del_treedict,
     parse_datetime,
     parse_timestamp,
@@ -174,6 +176,196 @@ class TestUtilDatetime(unittest.TestCase):
         self.assertEqual(f"{self.ts:%b%d %R::h}", "Jun10 08:00")
         self.assertEqual(f"{self.ts:%b%d %R::>12}", " Jun10 08:00")
         self.assertEqual(f"{self.ts:%b%d %R::>12h}", " Jun10 08:00")
+
+
+class TestUtilFormatter(unittest.TestCase):
+    @classmethod
+    def setUpClass(self):
+        # Set timezone to UTC so rendered datetimes match expected value
+        os.environ["TZ"] = "UTC"
+        time.tzset()
+        self.fmt = UtilFormatter()
+        self.ts = 978336000.0  # 2001-01-01T08:00:00 UTC
+
+    def format(self, fmt, *args, **kwargs):
+        return self.fmt.format(fmt, *args, **kwargs)
+
+    def test_conv_d(self):
+        # !d converts a timestamp to UtilDatetime
+        self.assertEqual(self.format("{0!d}", self.ts), "2001-01-01T08:00:00")
+        self.assertEqual(self.format("{0!d:%b%d %R}", self.ts), "Jan01 08:00")
+        self.assertEqual(self.format("{0!d:%b%d %R::>12}", self.ts), " Jan01 08:00")
+        self.assertEqual(self.format("{0!d:%b%d %R::>12h}", self.ts), " Jan01 08:00")
+        # epoch renders as empty string, or "-" with the h suffix
+        self.assertEqual(self.format("{0!d}", 0.0), "")
+        self.assertEqual(self.format("{0!d:%FT%T::<6}", 0.0), "      ")
+        self.assertEqual(self.format("{0!d:::h}", 0.0), "-")
+        self.assertEqual(self.format("{0!d:%FT%T::<6h}", 0.0), "-     ")
+        # empty string is treated as epoch
+        self.assertEqual(self.format("{0!d}", ""), "")
+        self.assertEqual(self.format("{0!d:::h}", ""), "-")
+        # keyword args work too
+        self.assertEqual(self.format("{t!d:%R}", t=self.ts), "08:00")
+        # other invalid values raise TypeError
+        with self.assertRaises(TypeError):
+            self.format("{0!d}", "foo")
+        with self.assertRaises(TypeError):
+            self.format("{0!d}", None)
+
+    def test_conv_D(self):
+        # !D converts a timestamp to an ISO 8601 string
+        self.assertEqual(self.format("{0!D}", self.ts), "2001-01-01T08:00:00")
+        self.assertEqual(self.format("{0!D:>21}", self.ts), "  2001-01-01T08:00:00")
+        self.assertEqual(self.format("{0!D:>21h}", self.ts), "  2001-01-01T08:00:00")
+        # epoch and other false values render as empty string
+        self.assertEqual(self.format("{0!D}", 0.0), "")
+        self.assertEqual(self.format("{0!D}", 0), "")
+        self.assertEqual(self.format("{0!D}", ""), "")
+        self.assertEqual(self.format("{0!D}", None), "")
+        self.assertEqual(self.format("{0!D:h}", 0.0), "-")
+        self.assertEqual(self.format("{0!D:>3h}", ""), "  -")
+        with self.assertRaises(TypeError):
+            self.format("{0!D}", "foo")
+
+    def test_conv_F(self):
+        # !F converts seconds to Flux Standard Duration
+        self.assertEqual(self.format("{0!F}", 0), "0s")
+        self.assertEqual(self.format("{0!F}", 0.0001), "0s")
+        self.assertEqual(self.format("{0!F}", 1.5), "1.500s")
+        self.assertEqual(self.format("{0!F}", 30), "30s")
+        self.assertEqual(self.format("{0!F}", 90), "1.5m")
+        self.assertEqual(self.format("{0!F}", 3600), "1h")
+        self.assertEqual(self.format("{0!F}", 2 * 86400), "2d")
+        self.assertEqual(self.format("{0!F}", math.inf), "inf")
+        self.assertEqual(self.format("{0!F:>6}", 90), "  1.5m")
+        # empty string renders as empty string, or "-" with the h suffix
+        self.assertEqual(self.format("{0!F}", ""), "")
+        self.assertEqual(self.format("{0!F:h}", ""), "-")
+        # zero duration is "0s" which is an empty output for h suffix
+        self.assertEqual(self.format("{0!F:h}", 0), "-")
+        self.assertEqual(self.format("{0!F:>5h}", 0), "    -")
+        self.assertEqual(self.format("{0!F:>5h}", 90), " 1.5m")
+        with self.assertRaises(TypeError):
+            self.format("{0!F}", "foo")
+        with self.assertRaises(TypeError):
+            self.format("{0!F}", None)
+
+    def test_conv_H(self):
+        # !H converts seconds to a H:MM:SS timedelta string
+        self.assertEqual(self.format("{0!H}", 0), "0:00:00")
+        self.assertEqual(self.format("{0!H}", 90), "0:01:30")
+        self.assertEqual(self.format("{0!H}", 3600), "1:00:00")
+        self.assertEqual(self.format("{0!H}", 86400), "1 day, 0:00:00")
+        # fractional seconds are rounded
+        self.assertEqual(self.format("{0!H}", 59.6), "0:01:00")
+        self.assertEqual(self.format("{0!H}", 59.4), "0:00:59")
+        # nonzero values < 1 are rounded up to 1s, not down to zero
+        self.assertEqual(self.format("{0!H}", 0.1), "0:00:01")
+        self.assertEqual(self.format("{0!H}", 0.9), "0:00:01")
+        # empty string renders as empty string, or "-" with the h suffix
+        self.assertEqual(self.format("{0!H}", ""), "")
+        self.assertEqual(self.format("{0!H:h}", ""), "-")
+        # zero timedelta is an empty output for h suffix
+        self.assertEqual(self.format("{0!H:h}", 0), "-")
+        self.assertEqual(self.format("{0!H:>8h}", 0), "       -")
+        with self.assertRaises(TypeError):
+            self.format("{0!H}", "foo")
+        with self.assertRaises(TypeError):
+            self.format("{0!H}", None)
+
+    def test_conv_P(self):
+        # !P converts a fraction to a percentage
+        self.assertEqual(self.format("{0!P}", 0), "0%")
+        self.assertEqual(self.format("{0!P}", 0.5), "50%")
+        self.assertEqual(self.format("{0!P}", 1.0), "100%")
+        self.assertEqual(self.format("{0!P}", 1), "100%")
+        self.assertEqual(self.format("{0!P}", 0.12345), "12.3%")
+        self.assertEqual(self.format("{0!P}", 0.999), "99.9%")
+        self.assertEqual(self.format("{0!P}", 2.5), "250%")
+        # values < 1% get two decimal places
+        self.assertEqual(self.format("{0!P}", 0.005), "0.50%")
+        self.assertEqual(self.format("{0!P}", 0.00123), "0.12%")
+        # empty string renders as empty string, or "-" with the h suffix
+        self.assertEqual(self.format("{0!P}", ""), "")
+        self.assertEqual(self.format("{0!P:h}", ""), "-")
+        with self.assertRaises(TypeError):
+            self.format("{0!P}", "foo")
+        with self.assertRaises(TypeError):
+            self.format("{0!P}", None)
+
+    def test_conv_standard(self):
+        # standard conversions still work
+        self.assertEqual(self.format("{0!s}", 42), "42")
+        self.assertEqual(self.format("{0!r}", "foo"), "'foo'")
+        self.assertEqual(self.format("{0!a}", "é"), "'\\xe9'")
+        with self.assertRaises(ValueError):
+            self.format("{0!X}", 42)
+
+    def test_no_conv(self):
+        # no conversion: works like a standard Formatter
+        self.assertEqual(self.format("{0}", "foo"), "foo")
+        self.assertEqual(self.format("{0:>5}", "foo"), "  foo")
+        self.assertEqual(self.format("{0:<5d}", 42), "42   ")
+        self.assertEqual(self.format("{0:8.2f}", 1234.567), " 1234.57")
+        self.assertEqual(self.format("{s} {i}", s="a", i=1), "a 1")
+
+    def test_h_suffix(self):
+        # h suffix replaces "empty" values with a hyphen
+        self.assertEqual(self.format("{0:h}", ""), "-")
+        self.assertEqual(self.format("{0:h}", "0s"), "-")
+        self.assertEqual(self.format("{0:h}", 0.0), "-")
+        self.assertEqual(self.format("{0:h}", "0.0"), "-")
+        self.assertEqual(self.format("{0:h}", "0:00:00"), "-")
+        self.assertEqual(self.format("{0:h}", "1970-01-01T00:00:00"), "-")
+        self.assertEqual(self.format("{0:h}", None), "None")
+        # non-empty values are unchanged
+        self.assertEqual(self.format("{0:h}", "foo"), "foo")
+        self.assertEqual(self.format("{0:h}", 42), "42")
+        self.assertEqual(self.format("{0:h}", 0), "0")
+        self.assertEqual(self.format("{0:h}", 1.5), "1.5")
+        # h suffix respects width and alignment
+        self.assertEqual(self.format("{0:>5h}", ""), "    -")
+        self.assertEqual(self.format("{0:<5h}", ""), "-    ")
+        self.assertEqual(self.format("{0:^5h}", ""), "  -  ")
+        self.assertEqual(self.format("{0:>5h}", "foo"), "  foo")
+        # numeric values are converted to strings, so numeric type
+        # specs are not applied, but width still is
+        self.assertEqual(self.format("{0:>5h}", 42), "   42")
+        self.assertEqual(self.format("{0:<5h}", 42), "42   ")
+
+    def test_truncation_suffix(self):
+        # + suffix denotes truncation with a trailing "+"
+        self.assertEqual(self.format("{0:5.5+}", "abcdefgh"), "abcd+")
+        self.assertEqual(self.format("{0:.3+}", "abcdefgh"), "ab+")
+        # no truncation marker when value fits
+        self.assertEqual(self.format("{0:5.5+}", "abcde"), "abcde")
+        self.assertEqual(self.format("{0:5.5+}", "abc"), "abc  ")
+        self.assertEqual(self.format("{0:>5.5+}", "abc"), "  abc")
+        self.assertEqual(self.format("{0:5.5+}", ""), "     ")
+        # integers are never truncated by width
+        self.assertEqual(self.format("{0:>3d+}", 12345), "12345")
+        self.assertEqual(self.format("{0:>8d+}", 12345), "   12345")
+        # combined with h suffix
+        self.assertEqual(self.format("{0:5.5h+}", "abcdefgh"), "abcd+")
+        self.assertEqual(self.format("{0:5.5h+}", ""), "-    ")
+        # combined with conversions
+        self.assertEqual(self.format("{0!D:.10+}", self.ts), "2001-01-0+")
+        self.assertEqual(self.format("{0!F:.4+}", 1.5), "1.5+")
+        self.assertEqual(self.format("{0!H:.4+}", 90), "0:0+")
+
+    def test_combined(self):
+        # multiple fields with different conversions and suffixes
+        self.assertEqual(
+            self.format(
+                "{s:<6h} {i:>7d} {d!d:%b%d %R::^13} {d!D:>19} {f!F:>8h} {p!P:>5}",
+                s="",
+                i=42,
+                d=self.ts,
+                f=0,
+                p=0.5,
+            ),
+            "-           42  Jan01 08:00  2001-01-01T08:00:00        -   50%",
+        )
 
 
 class Item:
