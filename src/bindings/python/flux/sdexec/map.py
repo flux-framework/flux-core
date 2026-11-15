@@ -101,6 +101,7 @@ its constructor.
 import errno
 import math
 import re
+import sys
 from pathlib import Path
 
 from flux.cli.argparse import FluxArgumentParser
@@ -676,7 +677,6 @@ def main(args=None):
     """CLI entry point: show systemd unit properties for given resource IDs."""
     import importlib
     import json
-    import sys
 
     parser = FluxArgumentParser(
         prog="flux python -m flux.sdexec.map",
@@ -741,4 +741,4 @@ def main(args=None):
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
