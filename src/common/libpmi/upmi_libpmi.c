@@ -14,12 +14,14 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <dlfcn.h>
+#include <flux/idset.h>
 #if HAVE_LINK_H
 #include <link.h>
 #endif
 
 #include "src/common/libutil/errprintf.h"
 #include "ccan/array_size/array_size.h"
+#include "ccan/str/str.h"
 
 #include "simple_client.h"
 #include "pmi_strerror.h"
@@ -35,6 +37,7 @@ struct plugin_ctx {
     int (*get_size) (int *size);
     int (*get_rank) (int *rank);
     int (*barrier) (void);
+    int (*barrier_group) (const int *group, int count, const char *tag);
     int (*kvs_get_my_name) (char *kvsname, int length);
     int (*kvs_put) (const char *kvsname, const char *key, const char *value);
     int (*kvs_commit) (const char *kvsname);
@@ -133,6 +136,9 @@ static struct plugin_ctx *plugin_ctx_create (const char *path,
         errprintf (error, "%s:  missing required PMI_* symbols", path);
         goto error;
     }
+    /* PMI-1.2 group barrier is optional (absent from pre-1.2 libraries).
+     */
+    ctx->barrier_group = dlsym (ctx->dso, "PMI_Barrier_group");
 
     /* Cray's libpmi requires workarounds implemented in the libpmi2 plugin.
      * We shouldn't land here but if we do, fail early.
@@ -219,6 +225,84 @@ static int op_barrier (flux_plugin_t *p,
     if (result != PMI_SUCCESS)
         return upmi_seterror (p, args, "%s", pmi_strerror (result));
 
+    return 0;
+}
+
+/* Translate a upmi group to PMI_Barrier_group() arguments.  *ranksp is
+ * a rank array to free, or NULL for the PMI_GROUP_* constants.
+ */
+static int group_to_api (const char *group,
+                         const int **groupp,
+                         int *countp,
+                         int **ranksp)
+{
+    struct idset *ids;
+    int *ranks;
+    int count;
+    unsigned int id;
+    int i;
+
+    *ranksp = NULL;
+    *countp = 0;
+    if (streq (group, "world")) {
+        *groupp = PMI_GROUP_WORLD;
+        return 0;
+    }
+    if (streq (group, "node")) {
+        *groupp = PMI_GROUP_NODE;
+        return 0;
+    }
+    if (streq (group, "self")) {
+        *groupp = PMI_GROUP_SELF;
+        return 0;
+    }
+    if (!(ids = idset_decode (group)))
+        return -1;
+    count = idset_count (ids);
+    if (count == 0 || !(ranks = calloc (count, sizeof (int)))) {
+        idset_destroy (ids);
+        return -1;
+    }
+    i = 0;
+    id = idset_first (ids);
+    while (id != IDSET_INVALID_ID) {
+        ranks[i++] = id;
+        id = idset_next (ids, id);
+    }
+    idset_destroy (ids);
+    *groupp = ranks;
+    *countp = count;
+    *ranksp = ranks;
+    return 0;
+}
+
+static int op_barrier_group (flux_plugin_t *p,
+                             const char *topic,
+                             flux_plugin_arg_t *args,
+                             void *data)
+{
+    struct plugin_ctx *ctx = flux_plugin_aux_get (p, plugin_name);
+    const char *group;
+    const char *tag;
+    const int *g;
+    int count;
+    int *ranks;
+    int result;
+
+    if (flux_plugin_arg_unpack (args,
+                                FLUX_PLUGIN_ARG_IN,
+                                "{s:s s:s}",
+                                "group", &group,
+                                "tag", &tag) < 0)
+        return upmi_seterror (p, args, "error unpacking barrier_group args");
+    if (!ctx->barrier_group)
+        return upmi_seterror (p, args, "PMI_Barrier_group not available");
+    if (group_to_api (group, &g, &count, &ranks) < 0)
+        return upmi_seterror (p, args, "invalid group '%s'", group);
+    result = ctx->barrier_group (g, count, tag[0] != '\0' ? tag : NULL);
+    free (ranks);
+    if (result != PMI_SUCCESS)
+        return upmi_seterror (p, args, "%s", pmi_strerror (result));
     return 0;
 }
 
@@ -343,13 +427,14 @@ error:
 }
 
 static const struct flux_plugin_handler optab[] = {
-    { "upmi.put",           op_put,         NULL },
-    { "upmi.get",           op_get,         NULL },
-    { "upmi.barrier",       op_barrier,     NULL },
-    { "upmi.abort",         op_abort,       NULL },
-    { "upmi.initialize",    op_initialize,  NULL },
-    { "upmi.finalize",      op_finalize,    NULL },
-    { "upmi.preinit",       op_preinit,     NULL },
+    { "upmi.put", op_put, NULL },
+    { "upmi.get", op_get, NULL },
+    { "upmi.barrier", op_barrier, NULL },
+    { "upmi.barrier_group", op_barrier_group, NULL },
+    { "upmi.abort", op_abort, NULL },
+    { "upmi.initialize", op_initialize, NULL },
+    { "upmi.finalize", op_finalize, NULL },
+    { "upmi.preinit", op_preinit, NULL },
     { 0 },
 };
 

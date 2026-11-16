@@ -3,29 +3,18 @@
 
 test_description='Test MPI-4 Sessions over Flux PMI
 
-An MPI Session program builds a communicator from the WORLD process set
-and from an even-rank subset.  MPICH >= 5.0 implements true Sessions
-and bootstraps the subset communicator with a PMI-1.2 group barrier when
-the process manager offers PMI-1.2, falling back to whole-job barriers
-otherwise.  MPICH 4.x builds an internal MPI_COMM_WORLD behind the
-Sessions API and always uses whole-job barriers.
+This covers MPI sessions support in MPICH + PMI-1.2 + jobdict.
+flux-pmix covers MPI sessions support in {MPICH, OpenMPI} + PMIx + jobdict.
 
-This test runs a Sessions program against the server pinned to PMI-1.1
-with pmi-simple.version=1.1, then against the default PMI-1.2 server,
-and traces the wire to check what the subset communicator used: only
-whole-job barriers against 1.1, and on MPICH >= 5 a tagged group
-barrier against 1.2.
+MPICH >= 5 uses the group barrier IFF:
+ - The ch4 device is selected
+ - MPIR_CVAR_PMI_DISABLE_GROUP == 0
+ - HAVE_PMI_BARRIER_GROUP is defined to 1
 
-Skipped unless FLUX_TEST_MPI is set, the MPI is MPICH, and MPI-4
-Sessions are available.
-
-N.B. Two MPICH details affect whether MPICH >= 5 uses the group barrier
-at all, and the wire assertion guards against both:
- - MPICH 5.0.x configure only enables PMI_Barrier_group when linking a
-   third party libpmi, so a build with its own embedded libpmi needs
-   CPPFLAGS=-DHAVE_PMI_BARRIER_GROUP=1 (see scripts/fetch-and-build-mpich.sh).
- - MPICH main after v5.0.2 defaults MPIR_CVAR_PMI_DISABLE_GROUP to 1.
-   The test sets it to 0 explicitly.
+MPICH 5.0.x leaves HAVE_PMI_BARRIER_GROUP undefined when built with
+its embedded libpmi, and main after 5.0.2 defaults
+MPIR_CVAR_PMI_DISABLE_GROUP to 1.  See pmodels/mpich#8056 and
+scripts/fetch-and-build-mpich.sh.
 '
 
 . `dirname $0`/sharness.sh
@@ -53,13 +42,17 @@ if ! ${SESSIONS} --probe; then
     test_done
 fi
 
-# MPICH >= 5.0 has PMI_Barrier_group and true Sessions (see above).
+# MPICH >= 5.0 on the ch4 device uses the group barrier (see above).
 MPICH_MAJOR=$(${VERSION} | sed -n 's/^MPICH Version:[ \t]*\([0-9]*\).*/\1/p')
-if test "${MPICH_MAJOR:-0}" -ge 5; then
-    test_set_prereq GROUP_BARRIER
-else
+MPICH_DEVICE=$(${VERSION} | sed -n 's/^MPICH Device:[ \t]*\([^: \t]*\).*/\1/p')
+if test "${MPICH_MAJOR:-0}" -lt 5; then
     echo "# MPICH ${MPICH_MAJOR}.x: the group barrier is exercised only" \
          "with MPICH >= 5"
+elif test "${MPICH_DEVICE:-unknown}" != ch4; then
+    echo "# MPICH device ${MPICH_DEVICE:-unknown}: the group barrier is" \
+         "exercised only with ch4"
+else
+    test_set_prereq GROUP_BARRIER
 fi
 
 # work around https://github.com/open-mpi/ompi/issues/7701 and similar in mpich
@@ -106,8 +99,14 @@ test_expect_success GROUP_BARRIER 'subset communicator used a group barrier' '
 	grep "cmd=barrier_in group=" trace12.err &&
 	grep "cmd=barrier_out tag=" trace12.err
 '
-# On MPICH 4.x a group barrier would mean the version check is wrong.
-test_expect_success !GROUP_BARRIER 'MPICH 4.x client used only 1.1 barriers' '
+test_expect_success GROUP_BARRIER 'even subset sent an ascending rank list' '
+	grep "cmd=barrier_in group=0,2:" trace12.err
+'
+test_expect_success GROUP_BARRIER 'descending subset sent a descending rank list' '
+	grep "cmd=barrier_in group=3,1:" trace12.err
+'
+# On MPICH 4.x or ch3, a group barrier would mean the prereq is wrong.
+test_expect_success !GROUP_BARRIER 'client without group barrier used only 1.1 barriers' '
 	grep "cmd=barrier_in" trace12.err &&
 	test_must_fail grep "cmd=barrier_in group=" trace12.err
 '

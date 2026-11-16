@@ -91,7 +91,9 @@ check_PROGRAMS = \
 	test_pmi_info \
 	test_pmi2_info \
 	test_kvstest \
-	test_kvstest2
+	test_kvstest2 \
+	test_grouptest \
+	test_threadtest
 
 check_LTLIBRARIES = \
         test/plugin/singlex.la
@@ -143,6 +145,16 @@ test_pmi2_info_LDADD = $(test_ldadd)
 test_kvstest_SOURCES = test/kvstest.c
 test_kvstest_CPPFLAGS = $(test_cppflags)
 test_kvstest_LDADD = $(test_ldadd)
+
+test_grouptest_SOURCES = test/grouptest.c
+test_grouptest_CPPFLAGS = $(test_cppflags)
+test_grouptest_LDADD = \
+	$(top_builddir)/src/common/libidset/libidset.la \
+	$(test_ldadd)
+
+test_threadtest_SOURCES = test/threadtest.c
+test_threadtest_CPPFLAGS = $(test_cppflags)
+test_threadtest_LDADD = $(test_ldadd)
 
 test_kvstest2_SOURCES = test/kvstest2.c
 test_kvstest2_CPPFLAGS = $(test_cppflags)

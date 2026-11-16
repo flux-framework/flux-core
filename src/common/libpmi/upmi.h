@@ -63,6 +63,17 @@ int upmi_get (struct upmi *upmi,
               flux_error_t *error);
 int upmi_barrier (struct upmi *upmi,
                   flux_error_t *error);
+
+/* Barrier over a subset of ranks.  'group' is "world", "node", "self",
+ * or an RFC 22 idset of ranks including this one.  'tag' (may be NULL)
+ * distinguishes concurrent barriers over the same group; implementations
+ * without that notion may ignore it.  Fails if group barriers are not
+ * supported.
+ */
+int upmi_barrier_group (struct upmi *upmi,
+                        const char *group,
+                        const char *tag,
+                        flux_error_t *error);
 int upmi_abort (struct upmi *upmi, const char *msg, flux_error_t *error);
 
 #endif /* !_LIBPMI_UPMI_H */

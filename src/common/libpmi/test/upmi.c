@@ -66,6 +66,15 @@ void test_single (void)
     ok (upmi_barrier (upmi, &error) == 0,
         "upmi_barrier works");
 
+    ok (upmi_barrier_group (upmi, "world", NULL, &error) == 0,
+        "upmi_barrier_group group=world works");
+    ok (upmi_barrier_group (upmi, "0", "tag", &error) == 0,
+        "upmi_barrier_group group=0 tag=tag works");
+    ok (upmi_barrier_group (upmi, NULL, NULL, &error) < 0,
+        "upmi_barrier_group group=NULL fails");
+    ok (upmi_barrier_group (NULL, "world", NULL, &error) < 0,
+        "upmi_barrier_group upmi=NULL fails");
+
     ok (upmi_get (upmi, "foo", -1, &val, &error) == 0,
         "upmi_get key=foo works");
     is (val, "bar",

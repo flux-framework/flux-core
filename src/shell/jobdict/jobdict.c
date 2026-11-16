@@ -48,6 +48,8 @@
  *     Exchange keys put since the last exchange among 'participants' (an
  *     RFC 22 idset of shell ranks, or all shells if omitted).  Every
  *     participant must be a valid shell rank and this shell MUST be one.
+ *     Omit 'participants' only when every task on every shell is blocked
+ *     in the exchange (see below).
  *     'tag' distinguishes concurrent exchanges on the same dictionary.
  *     When the exchange completes on this shell,
  *     'exit_topic' is called through the plugin stack with
@@ -66,7 +68,20 @@
  *
  * Since a put from a non-participating task may occur while an exchange is
  * in flight, each exchange contributes a snapshot of the pending keys and,
- * once complete, retires only those keys from the pending set.
+ * once complete, retires only those keys from the pending set.  Keys are
+ * retired only by an exchange with 'participants' omitted.  An explicit
+ * participant set that happens to name every shell does not qualify: a
+ * task that is not a member of the barrier it serves may enter a later
+ * subset exchange before this shell has received the result, and that
+ * exchange's snapshot must still carry the retired keys for it.
+ *
+ * The cost is that keys put since the last exchange without participants
+ * are resent by every explicit-participant exchange until one occurs.
+ * PMI programs normally reach a whole-job barrier after their puts, so
+ * the pending set stays small, but a job that puts many keys and then
+ * uses only group barriers resends all of them each time.  Retiring keys
+ * earlier would need each shell to learn that every participant shell
+ * has merged the result.
  *
  * All dictionaries share one shell service for inter-shell exchange RPCs,
  * registered at shell.init (before the init barrier).  Each request names
@@ -105,7 +120,8 @@ struct jobdict {
 };
 
 /* Per-exchange state, passed through the exchange engine as the exit callback
- * arg.
+ * arg.  'full' is set only when participants were omitted, and is what
+ * allows the snapshot keys to be retired on exit.
  */
 struct jobdict_exchange {
     struct jobdict *dict;
@@ -523,10 +539,10 @@ static int op_exchange (flux_plugin_t *p,
             goto error;
         }
     }
-    /* Ranks are now known to be distinct and in 0..size-1, so a set of
-     * 'size' ranks is exactly the set of all shells.
+    /* An explicit participant set never retires keys, even when it names
+     * every shell, since it does not imply every task is blocked in it.
      */
-    full = (!participants || idset_count (participants) == dict->size);
+    full = !participants;
     if (!(xcg = jobdict_exchange_create (dict, exit_topic, full))) {
         seterror (args, "error creating exchange: %s", strerror (errno));
         goto error;

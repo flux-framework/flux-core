@@ -60,6 +60,18 @@ int PMI_KVS_Get (const char *kvsname,
 int PMI_KVS_Commit (const char *kvsname);
 int PMI_Barrier (void);
 
+/* PMI-1.2 group barrier.  'group' is an array of 'count' process ranks, or
+ * one of the special constants below, in which case 'count' is ignored.
+ * 'stringtag' (which may be NULL) distinguishes concurrent barriers.
+ * Returns PMI_FAIL if the process manager did not offer subversion 2;
+ * PMI_Barrier_group (PMI_GROUP_SELF, 0, NULL) may be used as a probe.
+ */
+#define PMI_GROUP_WORLD ((int *)0)  // all processes
+#define PMI_GROUP_SELF  ((int *)1)  // the calling process only
+#define PMI_GROUP_NODE  ((int *)2)  // processes on the same node as caller
+
+int PMI_Barrier_group (const int *group, int count, const char *stringtag);
+
 int PMI_Publish_name (const char *service_name, const char *port);
 int PMI_Unpublish_name (const char *service_name);
 int PMI_Lookup_name (const char *service_name, char *port);

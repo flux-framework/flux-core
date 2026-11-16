@@ -73,6 +73,44 @@ static void die (int rc, const char *fmt, ...)
     exit (1);
 }
 
+/* Build a communicator from the 'n' world ranks in 'ranks' (members only),
+ * barrier on it, and free it.  'name' distinguishes the stringtag passed
+ * to MPI_Comm_create_from_group() and thus the PMI group barrier tag.
+ */
+static void subset_test (MPI_Group world_group,
+                         int n,
+                         const int *ranks,
+                         const char *name,
+                         int rank)
+{
+    MPI_Group sub;
+    MPI_Comm subcomm;
+    char stringtag[64];
+    int subrank;
+    int rc;
+
+    snprintf (stringtag, sizeof (stringtag), "flux.sessions.%s", name);
+    if ((rc = MPI_Group_incl (world_group, n, ranks, &sub)) != MPI_SUCCESS)
+        die (rc, "%d: MPI_Group_incl %s failed", rank, name);
+    if ((rc = MPI_Group_rank (sub, &subrank)) != MPI_SUCCESS)
+        die (rc, "%d: MPI_Group_rank %s failed", rank, name);
+    if (subrank != MPI_UNDEFINED) {
+        rc = MPI_Comm_create_from_group (sub,
+                                         stringtag,
+                                         MPI_INFO_NULL,
+                                         MPI_ERRORS_RETURN,
+                                         &subcomm);
+        if (rc != MPI_SUCCESS)
+            die (rc, "%d: MPI_Comm_create_from_group %s failed", rank, name);
+        if ((rc = MPI_Barrier (subcomm)) != MPI_SUCCESS)
+            die (rc, "%d: MPI_Barrier %s failed", rank, name);
+        if ((rc = MPI_Comm_free (&subcomm)) != MPI_SUCCESS)
+            die (rc, "%d: MPI_Comm_free %s failed", rank, name);
+    }
+    if ((rc = MPI_Group_free (&sub)) != MPI_SUCCESS)
+        die (rc, "%d: MPI_Group_free %s failed", rank, name);
+}
+
 int main (int argc, char *argv[])
 {
     MPI_Session sh;
@@ -117,40 +155,30 @@ int main (int argc, char *argv[])
              total,
              size);
 
-    /* Proper subset (even ranks): only members create and barrier on the
-     * subset communicator, exercising a subset group barrier.
+    /* Proper subsets: only members create and barrier on the subset
+     * communicator, exercising a subset group barrier.
+     *
+     * The even ranks in ascending order give an ascending rank list on
+     * the wire.  The odd ranks in descending order give a descending
+     * one: MPICH lists the node roots in communicator rank order, so
+     * reversing the group reverses the list (flux-core issue #7888).
      */
     if (size >= 2) {
-        MPI_Group sub;
-        MPI_Comm subcomm;
         int n = (size + 1) / 2; // count of even ranks in [0, size)
         int *ranks;
-        int subrank;
 
         if (!(ranks = malloc (n * sizeof (int))))
             die (MPI_SUCCESS, "%d: out of memory", rank);
         for (int i = 0; i < n; i++)
             ranks[i] = 2 * i;
-        if ((rc = MPI_Group_incl (world_group, n, ranks, &sub)) != MPI_SUCCESS)
-            die (rc, "%d: MPI_Group_incl even failed", rank);
+        subset_test (world_group, n, ranks, "even", rank);
+
+        n = size / 2; // count of odd ranks in [0, size)
+        int top = (size - 1) % 2 ? size - 1 : size - 2; // largest odd rank
+        for (int i = 0; i < n; i++)
+            ranks[i] = top - 2 * i;
+        subset_test (world_group, n, ranks, "odd-reversed", rank);
         free (ranks);
-        if ((rc = MPI_Group_rank (sub, &subrank)) != MPI_SUCCESS)
-            die (rc, "%d: MPI_Group_rank even failed", rank);
-        if (subrank != MPI_UNDEFINED) {
-            rc = MPI_Comm_create_from_group (sub,
-                                             "flux.sessions.even",
-                                             MPI_INFO_NULL,
-                                             MPI_ERRORS_RETURN,
-                                             &subcomm);
-            if (rc != MPI_SUCCESS)
-                die (rc, "%d: MPI_Comm_create_from_group even failed", rank);
-            if ((rc = MPI_Barrier (subcomm)) != MPI_SUCCESS)
-                die (rc, "%d: MPI_Barrier even failed", rank);
-            if ((rc = MPI_Comm_free (&subcomm)) != MPI_SUCCESS)
-                die (rc, "%d: MPI_Comm_free even failed", rank);
-        }
-        if ((rc = MPI_Group_free (&sub)) != MPI_SUCCESS)
-            die (rc, "%d: MPI_Group_free even failed", rank);
     }
     if (rank == 0)
         printf ("MPI Sessions test OK: size=%d\n", size);

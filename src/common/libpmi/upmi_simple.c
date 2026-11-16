@@ -13,9 +13,11 @@
 #endif
 #include <stdlib.h>
 #include <errno.h>
+#include <flux/idset.h>
 
 #include "src/common/libutil/errprintf.h"
 #include "ccan/array_size/array_size.h"
+#include "ccan/str/str.h"
 
 #include "simple_client.h"
 #include "pmi_strerror.h"
@@ -126,6 +128,71 @@ static int op_barrier (flux_plugin_t *p,
     return 0;
 }
 
+/* Translate a upmi group to the PMI-1.2 wire form.  *wirep is set to a
+ * static designator, or NULL for self; *cpyp is a string to free, if any.
+ */
+static int group_to_wire (const char *group, const char **wirep, char **cpyp)
+{
+    struct idset *ids;
+    char *s = NULL;
+
+    *cpyp = NULL;
+    if (streq (group, "world")) {
+        *wirep = "WORLD";
+        return 0;
+    }
+    if (streq (group, "node")) {
+        *wirep = "NODE";
+        return 0;
+    }
+    if (streq (group, "self")) {
+        *wirep = NULL;
+        return 0;
+    }
+    if (!(ids = idset_decode (group)))
+        return -1;
+    s = idset_encode (ids, 0); // plain comma-separated, no ranges
+    idset_destroy (ids);
+    if (!s)
+        return -1;
+    *wirep = s;
+    *cpyp = s;
+    return 0;
+}
+
+static int op_barrier_group (flux_plugin_t *p,
+                             const char *topic,
+                             flux_plugin_arg_t *args,
+                             void *data)
+{
+    struct plugin_ctx *ctx = flux_plugin_aux_get (p, plugin_name);
+    const char *group;
+    const char *tag;
+    const char *wire;
+    char *cpy;
+    int itag;
+    int result;
+
+    if (flux_plugin_arg_unpack (args,
+                                FLUX_PLUGIN_ARG_IN,
+                                "{s:s s:s}",
+                                "group", &group,
+                                "tag", &tag) < 0)
+        return upmi_seterror (p, args, "error unpacking barrier_group args");
+    if (ctx->client->subversion < 2)
+        return upmi_seterror (p, args, "server does not support PMI-1.2");
+    if (group_to_wire (group, &wire, &cpy) < 0)
+        return upmi_seterror (p, args, "invalid group '%s'", group);
+    if (!wire) // self
+        return 0;
+    itag = pmi_simple_client_barrier_tag (tag[0] != '\0' ? tag : NULL);
+    result = pmi_simple_client_barrier_group (ctx->client, wire, itag);
+    free (cpy);
+    if (result != PMI_SUCCESS)
+        return upmi_seterror (p, args, "%s", pmi_strerror (result));
+    return 0;
+}
+
 static int op_abort (flux_plugin_t *p,
                      const char *topic,
                      flux_plugin_arg_t *args,
@@ -212,17 +279,16 @@ static int op_preinit (flux_plugin_t *p,
 }
 
 static const struct flux_plugin_handler optab[] = {
-    { "upmi.put",           op_put,         NULL },
-    { "upmi.get",           op_get,         NULL },
-    { "upmi.barrier",       op_barrier,     NULL },
-    { "upmi.abort",         op_abort,       NULL },
-    { "upmi.initialize",    op_initialize,  NULL },
-    { "upmi.finalize",      op_finalize,    NULL },
-    { "upmi.preinit",       op_preinit,     NULL },
+    { "upmi.put", op_put, NULL },
+    { "upmi.get", op_get, NULL },
+    { "upmi.barrier", op_barrier, NULL },
+    { "upmi.barrier_group", op_barrier_group, NULL },
+    { "upmi.abort", op_abort, NULL },
+    { "upmi.initialize", op_initialize, NULL },
+    { "upmi.finalize", op_finalize, NULL },
+    { "upmi.preinit", op_preinit, NULL },
     { 0 },
 };
-
-
 
 int upmi_simple_init (flux_plugin_t *p)
 {

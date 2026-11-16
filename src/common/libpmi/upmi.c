@@ -618,6 +618,33 @@ int upmi_barrier (struct upmi *upmi, flux_error_t *errp)
     return 0;
 }
 
+int upmi_barrier_group (struct upmi *upmi,
+                        const char *group,
+                        const char *tag,
+                        flux_error_t *errp)
+{
+    flux_error_t error;
+
+    if (!upmi || !group) {
+        errprintf (errp, "invalid argument");
+        return -1;
+    }
+    if (upmi_call (upmi,
+                   "upmi.barrier_group",
+                   &error,
+                   "{s:s s:s}",
+                   "group",
+                   group,
+                   "tag",
+                   tag ? tag : "") < 0) {
+        errprintf (errp, "%s", error.text);
+        upmi_trace (upmi, "barrier_group group=%s: %s", group, error.text);
+        return -1;
+    }
+    upmi_trace (upmi, "barrier_group group=%s: success", group);
+    return 0;
+}
+
 static void upmi_vtrace (struct upmi *upmi, const char *fmt, va_list ap)
 {
     if ((upmi->flags & UPMI_TRACE) && upmi->trace_fun) {
