@@ -26,8 +26,8 @@ coverage:
 comment:
  layout: "header, diff, changes, tree"
  behavior: new
- after_n_builds: 2
+ after_n_builds: 3
 
 codecov:
  notify:
-  after_n_builds: 2
+  after_n_builds: 3
