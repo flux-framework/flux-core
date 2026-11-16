@@ -327,6 +327,7 @@ error:
 static void delete_guest_watcher (struct info_ctx *ctx,
                                   struct guest_watch_ctx *gw)
 {
+    uuid_count_decr (ctx->guest_watchers_uuid_count, gw->msg);
     zhashx_delete (ctx->guest_watchers_matchtags, gw->matchtag_key);
     zlistx_delete (ctx->guest_watchers, gw->handle);
 }
@@ -861,6 +862,7 @@ int guest_watch (struct info_ctx *ctx,
         errno = EINVAL;
         goto error;
     }
+    uuid_count_incr (ctx->guest_watchers_uuid_count, gw->msg);
 
     return 0;
 
@@ -899,10 +901,12 @@ void guest_watchers_cancel (struct info_ctx *ctx,
             guest_watch_cancel (ctx, gw, msg, cancel);
             return;
         }
-        /* else fallthrough to loop over everything */
+        /* else fallthrough to possibly loop over everything */
     }
 
  fallthrough:
+    if (!uuid_count_contains (ctx->guest_watchers_uuid_count, msg))
+        return;
     gw = zlistx_first (ctx->guest_watchers);
     while (gw) {
         guest_watch_cancel (ctx, gw, msg, cancel);
@@ -916,7 +920,8 @@ int guest_watch_setup (struct info_ctx *ctx)
     if (!(ctx->guest_watchers = zlistx_new ()))
         return -1;
     zlistx_set_destructor (ctx->guest_watchers, guest_watch_ctx_destroy_wrapper);
-    if (!(ctx->guest_watchers_matchtags = zhashx_new ()))
+    if (!(ctx->guest_watchers_matchtags = zhashx_new ())
+        || !(ctx->guest_watchers_uuid_count = zhashx_new ()))
         return -1;
     return 0;
 }
@@ -940,6 +945,8 @@ void guest_watch_cleanup (struct info_ctx *ctx)
     }
     if (ctx->guest_watchers_matchtags)
         zhashx_destroy (&ctx->guest_watchers_matchtags);
+    if (ctx->guest_watchers_uuid_count)
+        zhashx_destroy (&ctx->guest_watchers_uuid_count);
 }
 
 /*
