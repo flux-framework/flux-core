@@ -14,6 +14,8 @@
 #include <jansson.h>
 #include <flux/core.h>
 
+#include "src/common/libczmqcontainers/czmq_containers.h"
+
 /* we want to copy credentials, etc. from the original
  * message when we send RPCs to other job-info targets.
  */
@@ -56,6 +58,15 @@ int get_matchtag_key (flux_t *h,
                       const flux_msg_t *msg,
                       char *buf,
                       size_t bufsize);
+
+/* increment the count for msg uuid, add to hash if missing */
+void uuid_count_incr (zhashx_t *h, const flux_msg_t *msg);
+
+/* decrement the count for msg uuid.  remove entry when count is zero. */
+void uuid_count_decr (zhashx_t *h, const flux_msg_t *msg);
+
+/* return true if msg uuid is nonzero */
+bool uuid_count_contains (zhashx_t *h, const flux_msg_t *msg);
 
 #endif /* ! _FLUX_JOB_INFO_UTIL_H */
 

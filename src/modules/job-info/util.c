@@ -15,9 +15,11 @@
 #include <jansson.h>
 #include <flux/core.h>
 
+#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libeventlog/eventlog.h"
 #include "src/common/libjob/idf58.h"
 #include "src/common/libutil/jpath.h"
+#include "ccan/ptrint/ptrint.h"
 
 #include "ccan/str/str.h"
 
@@ -191,6 +193,39 @@ int get_matchtag_key (flux_t *h,
         return -1;
     }
     return 0;
+}
+
+void uuid_count_incr (zhashx_t *h, const flux_msg_t *msg)
+{
+    const char *uuid = flux_msg_route_first (msg);
+    if (!uuid)
+        return;
+
+    /* N.B. ptr2int (NULL) returns 0 */
+    int count = ptr2int (zhashx_lookup (h, uuid));
+    zhashx_update (h, uuid, int2ptr (count + 1));
+}
+
+void uuid_count_decr (zhashx_t *h, const flux_msg_t *msg)
+{
+    const char *uuid = flux_msg_route_first (msg);
+    if (!uuid)
+        return;
+
+    /* N.B. ptr2int (NULL) returns 0 */
+    int count = ptr2int (zhashx_lookup (h, uuid));
+    if (count > 1)
+        zhashx_update (h, uuid, int2ptr (count - 1));
+    else
+        zhashx_delete (h, uuid);
+}
+
+bool uuid_count_contains (zhashx_t *h, const flux_msg_t *msg)
+{
+    const char *uuid;
+    if (!(uuid = flux_msg_route_first (msg)))
+        return false;
+    return zhashx_lookup (h, uuid) ? true : false;
 }
 
 /*
