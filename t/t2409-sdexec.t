@@ -42,11 +42,13 @@ pwd=$(which pwd)
 printenv=$(which printenv)
 systemctl=$(which systemctl)
 
-test_expect_success 'enable debug logging' '
+test_expect_success 'enable debug logging and a private record directory' '
+	mkdir -p records &&
 	cat >systemd.toml <<-EOF &&
 	[systemd]
 	sdbus-debug = true
 	sdexec-debug = true
+	sdexec-record-dir = "$(pwd)/records"
 	EOF
 	flux config load <systemd.toml
 '
