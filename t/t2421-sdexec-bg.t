@@ -46,11 +46,13 @@ unit_loadstate() {
 	systemctl --user show -p LoadState --value "$1" 2>/dev/null
 }
 
-test_expect_success 'enable debug logging' '
+test_expect_success 'enable debug logging and a private record directory' '
+	mkdir -p records &&
 	cat >systemd.toml <<-EOF &&
 	[systemd]
 	sdbus-debug = true
 	sdexec-debug = true
+	sdexec-record-dir = "$(pwd)/records"
 	EOF
 	flux config load <systemd.toml
 '
