@@ -96,8 +96,8 @@ test_expect_success 'remove sdmon module' '
 test_expect_success 'wait for it to leave the sdmon.online group' '
 	run_timeout 30 $groups waitfor --count=0 sdmon.online
 '
-test_expect_success 'load sdmon module' '
-	flux module load sdmon
+test_expect_success 'load sdmon module again' '
+	flux module load sdmon usr_glob="*shell-${testname}*"
 '
 test_expect_success 'wait for module stats to show test unit' '
 	wait_for_some 30
