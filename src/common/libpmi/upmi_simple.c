@@ -18,6 +18,9 @@
 #include "src/common/libutil/errprintf.h"
 #include "ccan/array_size/array_size.h"
 #include "ccan/str/str.h"
+#ifndef HAVE_SECURE_GETENV
+#include "src/common/libmissing/secure_getenv.h"
+#endif
 
 #include "simple_client.h"
 #include "pmi_strerror.h"
@@ -48,10 +51,11 @@ static struct plugin_ctx *plugin_ctx_create (void)
 
     if (!(ctx = calloc (1, sizeof (*ctx))))
         return NULL;
-    if (!(ctx->client = pmi_simple_client_create_fd (getenv ("PMI_FD"),
-                                                     getenv ("PMI_RANK"),
-                                                     getenv ("PMI_SIZE"),
-                                                     getenv ("PMI_SPAWNED")))) {
+    ctx->client = pmi_simple_client_create_fd (secure_getenv ("PMI_FD"),
+                                               secure_getenv ("PMI_RANK"),
+                                               secure_getenv ("PMI_SIZE"),
+                                               secure_getenv ("PMI_SPAWNED"));
+    if (!ctx->client) {
         plugin_ctx_destroy (ctx);
         return NULL;
     }
@@ -264,7 +268,7 @@ static int op_preinit (flux_plugin_t *p,
     const char *vars[] = { "PMI_FD", "PMI_RANK", "PMI_SIZE" }; // required
 
     for (int i = 0; i < ARRAY_SIZE (vars); i++) {
-        if (!getenv (vars[i]))
+        if (!secure_getenv (vars[i]))
             return upmi_seterror (p, args, "%s not found in environ", vars[i]);
     }
     if (!(ctx = plugin_ctx_create ())

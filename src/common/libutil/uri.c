@@ -17,6 +17,9 @@
 
 #include "src/common/libyuarel/yuarel.h"
 #include "ccan/str/str.h"
+#ifndef HAVE_SECURE_GETENV
+#include "src/common/libmissing/secure_getenv.h"
+#endif
 #include "errprintf.h"
 #include "popen2.h"
 #include "read_all.h"
@@ -81,7 +84,7 @@ char *uri_resolve (const char *uri, flux_error_t *errp)
     if (yuarel_parse (&yuri, cpy) == 0 && yuri.scheme) {
         if (streq (yuri.scheme, "ssh")
             || streq (yuri.scheme, "local")) {
-            if (getenv ("FLUX_URI_RESOLVE_LOCAL"))
+            if (secure_getenv ("FLUX_URI_RESOLVE_LOCAL"))
                 result = uri_to_local (&yuri);
             else
                 result = strdup (uri);

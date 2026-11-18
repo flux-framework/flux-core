@@ -14,6 +14,9 @@
 #include <flux/core.h>
 
 #include "src/common/libutil/fluid.h"
+#ifndef HAVE_SECURE_GETENV
+#include "src/common/libmissing/secure_getenv.h"
+#endif
 
 #include "job.h"
 
@@ -59,7 +62,7 @@ int flux_job_kvs_guest_key (char *buf,
 
     if (buffer_arg_check (buf, bufsz) < 0)
         return -1;
-    if (getenv ("FLUX_KVS_NAMESPACE"))
+    if (secure_getenv ("FLUX_KVS_NAMESPACE"))
         len = snprintf (buf, bufsz, "%s", key ? key : ".");
     else {
         if (fluid_encode (idstr, sizeof (idstr), id, FLUID_STRING_DOTHEX) < 0)

@@ -53,6 +53,7 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <errno.h>
+#include <stdlib.h>
 #include <string.h>
 #include <signal.h>
 
@@ -66,6 +67,9 @@
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libterminus/pty.h"
+#ifndef HAVE_SECURE_GETENV
+#include "src/common/libmissing/secure_getenv.h"
+#endif
 
 #include "terminus.h"
 
@@ -434,7 +438,7 @@ static flux_cmd_t *make_cmd (const flux_msg_t *msg)
     const char *cwd = NULL;
     json_t *env = NULL;
     flux_cmd_t *cmd = NULL;
-    const char *shell = getenv ("SHELL");
+    const char *shell = secure_getenv ("SHELL");
 
     if (flux_msg_unpack (msg,
                          "{s?o s?o s?s}",
@@ -890,7 +894,7 @@ flux_terminus_server_create (flux_t *h, const char *service)
 
     /*  In test mode, avoid flux_get_rank(3) as it will hang
      */
-    if (getenv ("FLUX_TERMINUS_TEST_SERVER"))
+    if (secure_getenv ("FLUX_TERMINUS_TEST_SERVER"))
         ts->rank = -1;
     else if (flux_get_rank (h, &ts->rank) < 0)
         goto err;

@@ -33,6 +33,9 @@
 #include <errno.h>
 #include <sys/types.h>
 #include <string.h>
+#ifndef HAVE_SECURE_GETENV
+#include "src/common/libmissing/secure_getenv.h"
+#endif
 
 #include "pmi.h"
 #include "pmi_strerror.h"
@@ -48,10 +51,10 @@ int PMI_Init (int *spawned)
     if (pmi_global_ctx)
         return PMI_ERR_INIT;
 
-    ctx = pmi_simple_client_create_fd (getenv ("PMI_FD"),
-                                       getenv ("PMI_RANK"),
-                                       getenv ("PMI_SIZE"),
-                                       getenv ("PMI_SPAWNED"));
+    ctx = pmi_simple_client_create_fd (secure_getenv ("PMI_FD"),
+                                       secure_getenv ("PMI_RANK"),
+                                       secure_getenv ("PMI_SIZE"),
+                                       secure_getenv ("PMI_SPAWNED"));
     if (!ctx) {
         if (errno == ENOMEM)
             return PMI_ERR_NOMEM;

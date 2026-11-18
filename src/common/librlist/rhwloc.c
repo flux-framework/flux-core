@@ -12,6 +12,7 @@
 #include "config.h"
 #endif
 
+#include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -25,6 +26,9 @@
 #include "src/common/libutil/read_all.h"
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/errprintf.h"
+#ifndef HAVE_SECURE_GETENV
+#include "src/common/libmissing/secure_getenv.h"
+#endif
 
 #include "rnode.h"
 #include "rlist.h"
@@ -196,7 +200,7 @@ hwloc_topology_t rhwloc_local_topology_load (rhwloc_flags_t flags)
      *  If loading from the XML file fails for any reason, fall back
      *  to normal topology load.
      */
-    if ((xml = getenv ("FLUX_HWLOC_XMLFILE"))) {
+    if ((xml = secure_getenv ("FLUX_HWLOC_XMLFILE"))) {
         int xml_flags = flags;
 
         /* If FLUX_HWLOC_XMLFILE_NOT_THISSYSTEM is set, use RHWLOC_NO_RESTRICT
@@ -204,7 +208,7 @@ hwloc_topology_t rhwloc_local_topology_load (rhwloc_flags_t flags)
          * HWLOC_TOPOLOGY_FLAG_IS_THISSYSTEM, neither of which is appropriate
          * for a topology loaded from a different system.
          */
-        if (getenv ("FLUX_HWLOC_XMLFILE_NOT_THISSYSTEM"))
+        if (secure_getenv ("FLUX_HWLOC_XMLFILE_NOT_THISSYSTEM"))
             xml_flags |= RHWLOC_NO_RESTRICT;
 
         /*  If load is successful, return topo immediately so no further
@@ -422,7 +426,7 @@ static int collect_unique_gpus (hwloc_topology_t topo,
     /*  Allow disabling deduplication via environment variable as an escape
      *  hatch in case this logic causes problems in the field.
      */
-    if (getenv ("FLUX_HWLOC_GPU_NO_DEDUP"))
+    if (secure_getenv ("FLUX_HWLOC_GPU_NO_DEDUP"))
         dedup = false;
 
     /*  Manually index GPUs -- os_index does not seem to be valid for
