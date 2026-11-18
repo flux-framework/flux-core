@@ -278,6 +278,8 @@ AC_CHECK_FUNCS( \
   setlocale \
   uselocale \
   inotify_init1 \
+  issetugid \
+  getauxval \
 )
 # See src/common/libmissing/Makefile.am
 AC_REPLACE_FUNCS( \
@@ -289,6 +291,7 @@ AC_REPLACE_FUNCS( \
   pipe2 \
   mempcpy \
   get_current_dir_name \
+  secure_getenv \
 )
 X_AC_CHECK_PTHREADS
 X_AC_CHECK_COND_LIB(rt, clock_gettime)
