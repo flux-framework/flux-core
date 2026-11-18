@@ -28,6 +28,9 @@
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
+#ifndef HAVE_SECURE_GETENV
+#include "src/common/libmissing/secure_getenv.h"
+#endif
 
 #include "upmi.h"
 #include "upmi_plugin.h"
@@ -253,9 +256,9 @@ struct upmi *upmi_create_ex (const char *uri,
     const char *searchpath;
     const char *methods;
 
-    if (!(methods = getenv ("FLUX_PMI_CLIENT_METHODS")))
+    if (!(methods = secure_getenv ("FLUX_PMI_CLIENT_METHODS")))
         methods = default_methods;
-    if (!(searchpath = getenv ("FLUX_PMI_CLIENT_SEARCHPATH")))
+    if (!(searchpath = secure_getenv ("FLUX_PMI_CLIENT_SEARCHPATH")))
         searchpath = flux_conf_builtin_get ("upmi_pluginpath", FLUX_CONF_AUTO);
 
     if (!(upmi = upmi_create_uninit (methods,

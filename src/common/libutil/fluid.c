@@ -28,6 +28,9 @@
 #include "fluid.h"
 #include "mnemonic.h"
 #include "basemoji.h"
+#ifndef HAVE_SECURE_GETENV
+#include "src/common/libmissing/secure_getenv.h"
+#endif
 
 /* fluid: [ts:40 id:14 seq:10] */
 static const int bits_per_ts = 40;
@@ -184,7 +187,7 @@ static inline int is_utf8_locale (void)
      * FLUX_F58_FORCE_ASCII is set.
      */
     if (MB_CUR_MAX > 1 && streq (nl_langinfo (CODESET), "UTF-8")
-        && !getenv ("FLUX_F58_FORCE_ASCII"))
+        && !secure_getenv ("FLUX_F58_FORCE_ASCII"))
         return 1;
     return 0;
 }
