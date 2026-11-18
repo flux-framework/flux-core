@@ -1,0 +1,35 @@
+#!/bin/sh
+# check-getenv - verify that Flux library code uses secure_getenv(3)
+#
+# Library code may be called from a setuid program, e.g. a PAM module
+# loaded by sudo(8), so it must not trust the environment. Check all C
+# sources except those listed below, which never run in a privileged
+# process or are vendored from elsewhere. New code is checked by
+# default. Only files tracked by git are checked.
+#
+# Usage: check-getenv
+#
+# Exit 0 if no bare getenv() calls are found, otherwise list them and
+# exit 1.
+
+cd "$(git rev-parse --show-toplevel)" || exit 1
+
+# git grep -w does not match secure_getenv or flux_cmd_getenv.
+if git grep -nw getenv -- '*.[ch]' \
+    ':!doc/' \
+    ':!t/' \
+    ':!*/test/*' \
+    ':!src/cmd/' \
+    ':!src/broker/' \
+    ':!src/modules/' \
+    ':!src/shell/' \
+    ':!src/bindings/' \
+    ':!src/common/libtestutil/' \
+    ':!src/common/libev/' \
+    ':!src/common/liboptparse/getopt.c' \
+    ':!src/common/libmissing/secure_getenv.c'
+then
+    echo "check-getenv: use secure_getenv(3) instead of getenv(3)" >&2
+    exit 1
+fi
+exit 0
