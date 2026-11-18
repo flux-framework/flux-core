@@ -751,6 +751,17 @@ of compiled-in install paths and the environment.
 
    Values may include multiple directories separated by semicolons.
 
+SECURE EXECUTION
+================
+
+When a program runs in secure execution mode, for example because it is
+setuid or setgid, the Flux API ignores environment variables that would
+otherwise affect it, such as :envvar:`FLUX_URI` and
+:envvar:`FLUX_CONNECTOR_PATH`.  This prevents an unprivileged user from
+controlling a privileged program that calls the Flux API, such as a PAM
+module loaded by :linux:man8:`sudo`.  See :linux:man3:`secure_getenv` for
+details.
+
 RESOURCES
 =========
 
