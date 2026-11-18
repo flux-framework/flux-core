@@ -29,6 +29,9 @@
 #include "src/common/libflux/plugin_private.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/aux.h"
+#ifndef HAVE_SECURE_GETENV
+#include "src/common/libmissing/secure_getenv.h"
+#endif
 #include "ccan/str/str.h"
 
 #ifndef UUID_STR_LEN
@@ -40,7 +43,7 @@ static pthread_once_t deepbind_once = PTHREAD_ONCE_INIT;
 
 static void init_use_deepbind (void)
 {
-    const char *var = getenv ("FLUX_LOAD_WITH_DEEPBIND");
+    const char *var = secure_getenv ("FLUX_LOAD_WITH_DEEPBIND");
     if (!var) {
         // default is to allow the flag
         return;
