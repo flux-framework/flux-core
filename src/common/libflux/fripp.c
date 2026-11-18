@@ -25,6 +25,9 @@
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/iterators.h"
+#ifndef HAVE_SECURE_GETENV
+#include "src/common/libmissing/secure_getenv.h"
+#endif
 
 #define FRIPP_MAX_PACKET_LEN 1440
 #define INTERNAL_BUFFSIZE 128
@@ -453,7 +456,7 @@ struct fripp_ctx *fripp_ctx_create (flux_t *h)
      * be created with disabled status so we don't repeatedly try to create
      * it "on demand" in the flux_stats_*() functions.
      */
-    if (!(addr = getenv ("FLUX_FRIPP_STATSD")))
+    if (!(addr = secure_getenv ("FLUX_FRIPP_STATSD")))
         return ctx;
     if (parse_address (&ctx->addrinfo, addr, errbuf, sizeof (errbuf)) < 0) {
         flux_log (h, LOG_ERR, "FLUX_FRIPP_STATSD parse error: %s", errbuf);

@@ -20,6 +20,9 @@
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libutil/errno_safe.h"
+#ifndef HAVE_SECURE_GETENV
+#include "src/common/libmissing/secure_getenv.h"
+#endif
 
 enum {
     FLUX_ATTRFLAG_IMMUTABLE = 1,
@@ -167,7 +170,7 @@ const char *flux_attr_get (flux_t *h, const char *name)
         return NULL;
     }
     if (streq (name, "parent-uri")
-        && (proxy_remote = getenv ("FLUX_PROXY_REMOTE")))
+        && (proxy_remote = secure_getenv ("FLUX_PROXY_REMOTE")))
         return attr_get_proxy_remote (h, proxy_remote, "parent-remote-uri");
 
     return attr_get (h, name);
