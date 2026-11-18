@@ -46,7 +46,9 @@ test_expect_success 'flux-shell: per-resource type=node works' '
 	EOF
 	test_cmp per-node.expected per-node.out
 '
-test_expect_success 'flux-shell: historical batch jobspec still work' '
+# N.B. legacy test jobspecs may not setup things correctly to allow
+# ASAN (e.g. overwrite environment), so disable under ASAN
+test_expect_success NO_ASAN 'flux-shell: historical batch jobspec still work' '
 	for spec in $SHARNESS_TEST_SRCDIR/batch/jobspec/*.json; do
 		input=$(basename $spec) &&
 		cat $spec |

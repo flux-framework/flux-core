@@ -1,0 +1,4 @@
+#!/bin/sh
+# Wrapper for pkill command to run without ASAN
+dir=$(dirname $0)
+$dir/no-asan.sh pkill "$@"
