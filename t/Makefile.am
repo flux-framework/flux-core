@@ -204,6 +204,7 @@ TESTSCRIPTS = \
 	t2291-job-update-queue.t \
 	t2292-job-update-running.t \
 	t2300-sched-simple.t \
+	t2301-audit-alloc.t \
 	t2302-sched-simple-up-down.t \
 	t2303-sched-hello.t \
 	t2304-sched-simple-alloc-check.t \
