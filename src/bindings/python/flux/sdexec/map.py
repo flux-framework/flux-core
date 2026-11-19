@@ -51,8 +51,31 @@ device paths needed for compute workloads:
     - ``/dev/dri/card<N>`` — DRM card device
     - ``/dev/kfd`` — Kernel Fusion Driver (required for ROCm/HIP, shared)
 
+In AMD compute partition modes (e.g. CPX, TPX), one PCI device has several
+GPUs. Each has its own render node, but only the render node of partition 0
+is in the PCI device's ``drm/`` directory. So render nodes of AMD GPUs are
+also read from ``drm_render_minor`` of the KFD topology nodes in
+``/sys/class/kfd/kfd/topology/nodes``. A KFD node is on a PCI device if its
+``domain`` and ``location_id`` match the PCI address. ``location_id`` holds
+the PCI bus, device, and function, but if a PCI device has more than one GPU,
+the low three bits hold the partition number. The mapper assumes that the
+n-th GPU on a PCI device in hwloc order is the KFD node with the n-th lowest
+``location_id``. This was confirmed with ROCm on MI300A, but the mapper does
+not check it. Mapping fails if a held AMD GPU has no render node, or if a PCI
+device has more than one GPU and KFD does not have one node per GPU.
+
+Note: The mapper counts the GPUs on each PCI device from hwloc, after
+duplicate GPUs are removed. If FLUX_HWLOC_GPU_NO_DEDUP is set and hwloc lists
+one GPU more than once (e.g. as both RSMI and OpenCL devices), the count is
+too high and mapping fails for that GPU. This is not a problem for the
+sdexec-mapper module, because the system instance does not set
+FLUX_HWLOC_GPU_NO_DEDUP. But if the mapper is changed or used in other code,
+make sure that each GPU on a PCI device is counted once.
+
 Discovery is opportunistic: if a device path doesn't exist, it's skipped.
 This makes the mapper work across different drivers and configurations.
+The exception is the render node of a held AMD GPU: if it doesn't exist,
+mapping fails.
 Shared devices like ``/dev/kfd`` and ``/dev/nvidiactl`` are automatically
 deduplicated when multiple GPUs are allocated to a job.
 
@@ -110,6 +133,7 @@ from flux.resource import ResourceSet
 
 # Sysfs and device path constants
 SYSFS_PCI_DEVICES = "/sys/bus/pci/devices"
+SYSFS_KFD_NODES = "/sys/class/kfd/kfd/topology/nodes"
 DEV_DRI = "/dev/dri"
 DEV_PREFIX = "/dev"
 DEV_ROOT = Path(DEV_PREFIX)
@@ -288,6 +312,21 @@ def merge_allowed_devices(properties, allowed_devices):
     return properties
 
 
+def _kfd_nodes():
+    """Yield (domain, location_id, render_minor) of each KFD GPU node."""
+    for path in Path(SYSFS_KFD_NODES).glob("*/properties"):
+        try:
+            text = path.read_text()
+            props = dict(line.split() for line in text.splitlines() if line)
+            minor = int(props.get("drm_render_minor", 0))
+            node = (int(props["domain"]), int(props["location_id"]), minor)
+        except (OSError, KeyError, ValueError):
+            continue
+        # CPU nodes have no render node
+        if minor > 0:
+            yield node
+
+
 class ResourceMapper:
     """Base class for resource ID to systemd unit property mappers.
 
@@ -406,6 +445,7 @@ class HwlocMapper(ResourceMapper):
         self._map = lib.rhwloc_map_create(xml.encode())
         if self._map == ffi.NULL:
             raise OSError(errno.EINVAL, "rhwloc_map_create failed")
+        self._gpu_addrs = None
 
     def __del__(self):
         if self._map and self._map != self._ffi.NULL:
@@ -533,11 +573,74 @@ class HwlocMapper(ResourceMapper):
             raise OSError(errno.ENODEV, f"GPU {pci_path.name}: {kfd_dev} not found")
         return [f"{kfd_dev} rw"]
 
-    def _discover_gpu_devices(self, pci_addr):
+    def _kfd_render_minors(self, pci_addr, count):
+        """Return render minors of KFD nodes on a PCI device.
+
+        Args:
+            pci_addr: PCI address string, e.g. ``"0000:01:00.0"``.
+            count: Number of GPUs on the PCI device.
+
+        Returns:
+            List of render minors in ``location_id`` order.
+        """
+        domain, bus, devfn = pci_addr.split(":")
+        dev, func = devfn.split(".")
+        bdf = (int(bus, 16) << 8) | (int(dev, 16) << 3) | int(func, 16)
+        # If there is more than one GPU, the low three bits are the partition
+        mask = ~7 if count > 1 else ~0
+        nodes = sorted(
+            (loc, minor)
+            for dom, loc, minor in _kfd_nodes()
+            if dom == int(domain, 16) and loc & mask == bdf & mask
+        )
+        return [minor for _, minor in nodes]
+
+    def _discover_amd_drm_devices(self, pci_path, partitions):
+        """Discover DRM devices for held GPUs on an AMD PCI device.
+
+        Args:
+            pci_path: Path object to PCI device directory.
+            partitions: Indices of held GPUs on this PCI device.
+
+        Returns:
+            List of DeviceAllow strings for DRM devices.
+
+        Raises:
+            OSError: A held GPU has no render node, or the PCI device has more
+                than one GPU and KFD does not have one node per GPU.
+        """
+        pci_addr = pci_path.name
+        count = self._all_gpu_addrs().count(pci_addr)
+        minors = self._kfd_render_minors(pci_addr, count)
+        if len(minors) == count:
+            renders = [Path(DEV_DRI) / f"renderD{minors[i]}" for i in partitions]
+        elif count == 1:
+            drm = sorted((pci_path / "drm").glob("renderD*"))
+            renders = [Path(DEV_DRI) / entry.name for entry in drm]
+        else:
+            raise OSError(
+                errno.ENODEV,
+                f"GPU {pci_addr}: hwloc has {count} GPUs"
+                f" but KFD topology has {len(minors)}",
+            )
+        if not renders:
+            raise OSError(errno.ENODEV, f"GPU {pci_addr}: no render node found")
+        for dev in renders:
+            if not dev.exists():
+                raise OSError(errno.ENODEV, f"GPU {pci_addr}: {dev} not found")
+        devices = []
+        if len(partitions) == count:
+            devices = self._discover_drm_devices(pci_path)
+        devices.extend(f"{dev} rw" for dev in renders)
+        return devices
+
+    def _discover_gpu_devices(self, pci_addr, partitions=None):
         """Discover all device nodes for a GPU at the given PCI address.
 
         Args:
             pci_addr: PCI address string, e.g. ``"0000:01:00.0"``.
+            partitions: Indices of held GPUs on this PCI device, or None if
+                the job holds all of them.
 
         Returns:
             List of DeviceAllow strings, e.g.
@@ -545,45 +648,22 @@ class HwlocMapper(ResourceMapper):
               "/dev/dri/renderD128 rw"]``.
         """
         pci_path = Path(f"{SYSFS_PCI_DEVICES}/{pci_addr}")
-        devices = []
-
-        drm_devices = self._discover_drm_devices(pci_path)
-        devices.extend(drm_devices)
-
         driver = self._get_driver_name(pci_path)
-        if driver:
-            if NVIDIA_DRIVER in driver:
-                devices.extend(self._discover_nvidia_devices(pci_path))
-            elif AMD_DRIVER in driver:
-                if not drm_devices:
-                    raise OSError(
-                        errno.ENODEV,
-                        f"GPU {pci_addr}: no /dev/dri devices found",
-                    )
-                devices.extend(self._discover_amd_devices(pci_path))
 
+        if driver and AMD_DRIVER in driver:
+            if partitions is None:
+                partitions = range(self._all_gpu_addrs().count(pci_addr))
+            devices = self._discover_amd_drm_devices(pci_path, partitions)
+            devices.extend(self._discover_amd_devices(pci_path))
+            return devices
+
+        devices = self._discover_drm_devices(pci_path)
+        if driver and NVIDIA_DRIVER in driver:
+            devices.extend(self._discover_nvidia_devices(pci_path))
         return devices
 
-    def map_gpus(self, gpus):
-        """Map logical GPU IDs to a DeviceAllow property.
-
-        An empty *gpus* string (no GPUs allocated) returns an empty dict.
-        Device policy enforcement is handled by :meth:`finalize_properties`.
-
-        Args:
-            gpus: Idset string of logical GPU IDs, e.g. ``"0-1"``,
-                or ``""`` when no GPUs are allocated.
-
-        Returns:
-            Dict with ``DeviceAllow`` key containing a comma-separated
-            string of ``"<path> rw"`` entries, or empty dict when no
-            GPUs are allocated.
-
-        Raises:
-            OSError: If the hwloc GPU PCI address lookup fails.
-        """
-        if not gpus:
-            return {}
+    def _gpu_pci_addrs(self, gpus):
+        """Map an idset string of logical GPU IDs to a list of PCI addresses."""
         ffi = self._ffi
         lib = self._lib
         error = ffi.new("flux_error_t[1]")
@@ -599,11 +679,61 @@ class HwlocMapper(ResourceMapper):
                 i += 1
         finally:
             lib.rhwloc_map_strv_free(addrs)
+        return pci_addrs
+
+    def _all_gpu_addrs(self):
+        """Return the PCI address of each GPU, indexed by GPU ID.
+
+        The address of a GPU with no PCI device is None.
+        """
+        if self._gpu_addrs is None:
+            count = self._lib.rhwloc_map_count_type(self._map, b"gpu")
+            self._gpu_addrs = []
+            for gpu in range(max(count, 0)):
+                try:
+                    self._gpu_addrs.extend(self._gpu_pci_addrs(str(gpu)))
+                except OSError:
+                    self._gpu_addrs.append(None)
+        return self._gpu_addrs
+
+    def map_gpus(self, gpus):
+        """Map logical GPU IDs to a DeviceAllow property.
+
+        An empty *gpus* string (no GPUs allocated) returns an empty dict.
+        Device policy enforcement is handled by :meth:`finalize_properties`.
+
+        If the job holds only some GPUs on a PCI device, only their device
+        nodes are allowed. This is supported only for AMD GPUs. For other
+        drivers, the job is allowed all devices of the PCI device.
+
+        Args:
+            gpus: Idset string of logical GPU IDs, e.g. ``"0-1"``,
+                or ``""`` when no GPUs are allocated.
+
+        Returns:
+            Dict with ``DeviceAllow`` key containing a comma-separated
+            string of ``"<path> rw"`` entries, or empty dict when no
+            GPUs are allocated.
+
+        Raises:
+            OSError: If the hwloc GPU PCI address lookup fails.
+        """
+        if not gpus:
+            return {}
+        pci_addrs = self._gpu_pci_addrs(gpus)
+        all_addrs = self._all_gpu_addrs()
+
+        # Map PCI address to indices of held GPUs on that device
+        held = {}
+        for gpu_id, addr in zip(IDset(gpus), pci_addrs):
+            held.setdefault(addr, []).append(all_addrs[:gpu_id].count(addr))
 
         devices = []
-        for addr in pci_addrs:
-            devices.extend(self._discover_gpu_devices(addr))
-
+        for addr, indices in held.items():
+            if len(indices) == all_addrs.count(addr):
+                devices.extend(self._discover_gpu_devices(addr))
+            else:
+                devices.extend(self._discover_gpu_devices(addr, indices))
         unique_devices = list(dict.fromkeys(devices))
         return {"DeviceAllow": ",".join(unique_devices)}
 
