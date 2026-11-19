@@ -30,6 +30,9 @@
 #include "src/common/libutil/fsd.h"
 #include "src/common/libutil/parse_size.h"
 #include "ccan/str/str.h"
+#ifndef HAVE_SECURE_GETENV
+#include "src/common/libmissing/secure_getenv.h"
+#endif
 
 #include "optparse.h"
 #include "getopt.h"
@@ -466,7 +469,7 @@ static int get_term_columns ()
 {
     char *val;
     int   cols = 80;
-    if ((val = getenv ("COLUMNS"))) {
+    if ((val = secure_getenv ("COLUMNS"))) {
         char *p;
         long lval = strtol (val, &p, 10);
         if (p && (*p == '\0'))
@@ -1077,7 +1080,7 @@ const char *optparse_get_str (optparse_t *p,
 int optparse_get_color (optparse_t *p, const char *name)
 {
     const char *when = "auto";
-    const char *no_color = getenv ("NO_COLOR");
+    const char *no_color = secure_getenv ("NO_COLOR");
 
     /* If NO_COLOR set to a non-empty value, set default to 'never'
      * (See no-color.org)

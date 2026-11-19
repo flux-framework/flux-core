@@ -28,6 +28,9 @@
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/iterators.h"
 #include "ccan/str/str.h"
+#ifndef HAVE_SECURE_GETENV
+#include "src/common/libmissing/secure_getenv.h"
+#endif
 
 
 #include "environment.h"
@@ -227,7 +230,7 @@ void environment_from_env (struct environment *e,
                            const char *default_base,
                            char separator)
 {
-    const char *env = getenv (key);
+    const char *env = secure_getenv (key);
     if (!env && !default_base)
         return;
     if (!env)

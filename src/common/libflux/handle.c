@@ -32,6 +32,9 @@
 #include "src/common/libutil/monotime.h"
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libidset/idset.h"
+#ifndef HAVE_SECURE_GETENV
+#include "src/common/libmissing/secure_getenv.h"
+#endif
 #include "ccan/array_size/array_size.h"
 #include "ccan/str/str.h"
 
@@ -135,7 +138,7 @@ static connector_init_f *find_connector_dso (const char *scheme,
                                              flux_error_t *errp)
 {
     char name[PATH_MAX];
-    const char *searchpath = getenv ("FLUX_CONNECTOR_PATH");
+    const char *searchpath = secure_getenv ("FLUX_CONNECTOR_PATH");
     char *path = NULL;
     void *dso = NULL;
     connector_init_f *connector_init = NULL;
@@ -188,7 +191,7 @@ static char *get_local_uri (void)
     const char *uri;
     char *result = NULL;
 
-    if ((uri = getenv ("FLUX_URI")))
+    if ((uri = secure_getenv ("FLUX_URI")))
         return strdup (uri);
     if (asprintf (&result,
                   "local://%s/local",
@@ -406,9 +409,9 @@ flux_t *flux_open_ex (const char *uri, int flags, flux_error_t *errp)
     if (!(connector_init = find_connector_builtin (scheme))
         && !(connector_init = find_connector_dso (scheme, &dso, errp)))
         goto error;
-    if (getenv ("FLUX_HANDLE_TRACE"))
+    if (secure_getenv ("FLUX_HANDLE_TRACE"))
         flags |= FLUX_O_TRACE;
-    if (getenv ("FLUX_HANDLE_MATCHDEBUG"))
+    if (secure_getenv ("FLUX_HANDLE_MATCHDEBUG"))
         flags |= FLUX_O_MATCHDEBUG;
     if (!(h = connector_init (path, flags, errp))) {
         if (dso)
@@ -416,7 +419,7 @@ flux_t *flux_open_ex (const char *uri, int flags, flux_error_t *errp)
         goto error;
     }
     h->dso = dso;
-    if ((s = getenv ("FLUX_HANDLE_USERID"))) {
+    if ((s = secure_getenv ("FLUX_HANDLE_USERID"))) {
         uint32_t userid = strtoul (s, NULL, 10);
         if (flux_opt_set (h,
                           FLUX_OPT_TESTING_USERID,
@@ -424,7 +427,7 @@ flux_t *flux_open_ex (const char *uri, int flags, flux_error_t *errp)
                           sizeof (userid)) < 0)
             goto error_handle;
     }
-    if ((s = getenv ("FLUX_HANDLE_ROLEMASK"))) {
+    if ((s = secure_getenv ("FLUX_HANDLE_ROLEMASK"))) {
         uint32_t rolemask = strtoul (s, NULL, 0);
         if (flux_opt_set (h,
                           FLUX_OPT_TESTING_ROLEMASK,

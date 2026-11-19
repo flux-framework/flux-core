@@ -54,4 +54,5 @@ EXTRA_libmissing_la_SOURCES = \
 	json_object_update_recursive.h \
 	pipe2.h \
 	mempcpy.h \
-	get_current_dir_name.h
+	get_current_dir_name.h \
+	secure_getenv.h

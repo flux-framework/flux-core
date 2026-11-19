@@ -53,6 +53,9 @@
 #ifndef HAVE_STRLCPY
 #include "src/common/libmissing/strlcpy.h"
 #endif
+#ifndef HAVE_SECURE_GETENV
+#include "src/common/libmissing/secure_getenv.h"
+#endif
 
 #include "pmi.h"
 #include "pmi2.h"
@@ -69,10 +72,10 @@ int PMI2_Init (int *spawned, int *size, int *rank, int *appnum)
     if (pmi_global_ctx)
         return PMI2_ERR_INIT;
 
-    ctx = pmi_simple_client_create_fd (getenv ("PMI_FD"),
-                                       getenv ("PMI_RANK"),
-                                       getenv ("PMI_SIZE"),
-                                       getenv ("PMI_SPAWNED"));
+    ctx = pmi_simple_client_create_fd (secure_getenv ("PMI_FD"),
+                                       secure_getenv ("PMI_RANK"),
+                                       secure_getenv ("PMI_SIZE"),
+                                       secure_getenv ("PMI_SPAWNED"));
     if (!ctx) {
         if (errno == ENOMEM)
             return PMI2_ERR_NOMEM;

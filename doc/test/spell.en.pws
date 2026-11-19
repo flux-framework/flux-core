@@ -595,6 +595,7 @@ DNS
 etest
 eth
 setuid
+setgid
 IDset
 busytimeout
 dbpath

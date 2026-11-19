@@ -121,6 +121,7 @@ TESTSCRIPTS = \
 	t0045-check-format-args.t \
 	t0046-gc-emptydir.t \
 	t0047-jobid-path.t \
+	t0048-secure-getenv.t \
 	t0090-content-enospc.t \
 	t0099-admin-system-scripts.t \
 	t0100-modprobe.t \
@@ -567,6 +568,7 @@ check_PROGRAMS = \
 	debug/stall \
 	util/jobspec1-validate \
 	util/marshall \
+	util/handle-open \
 	module/testloader
 
 if HAVE_MPI
@@ -1329,6 +1331,11 @@ util_marshall_SOURCES = util/marshall.c
 util_marshall_CPPFLAGS = $(test_cppflags)
 util_marshall_LDADD = $(test_ldadd)
 util_marshall_LDFLAGS = $(test_ldflags)
+
+util_handle_open_SOURCES = util/handle-open.c
+util_handle_open_CPPFLAGS = $(test_cppflags)
+util_handle_open_LDADD = $(test_ldadd)
+util_handle_open_LDFLAGS = $(test_ldflags)
 
 module_testloader_SOURCES = module/testloader.c
 module_testloader_CPPFLAGS = $(test_cppflags)

@@ -50,6 +50,8 @@ jobs:
         ref: ${{ github.event.pull_request.head.sha }}
         fetch-depth: 0
     - run: git fetch --tags || true
+    - name: run check-getenv
+      run: ./scripts/check-getenv
     - name: install dependencies
       run: |
         sudo apt update

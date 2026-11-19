@@ -16,6 +16,9 @@
 
 #include "src/common/librouter/usock.h"
 #include "src/common/libutil/errprintf.h"
+#ifndef HAVE_SECURE_GETENV
+#include "src/common/libmissing/secure_getenv.h"
+#endif
 #include "ccan/str/str.h"
 
 struct local_connector {
@@ -141,7 +144,7 @@ static int override_retry_count (struct usock_retry_params *retry)
 {
     const char *s;
 
-    if ((s = getenv ("FLUX_LOCAL_CONNECTOR_RETRY_COUNT"))) {
+    if ((s = secure_getenv ("FLUX_LOCAL_CONNECTOR_RETRY_COUNT"))) {
         char *endptr;
         int n;
 

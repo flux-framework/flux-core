@@ -16,6 +16,9 @@
 #include <math.h>
 
 #include "src/common/libutil/errprintf.h"
+#ifndef HAVE_SECURE_GETENV
+#include "src/common/libmissing/secure_getenv.h"
+#endif
 
 #include "job.h"
 
@@ -193,7 +196,7 @@ int flux_job_timeleft (flux_t *h, flux_error_t *errp, double *timeleft)
      *  is part of a job in the current instance. If not, then try to get
      *  expiration from R via resource.status RPC.
      */
-    if ((s = getenv ("FLUX_JOB_ID")))
+    if ((s = secure_getenv ("FLUX_JOB_ID")))
         expiration = get_job_expiration (h, s, errp);
     else
         expiration = get_instance_expiration (h, errp);
