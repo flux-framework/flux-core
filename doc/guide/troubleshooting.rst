@@ -446,3 +446,42 @@ unit, per-job, of the form :option:`flux-housekeeping@JOBID`. Use
 :command:`systemd-cgls` to list processes and :command:`journalctl -u
 flux-housekeeping@JOBID` to debug housekeeping scripts.
 
+
+*******************************
+Resource Allocation Consistency
+*******************************
+
+The job manager and the scheduler each keep track of which resources are
+allocated. A bug in either can result in the same resources being allocated
+to more than one job, or in the two disagreeing about which resources are
+free. A common symptom is that :command:`flux resource list` fails:
+
+.. code-block:: console
+
+  $ flux resource list
+  flux-resource: ERROR: job-manager.resource-status request failed: fmkHggkEBMy: duplicate allocation
+
+The job in this error is only the first conflicting job the job manager
+happened to find, not necessarily the one that was double booked. To find
+all overlapping allocations, and to check that the job manager and scheduler
+agree, run :command:`flux audit-alloc` as the instance owner:
+
+.. code-block:: console
+
+  # flux audit-alloc
+  flux-audit-alloc: WARNING: job-manager.resource-status: fmkHggkEBMy: duplicate allocation
+  flux-audit-alloc: INFO: checked 682 allocations, skipped 0
+  flux-audit-alloc: ERROR: conflict: job fmkHggkEBMy <-> job fmkHiMPjMsm
+  flux-audit-alloc: ERROR:    overlap: rank174/core[0-95] (tuolumne1174)
+  flux-audit-alloc: ERROR:    job fmkHggkEBMy: alloc 2026-11-18T10:53:05.985007-08:00
+  flux-audit-alloc: ERROR:    job fmkHiMPjMsm: alloc 2026-11-18T10:51:12.380548-08:00
+  flux-audit-alloc: INFO: job-manager and scheduler agree on allocated resources
+  flux-audit-alloc: INFO: debug bundle: flux-audit-alloc-20261118-105511.tar.gz
+
+When conflicts are found, a debug bundle containing logs, eventlogs, and
+the job manager and scheduler views of allocated resources is saved to a
+tarball, which should be attached to any bug report. Since the bundle
+captures the state of the instance when the problem is detected, run the
+command before canceling the affected jobs or reloading the scheduler.
+
+See :man1:`flux-audit-alloc` for details.
