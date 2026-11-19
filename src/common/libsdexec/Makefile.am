@@ -38,7 +38,9 @@ libsdexec_la_SOURCES = \
 	bus.h \
 	unit.c \
 	parse.h \
-	parse.c
+	parse.c \
+	record.h \
+	record.c
 
 test_ldadd = \
 	$(top_builddir)/src/common/libtap/libtap.la \
@@ -66,7 +68,8 @@ TESTS = \
 	test_value.t \
 	test_state.t \
 	test_stop.t \
-	test_unit.t
+	test_unit.t \
+	test_record.t
 
 check_PROGRAMS = \
 	$(TESTS)
@@ -125,3 +128,8 @@ test_unit_t_SOURCES = test/unit.c
 test_unit_t_CPPFLAGS = $(test_cppflags)
 test_unit_t_LDADD = libsdexec.la $(test_ldadd)
 test_unit_t_LDFLAGS = $(test_ldflags)
+
+test_record_t_SOURCES = test/record.c
+test_record_t_CPPFLAGS = $(test_cppflags)
+test_record_t_LDADD = libsdexec.la $(test_ldadd)
+test_record_t_LDFLAGS = $(test_ldflags)

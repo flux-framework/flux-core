@@ -28,13 +28,18 @@ flux_future_t *sdexec_property_get (flux_t *h,
 int sdexec_property_get_read (flux_future_t *f, const char *type, ...);
 
 /* 'GetAll' method-call.
+ * 'interface' selects the D-Bus interface whose properties are returned:
+ * NULL for the Service interface (ExecMain*, ExecStart, ...), or "" for
+ * every interface the object implements, which adds the Unit interface
+ * properties (ActiveState, SubState, ...) to the same reply.
  * sdexec_property_get_all_dict() accesses the returned property dict,
  * which can be further parsed with sdexec_property_dict_read().
  */
 flux_future_t *sdexec_property_get_all (flux_t *h,
                                         const char *service,
                                         uint32_t rank,
-                                        const char *path);
+                                        const char *path,
+                                        const char *interface);
 json_t *sdexec_property_get_all_dict (flux_future_t *f);
 
 /* 'PropertiesChanged' signal.

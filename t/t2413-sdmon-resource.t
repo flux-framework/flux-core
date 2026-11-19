@@ -32,7 +32,7 @@ EOT
 
 test_under_flux 1 full --config-path=$(pwd)/config -Slog-stderr-level=1
 
-testname="t2412-$$"
+testname="t2413-$$"
 
 groups="flux python ${SHARNESS_TEST_SRCDIR}/scripts/groups.py"
 
@@ -92,7 +92,7 @@ test_expect_success 'clear dmesg, then reload sdmon, resource, sched-simple' '
 	flux dmesg -C &&
 	flux module remove sched-simple &&
 	flux module remove resource &&
-	flux module reload sdmon &&
+	flux module reload sdmon usr_glob="*shell-${testname}*" &&
 	flux module load resource &&
 	flux module load sched-simple
 '

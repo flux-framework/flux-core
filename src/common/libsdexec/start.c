@@ -35,20 +35,49 @@
 #include "proplist.h"
 #include "start.h"
 
-/* ExecStart has D-Bus type a(sasb), an array of command lines.  Each is
- * [path, argv, ignore-failure], where ignore-failure corresponds to an
- * ExecStart prefix of "-".  This adds one command line with
- * ignore-failure=false.
+/* ExecStart (and the other Exec*= settings) have D-Bus type a(sasb), an
+ * array of command lines.  Each is [path, argv, ignore-failure], where
+ * ignore-failure corresponds to a prefix of "-" in a unit file.  This adds
+ * one command line with ignore-failure=false.
  */
-static void prop_add_execstart (struct sdexec_proplist *pl, json_t *cmdline)
+static void prop_add_exec (struct sdexec_proplist *pl,
+                           const char *name,
+                           json_t *cmdline)
 {
     const char *arg0;
     json_t *val = NULL;
 
     if (json_unpack (cmdline, "[s]", &arg0) == 0)
         val = json_pack ("[[sOb]]", arg0, cmdline, 0);
-    sdexec_proplist_add_json (pl, "ExecStart", "a(sasb)", val);
+    sdexec_proplist_add_json (pl, name, "a(sasb)", val);
     json_decref (val);
+}
+
+/* An Exec* property set through an SDEXEC_PROP_ option is a string, so
+ * the command line is encoded as a JSON array of strings.
+ */
+static int prop_add_exec_fromstring (struct sdexec_proplist *pl,
+                                     const char *name,
+                                     const char *val)
+{
+    json_t *cmdline;
+    size_t index;
+    json_t *entry;
+
+    if (!(cmdline = json_loads (val, 0, NULL)))
+        return -1;
+    if (!json_is_array (cmdline) || json_array_size (cmdline) == 0)
+        goto error;
+    json_array_foreach (cmdline, index, entry) {
+        if (!json_is_string (entry))
+            goto error;
+    }
+    prop_add_exec (pl, name, cmdline);
+    json_decref (cmdline);
+    return 0;
+error:
+    json_decref (cmdline);
+    return -1;
 }
 
 /* systemd fails a StartTransientUnit request if environment variable
@@ -252,6 +281,10 @@ static int prop_add (struct sdexec_proplist *pl,
             return -1;
         sdexec_proplist_add (pl, name, "t", u);
     }
+    else if (streq (name, "ExecStopPost")) {
+        if (prop_add_exec_fromstring (pl, name, val) < 0)
+            return -1;
+    }
     else if (streq (name, "OOMScoreAdjust")) {
         char *endptr;
         long l;
@@ -303,7 +336,7 @@ static json_t *prop_create (json_t *cmd,
         errno = ENOMEM;
         return NULL;
     }
-    prop_add_execstart (pl, cmdline);
+    prop_add_exec (pl, "ExecStart", cmdline);
     if (cwd)
         sdexec_proplist_add (pl, "WorkingDirectory", "s", cwd);
     sdexec_proplist_add (pl, "RemainAfterExit", "b", true);

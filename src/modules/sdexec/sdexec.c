@@ -13,6 +13,7 @@
  * Configuration:
  *  [systemd]
  *  sdexec-debug = true   # enables debug logging
+ *  sdexec-record-dir = "/path" # unit records (default: XDG_RUNTIME_DIR)
  *  enable = true         # enables auto loading by rc script
  */
 
@@ -45,6 +46,7 @@
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/fdutils.h"
 #include "src/common/libutil/jpath.h"
+#include "src/common/libutil/monotime.h"
 #include "src/common/libutil/parse_size.h"
 #include "src/common/libutil/strstrip.h"
 #include "src/common/libutil/basename.h"
@@ -55,6 +57,8 @@
 #include "src/common/libsdexec/channel.h"
 #include "src/common/libsdexec/unit.h"
 #include "src/common/libsdexec/property.h"
+#include "src/common/libsdexec/record.h"
+#include "src/common/libsdexec/list.h"
 
 #define MODULE_NAME "sdexec"
 
@@ -69,11 +73,20 @@ struct sdexec_ctx {
     uint32_t rank;
     char *local_uri;
     char *instance_name; // unit name suffix, derived from jobid-path
+    char *sweep_suffix;  // ":[<rank>-]<instance>.service" (see sweep_suffix())
     bool append_rank;   // node is shared with other brokers (see ctx_create)
+    char *record_dir;   // durable unit records (see sdproc_record_write())
     flux_msg_handler_t **handlers;
     zlistx_t *procs; // list of struct sdproc, owned by the module
     struct flux_msglist *kills;
     bool tearing_down;  // module unload in progress (see teardown_units())
+    bool unloading;     // ctx is being destroyed; records must survive
+    flux_future_t *f_sweep; // startup sweep unit list (see sweep_start())
+    flux_watcher_t *sweep_timer; // retry/warning timer for the sweep
+    struct timespec sweep_t0; // sweep start time
+    bool sweep_warned;  // slow sweep warning has been logged
+    bool swept;         // startup sweep is complete (see sweep_defer())
+    struct flux_msglist *deferred; // requests held until the sweep completes
 };
 
 enum stop_timer_state {
@@ -99,6 +112,7 @@ struct sdproc {
     flux_future_t *f_watch;
     flux_future_t *f_start;
     flux_future_t *f_stop;
+    flux_future_t *f_reset;
     struct unit *unit;
     struct flux_msglist *write_requests;
     struct channel *in;
@@ -111,6 +125,8 @@ struct sdproc {
     uint8_t bg:1;            // background (non-streaming) request
     uint8_t waitable:1;      // status collected later via a wait request
     uint8_t request_done:1;  // no more responses on the exec_request
+    uint8_t record_written:1; // a record exists for this unit
+    uint8_t label_generated:1; // label was made up, not set by the client
 
     const flux_msg_t *waiter; // parked wait request, or NULL
     json_t *retained_output;  // bounded tail of bg output for wait response
@@ -129,6 +145,12 @@ struct sdproc {
 };
 
 static const int default_stop_timeout_sec = -1; // disabled by default
+
+// warn if the startup sweep is still waiting for sdbus after this long
+static const double sweep_warn_sec = 30.;
+
+// delay before re-sending a sweep unit list request that failed with EAGAIN
+static const double sweep_retry_sec = 1.;
 
 // unload teardown deadline, stragglers are logged and left behind
 static const double teardown_timeout_sec = 30.;
@@ -273,19 +295,37 @@ static void sdproc_wait_notify (struct sdproc *proc)
 }
 
 /* Return a short display name for a background process for use in log
- * messages: the subprocess label if one was set, otherwise the basename of
- * argv[0].  Falls back to the unit name if neither is available.
+ * messages: the subprocess label if the client set one, otherwise the
+ * basename of argv[0], otherwise a label sdexec made up for it, otherwise
+ * the unit name.
  */
 static const char *sdproc_logname (struct sdproc *proc)
 {
     const char *label;
     const char *arg0;
 
-    if (json_unpack (proc->cmd, "{s:s}", "label", &label) == 0)
+    if (!proc->label_generated
+        && json_unpack (proc->cmd, "{s:s}", "label", &label) == 0)
         return label;
     if (json_unpack (proc->cmd, "{s:[s]}", "cmdline", &arg0) == 0)
         return basename_simple (arg0);
+    if (json_unpack (proc->cmd, "{s:s}", "label", &label) == 0)
+        return label;
     return sdexec_unit_name (proc->unit);
+}
+
+/* Format "name[pid]" for log messages, or just "name" if the pid is not
+ * known (e.g. a recovered unit that systemd has already collected).
+ */
+static const char *sdproc_logid (struct sdproc *proc, char *buf, size_t size)
+{
+    pid_t pid = sdexec_unit_pid (proc->unit);
+
+    if (pid > 0)
+        snprintf (buf, size, "%s[%d]", sdproc_logname (proc), (int)pid);
+    else
+        snprintf (buf, size, "%s", sdproc_logname (proc));
+    return buf;
 }
 
 /* Respond to the exec request with an error and remove the process.
@@ -324,11 +364,11 @@ static void exec_respond_error (struct sdproc *proc,
      * terminal error has already been logged and recorded on the first pass.
      */
     else if (errnum != ENODATA && !proc->wait_errnum) {
+        char id[128];
         flux_log (ctx->h,
                   LOG_ERR,
-                  "%s[%d]: %s",
-                  sdproc_logname (proc),
-                  (int)sdexec_unit_pid (proc->unit),
+                  "%s: %s",
+                  sdproc_logid (proc, id, sizeof (id)),
                   errstr && *errstr ? errstr : strerror (errnum));
     }
     if (proc->started_response_sent && sdproc_is_waitable (proc)) {
@@ -356,18 +396,27 @@ static bool client_listening (struct sdproc *proc)
  * streamed to a client, so this is the only record of its exit for a
  * non-waitable process.
  */
+/* Describe a wait status the way the rexec server logs one.
+ */
+static const char *status_str (int status, char *buf, size_t size)
+{
+    if (WIFSIGNALED (status))
+        snprintf (buf, size, "Killed by signal %d", WTERMSIG (status));
+    else
+        snprintf (buf, size, "Exit %d", WEXITSTATUS (status));
+    return buf;
+}
+
 static void sdproc_log_exit (struct sdproc *proc, int status)
 {
-    flux_t *h = proc->ctx->h;
-    const char *name = sdproc_logname (proc);
-    int pid = (int)sdexec_unit_pid (proc->unit);
+    char id[128];
+    char st[64];
 
-    if (WIFSIGNALED (status))
-        flux_log (h, LOG_INFO, "%s[%d]: Killed by signal %d",
-                  name, pid, WTERMSIG (status));
-    else
-        flux_log (h, LOG_INFO, "%s[%d]: Exit %d",
-                  name, pid, WEXITSTATUS (status));
+    flux_log (proc->ctx->h,
+              LOG_INFO,
+              "%s: %s",
+              sdproc_logid (proc, id, sizeof (id)),
+              status_str (status, st, sizeof (st)));
 }
 
 /* Send the streaming response IFF unit cleanup is complete and EOFs have
@@ -376,6 +425,15 @@ static void sdproc_log_exit (struct sdproc *proc, int status)
  */
 static void finalize_exec_request_if_done (struct sdproc *proc)
 {
+    /* A recorded terminal error (wait_errnum) means no further unit events
+     * are guaranteed, e.g. the unit is gone, so the inactive.dead gate below
+     * may never be satisfied.  Once the error has been delivered to a waiter
+     * (waitable cleared), there is nothing left to wait for: tear down now.
+     */
+    if (proc->wait_errnum && !sdproc_is_waitable (proc)) {
+        zlistx_delete (proc->ctx->procs, proc->list_handle);
+        return;
+    }
     if (proc->stop.timed_out) {
         exec_respond_error (proc,
                             EDEADLK,
@@ -581,25 +639,17 @@ static int sdproc_post_start_checks (struct sdproc *proc, flux_error_t *errp)
     return 0;
 }
 
-/* sdbus.subscribe sent a PropertiesChanged response for a particular unit.
- * Advance the proc->unit state accordingly and send exec responses as needed.
- * call finalize_exec_request_if_done() in case this update is the last thing
- * the exec request was waiting for.
+/* Advance proc->unit through the response protocol after its state has been
+ * updated (from a PropertiesChanged signal or a GetAll snapshot) and send
+ * exec responses as needed.  The caller is responsible for calling
+ * finalize_exec_request_if_done() afterward in case this was the last thing
+ * the exec request was waiting for.  This is shared by
+ * property_changed_continuation (live units) and the startup sweep
+ * (recovered units).
  */
-static void property_changed_continuation (flux_future_t *f, void *arg)
+static void sdproc_advance_state (struct sdproc *proc)
 {
-    flux_t *h = flux_future_get_flux (f);
-    struct sdproc *proc = arg;
-    json_t *properties;
-
-    if (!(properties = sdexec_property_changed_dict (f))) {
-        exec_respond_error (proc, errno, future_strerror (f, errno));
-        return;
-    }
-    if (!sdexec_unit_update (proc->unit, properties)) {
-        flux_future_reset (f);
-        return;
-    }
+    flux_t *h = proc->ctx->h;
 
     sdexec_log_debug (h,
                       "%s: %s.%s",
@@ -642,7 +692,7 @@ static void property_changed_continuation (flux_future_t *f, void *arg)
                     flux_log_error (h, "error killing unit after failed check");
                 sdexec_channel_start_output (proc->out);
                 sdexec_channel_start_output (proc->err);
-                goto done;
+                return;
             }
             if (flux_respond_pack (h,
                                    proc->exec_request,
@@ -722,6 +772,10 @@ static void property_changed_continuation (flux_future_t *f, void *arg)
      * and stderr to reach eof, and the unit to transition to inactive.dead.
      * We can land here for both a child failure and an exec failure.
      * Start channel output here in case of the latter so it can be finalized.
+     * A unit can also fail after StopUnit was issued above, e.g. when its
+     * ExecStopPost command exceeds TimeoutStopUSec, so the reset is tracked
+     * separately from the stop rather than being skipped because a stop is
+     * already in flight.
      */
     if (sdexec_unit_state (proc->unit) == STATE_FAILED
         && sdexec_unit_substate (proc->unit) == SUBSTATE_FAILED) {
@@ -729,7 +783,7 @@ static void property_changed_continuation (flux_future_t *f, void *arg)
         sdexec_channel_start_output (proc->out);
         sdexec_channel_start_output (proc->err);
 
-        if (!proc->f_stop) {
+        if (!proc->f_reset) {
             flux_future_t *f2;
             sdexec_log_debug (h,
                               "reset-failed %s",
@@ -742,10 +796,30 @@ static void property_changed_continuation (flux_future_t *f, void *arg)
                 flux_future_destroy (f2);
                 f2 = NULL;
             }
-            proc->f_stop = f2;
+            proc->f_reset = f2;
         }
     }
-done:
+}
+
+/* sdbus.subscribe sent a PropertiesChanged response for a particular unit.
+ * Advance the proc->unit state accordingly and send exec responses as needed.
+ * call finalize_exec_request_if_done() in case this update is the last thing
+ * the exec request was waiting for.
+ */
+static void property_changed_continuation (flux_future_t *f, void *arg)
+{
+    struct sdproc *proc = arg;
+    json_t *properties;
+
+    if (!(properties = sdexec_property_changed_dict (f))) {
+        exec_respond_error (proc, errno, future_strerror (f, errno));
+        return;
+    }
+    if (!sdexec_unit_update (proc->unit, properties)) {
+        flux_future_reset (f);
+        return;
+    }
+    sdproc_advance_state (proc);
     flux_future_reset (f);
     /* Conditionally send the final RPC response.
      */
@@ -901,6 +975,22 @@ static void sdproc_destroy (struct sdproc *proc)
 {
     if (proc) {
         int saved_errno = errno;
+        /* The record is the durable copy of this process's existence and
+         * status.  It is removed when the process is torn down, with two
+         * exceptions: a waitable process that still has a status to deliver
+         * is torn down only at module unload, and must survive it for the
+         * next instance to re-adopt; and the unload path tears down every
+         * proc, including running ones whose status has yet to be recorded.
+         * So remove the record only when the module is not unloading.
+         */
+        if (proc->ctx->record_dir
+            && proc->record_written
+            && !proc->ctx->unloading
+            && sdexec_record_remove (proc->ctx->record_dir,
+                                     sdexec_unit_name (proc->unit)) < 0)
+            flux_log_error (proc->ctx->h,
+                            "error removing record for %s",
+                            sdexec_unit_name (proc->unit));
         sdexec_channel_destroy (proc->in);
         sdexec_channel_destroy (proc->out);
         sdexec_channel_destroy (proc->err);
@@ -922,6 +1012,7 @@ static void sdproc_destroy (struct sdproc *proc)
         flux_future_destroy (proc->f_map);
         flux_future_destroy (proc->f_start);
         flux_future_destroy (proc->f_stop);
+        flux_future_destroy (proc->f_reset);
         sdexec_unit_destroy (proc->unit);
         flux_watcher_destroy (proc->stop.timer);
         json_decref (proc->cmd);
@@ -1131,8 +1222,11 @@ static struct sdproc *sdproc_create (struct sdexec_ctx *ctx,
     /* Set SDEXEC_NAME for sdexec_start_transient_unit().
      * Precedence: an explicit SDEXEC_NAME option wins and is used verbatim;
      * otherwise the name is built from the subprocess label so that it can be
-     * mapped back to the label job-exec uses to look up and recover the unit,
-     * falling back to a truncated uuid when there is no label.
+     * mapped back to the label job-exec uses to look up and recover the unit.
+     * A client that sets no label gets a truncated uuid as its label, so the
+     * process has the same label before and after a restart (the record
+     * carries it, and recovery finds it there).  Such a label is marked as
+     * generated so logs still name the process by its command.
      *
      * The instance name is appended, so a unit created by this instance is
      * "<label>:<instance>.service".  Since the systemd user instance is
@@ -1152,10 +1246,18 @@ static struct sdproc *sdproc_create (struct sdexec_ctx *ctx,
         const char *label;
 
         if (json_unpack (proc->cmd, "{s:s}", "label", &label) < 0) {
+            json_t *o;
+
             uuid_generate (uuid);
             uuid_unparse (uuid, uuid_str);
             uuid_str[13] = '\0'; // plenty of uniqueness
+            if (!(o = json_string (uuid_str))
+                || json_object_set_new (proc->cmd, "label", o) < 0) {
+                errno = ENOMEM;
+                goto error;
+            }
             label = uuid_str;
+            proc->label_generated = 1;
         }
         if (ctx->append_rank) {
             rc = asprintf (&tmp,
@@ -1315,6 +1417,93 @@ out:
     return rc;
 }
 
+/* Write the durable record for proc's unit and arrange for systemd to
+ * append its exit status (see record.h).  The record carries what a later
+ * instance of this module needs to re-adopt the unit after a restart: the
+ * label it is looked up by, the command line for logs and ps, the bg and
+ * waitable flags that decide whether its status must be kept for a wait,
+ * and the stop timer settings that would otherwise be lost (the systemd
+ * side of the unit does not retain them).  The exit status is appended by
+ * the unit's ExecStopPost command, which systemd runs as the unit's user
+ * with SERVICE_RESULT, EXIT_CODE and EXIT_STATUS in its environment in
+ * every terminal case, including a Type=notify unit that has sent
+ * STOPPING=1 and then exits 0, which systemd otherwise garbage collects
+ * along with its status.  Must be called before the unit is started.
+ */
+static int sdproc_record_write (struct sdproc *proc, const char **errstrp)
+{
+    struct sdexec_ctx *ctx = proc->ctx;
+    const char *name = sdexec_unit_name (proc->unit);
+    json_t *cmdline = NULL;
+    const char *label = NULL;
+    json_t *o = NULL;
+    json_t *stoppost = NULL;
+    char *stoppost_str = NULL;
+    int rc = -1;
+
+    if (!ctx->record_dir)
+        return 0;
+    (void)json_unpack (proc->cmd, "{s:o}", "cmdline", &cmdline);
+    (void)json_unpack (proc->cmd, "{s:s}", "label", &label);
+    if (!(o = json_pack ("{s:s* s:O? s:b s:b s:b s:i s:i}",
+                         "label", label,
+                         "cmdline", cmdline,
+                         "label_generated", proc->label_generated,
+                         "bg", proc->bg,
+                         "waitable", proc->waitable,
+                         "stop_timer_sec", proc->stop.timeout_sec,
+                         "stop_timer_signal", proc->stop.kill_signal))
+        || !(stoppost = sdexec_record_execstoppost (ctx->record_dir, name))
+        || !(stoppost_str = json_dumps (stoppost, JSON_COMPACT))) {
+        errno = ENOMEM;
+        *errstrp = "error building unit record";
+        goto done;
+    }
+    if (set_dict (proc->cmd,
+                  "opts",
+                  "SDEXEC_PROP_ExecStopPost",
+                  stoppost_str) < 0) {
+        *errstrp = "error setting ExecStopPost";
+        goto done;
+    }
+    if (sdexec_record_write (ctx->record_dir, name, o) < 0) {
+        *errstrp = "error writing unit record";
+        goto done;
+    }
+    proc->record_written = 1;
+    rc = 0;
+done:
+    ERRNO_SAFE_WRAP (free, stoppost_str);
+    ERRNO_SAFE_WRAP (json_decref, stoppost);
+    ERRNO_SAFE_WRAP (json_decref, o);
+    return rc;
+}
+
+/* Subscribe to PropertiesChanged signals for proc's unit so that unit state
+ * transitions drive the response protocol.  Used both when starting a unit and
+ * when recovering one that a previous instance of this module started.
+ */
+static int sdproc_start_watch (struct sdproc *proc, const char **errstrp)
+{
+    flux_t *h = proc->ctx->h;
+    const char *unit_path = sdexec_unit_path (proc->unit);
+
+    sdexec_log_debug (h, "watch %s", sdexec_unit_name (proc->unit));
+    if (!(proc->f_watch = sdexec_property_changed (h,
+                                                   "sdbus",
+                                                   proc->ctx->rank,
+                                                   unit_path))
+        || flux_future_then (proc->f_watch,
+                             -1,
+                             property_changed_continuation,
+                             proc) < 0) {
+        if (errstrp)
+            *errstrp = "sdbus watch operation failed";
+        return -1;
+    }
+    return 0;
+}
+
 /*
  * Resource mapping is complete. Set systemd properties as encoded by
  * key in the response payload, then start the transient unit.
@@ -1342,18 +1531,9 @@ static void map_continuation (flux_future_t *f, void *arg)
         goto error;
     }
 
-    sdexec_log_debug (h, "watch %s", sdexec_unit_name (proc->unit));
-    if (!(proc->f_watch = sdexec_property_changed (h,
-                                               "sdbus",
-                                               ctx->rank,
-                                               sdexec_unit_path (proc->unit)))
-        || flux_future_then (proc->f_watch,
-                             -1,
-                             property_changed_continuation,
-                             proc) < 0) {
-        errstr = "sdbus watch operation failed";
+    if (sdproc_record_write (proc, &errstr) < 0
+        || sdproc_start_watch (proc, &errstr) < 0)
         goto error;
-    }
 
     sdexec_log_debug (h, "start %s", sdexec_unit_name (proc->unit));
     if (!(proc->f_start = sdexec_start_transient_unit (h,
@@ -1435,6 +1615,25 @@ static int authorize_request (const flux_msg_t *msg,
  * Responses to those are handled in property_changed_continuation()
  * and start_continuation().
  */
+/* Until the startup sweep has finished (see sweep_start()), the process
+ * table is not authoritative: a wait or kill could draw a false ESRCH for
+ * a unit the sweep has yet to re-adopt, a list would be incomplete, and a
+ * new unit started now could be mistaken for a leftover by the sweep.  So
+ * every request that reads or changes the process table is held, in
+ * arrival order, and requeued when the sweep finishes.  Return true if
+ * 'msg' was held (or failed), in which case the handler returns at once.
+ */
+static bool sweep_defer (struct sdexec_ctx *ctx, const flux_msg_t *msg)
+{
+    if (ctx->swept)
+        return false;
+    if (flux_msglist_append (ctx->deferred, msg) < 0) {
+        if (flux_respond_error (ctx->h, msg, errno, NULL) < 0)
+            flux_log_error (ctx->h, "error responding to deferred request");
+    }
+    return true;
+}
+
 static void exec_cb (flux_t *h,
                      flux_msg_handler_t *mh,
                      const flux_msg_t *msg,
@@ -1449,6 +1648,9 @@ static void exec_cb (flux_t *h,
     flux_error_t error;
     const char *errstr = NULL;
     struct sdproc *proc;
+
+    if (sweep_defer (ctx, msg))
+        return;
 
     if (flux_request_unpack (msg,
                              NULL,
@@ -1550,6 +1752,9 @@ static void write_cb (flux_t *h,
     struct sdproc *proc;
     const char *stream;
 
+    if (sweep_defer (ctx, msg))
+        return;
+
     if (flux_request_unpack (msg,
                              NULL,
                              "{s:i s:o}",
@@ -1638,6 +1843,9 @@ static void kill_cb (flux_t *h,
     const char *errstr = NULL;
     flux_future_t *f;
 
+    if (sweep_defer (ctx, msg))
+        return;
+
     if (flux_request_unpack (msg,
                              NULL,
                              "{s:i s:i s?s}",
@@ -1716,6 +1924,9 @@ static void wait_cb (flux_t *h,
     flux_error_t error;
     const char *errstr = NULL;
 
+    if (sweep_defer (ctx, msg))
+        return;
+
     if (flux_request_unpack (msg,
                              NULL,
                              "{s:i s?s}",
@@ -1775,6 +1986,9 @@ static void list_cb (flux_t *h,
     json_t *procs = NULL;
     struct sdproc *proc;
 
+    if (sweep_defer (ctx, msg))
+        return;
+
     if (authorize_request (msg, ctx->rank, &error) < 0) {
         errstr = error.text;
         goto error;
@@ -1788,21 +2002,28 @@ static void list_cb (flux_t *h,
         const char *state;
         json_t *o;
 
-        /* A finished process retained for a wait request is a zombie ("Z");
-         * anything else is still running ("R").  Mirrors the rexec server.
+        /* A finished process retained for a wait request is a zombie ("Z"),
+         * as is one holding a terminal error for a waiter (e.g. a lost
+         * unit); anything else is still running ("R").  Mirrors the rexec
+         * server.
          */
-        state = sdexec_unit_has_finished (proc->unit) ? "Z" : "R";
+        state = (sdexec_unit_has_finished (proc->unit) || proc->wait_errnum)
+              ? "Z" : "R";
         (void)json_unpack (proc->cmd, "{s:s}", "label", &label);
-        if (json_unpack (proc->cmd, "{s:[s]}", "cmdline", &arg0) == 0
-            && (o = json_pack ("{s:i s:s s:s s:s s:b s:b s:b}",
-                               "pid", sdexec_unit_pid (proc->unit),
-                               "cmd", arg0,
-                               "label", label ? label : "",
-                               "state", state,
-                               "bg", proc->bg,
-                               "waitable", sdproc_is_waitable (proc),
-                               "attached", client_listening (proc)
-                                           || proc->waiter != NULL))) {
+        /* A recovered proc may have no cmdline; fall back to the unit name
+         * for the "cmd" field rather than omitting the entry.
+         */
+        if (json_unpack (proc->cmd, "{s:[s]}", "cmdline", &arg0) < 0)
+            arg0 = sdexec_unit_name (proc->unit);
+        if ((o = json_pack ("{s:i s:s s:s s:s s:b s:b s:b}",
+                            "pid", sdexec_unit_pid (proc->unit),
+                            "cmd", arg0,
+                            "label", label ? label : "",
+                            "state", state,
+                            "bg", proc->bg,
+                            "waitable", sdproc_is_waitable (proc),
+                            "attached", client_listening (proc)
+                                        || proc->waiter != NULL))) {
             if (json_array_append_new (procs, o) < 0) {
                 // jansson decrefs the new object on failure
                 goto nomem;
@@ -1915,7 +2136,16 @@ static void disconnect_cb (flux_t *h,
 {
     struct sdexec_ctx *ctx = arg;
     struct sdproc *proc;
+    const flux_msg_t *req;
 
+    /* Requests held for the sweep have no state yet; just drop them.
+     */
+    req = flux_msglist_first (ctx->deferred);
+    while (req) {
+        if (flux_disconnect_match (msg, req))
+            flux_msglist_delete (ctx->deferred);
+        req = flux_msglist_next (ctx->deferred);
+    }
     proc = zlistx_first (ctx->procs);
     while (proc) {
         if (!proc->bg && flux_disconnect_match (msg, proc->exec_request)) {
@@ -2011,6 +2241,12 @@ static void teardown_units (struct sdexec_ctx *ctx)
     int count = 0;
 
     ctx->tearing_down = true;
+    /* An unfinished sweep must not adopt units while they are torn down.
+     * Requests it was holding are failed when the ctx is destroyed.
+     */
+    flux_future_destroy (ctx->f_sweep);
+    ctx->f_sweep = NULL;
+    flux_watcher_stop (ctx->sweep_timer);
     proc = zlistx_first (ctx->procs);
     while (proc) {
         if (!sdproc_is_waitable (proc)) {
@@ -2048,7 +2284,21 @@ done:
     flux_watcher_destroy (check);
 }
 
-/* N.B. systemd.enable is checked in rc1 and ignored here since
+/* Unit records (see sdproc_record_write()) live in sdexec-record-dir if
+ * configured, else in XDG_RUNTIME_DIR, the runtime directory of the user
+ * systemd instance that owns the units.  That directory has exactly the
+ * lifetime the records need: it is per user, independent of any broker's
+ * rundir, survives a restart of the user systemd instance (unlike the
+ * transient units themselves), and is cleared by a reboot, which is the
+ * one event after which there is nothing left to recover.  The system
+ * instance's flux.service sets XDG_RUNTIME_DIR for the broker.  If
+ * neither is available, records are disabled and a status that is not
+ * collected before a module restart is lost, as before.
+ * N.B. the directory is set once at load: the records of units already
+ * running are in the old directory, and a later sweep must look where
+ * this instance wrote.
+ *
+ * N.B. systemd.enable is checked in rc1 and ignored here since
  * it should be OK to load the module manually for testing.
  */
 static int sdexec_configure (struct sdexec_ctx *ctx,
@@ -2057,18 +2307,33 @@ static int sdexec_configure (struct sdexec_ctx *ctx,
 {
     flux_error_t conf_error;
     int debug = 0;
+    const char *record_dir = NULL;
 
     if (flux_conf_unpack (conf,
                           &conf_error,
-                          "{s?{s?b}}",
+                          "{s?{s?b s?s}}",
                           "systemd",
-                            "sdexec-debug", &debug) < 0) {
+                            "sdexec-debug", &debug,
+                            "sdexec-record-dir", &record_dir) < 0) {
         errprintf (error,
                    "error reading [systemd] config table: %s",
                    conf_error.text);
         return -1;
     }
     sdexec_debug = (debug ? true : false);
+    if (!ctx->record_dir) {
+        if (!record_dir)
+            record_dir = getenv ("XDG_RUNTIME_DIR");
+        if (record_dir && !(ctx->record_dir = strdup (record_dir))) {
+            errprintf (error, "out of memory");
+            return -1;
+        }
+        if (!ctx->record_dir)
+            flux_log (ctx->h,
+                      LOG_WARNING,
+                      "unit records disabled: sdexec-record-dir is not"
+                      " configured and XDG_RUNTIME_DIR is not set");
+    }
     return 0;
 }
 
@@ -2102,6 +2367,515 @@ error_decref:
 error:
     if (flux_respond_error (h, msg, errno, errstr) < 0)
         flux_log_error (h, "error responding to config-reload request");
+}
+
+/* Create an sdproc for a unit found by the startup sweep.  A previous
+ * instance of this module started the unit and then went away; there is no
+ * exec request to respond to and the stdio socketpairs died with the old
+ * module, so a recovered proc has no request message and no channels.  A
+ * NULL channel is treated as being at EOF by the finalize gate
+ * (finalize_exec_request_if_done()), and both response-sent flags are
+ * pre-set so the state machine (sdproc_advance_state()) never tries to
+ * respond on the absent request.  The label, command line, flags and stop
+ * timer settings come from the unit's record if it has one; a unit with
+ * no record (started by something other than sdexec, or before records
+ * existed) is adopted as background and waitable with its label derived
+ * from the unit name, so its status remains collectable.
+ */
+static struct sdproc *sdproc_create_recovered (struct sdexec_ctx *ctx,
+                                               const char *name,
+                                               json_t *record)
+{
+    struct sdproc *proc;
+    flux_reactor_t *reactor = flux_get_reactor (ctx->h);
+    const char *label = NULL;
+    json_t *cmdline = NULL;
+    int bg = 1;
+    int waitable = 1;
+    int stop_timer_sec = default_stop_timeout_sec;
+    int stop_timer_signal = SIGKILL;
+    int label_generated = 0;
+    char *tmp = NULL;
+
+    if (!(proc = calloc (1, sizeof (*proc))))
+        return NULL;
+    proc->ctx = ctx;
+    if (record) {
+        (void)json_unpack (record,
+                           "{s?s s?o s?b s?b s?b s?i s?i}",
+                           "label", &label,
+                           "cmdline", &cmdline,
+                           "label_generated", &label_generated,
+                           "bg", &bg,
+                           "waitable", &waitable,
+                           "stop_timer_sec", &stop_timer_sec,
+                           "stop_timer_signal", &stop_timer_signal);
+        proc->record_written = 1;
+    }
+    proc->bg = bg;
+    proc->waitable = waitable;
+    proc->label_generated = label_generated;
+    /* No request message: the unit's "started" response went to a client of
+     * the previous module instance, and no further response may be sent.
+     */
+    proc->started_response_sent = 1;
+    proc->request_done = 1;
+    proc->stop.timeout_sec = stop_timer_sec;
+    proc->stop.kill_signal = stop_timer_signal;
+    if (!(proc->stop.timer = flux_timer_watcher_create (reactor,
+                                                        0,
+                                                        0,
+                                                        stop_timer_cb,
+                                                        proc)))
+        goto error;
+    /* Without a record, the label is the unit name with this instance's
+     * suffix removed, matching the label it was started with (the sweep
+     * only admits names ending in the suffix, so the strip cannot
+     * underflow).
+     */
+    if (!label) {
+        if (!(tmp = strdup (name)))
+            goto error;
+        tmp[strlen (tmp) - strlen (ctx->sweep_suffix)] = '\0';
+        label = tmp;
+    }
+    if (!(proc->cmd = json_pack ("{s:s s:O?}",
+                                 "label", label,
+                                 "cmdline", cmdline))) {
+        errno = ENOMEM;
+        goto error;
+    }
+    if (!(proc->unit = sdexec_unit_create (name)))
+        goto error;
+    free (tmp);
+    return proc;
+error:
+    ERRNO_SAFE_WRAP (free, tmp);
+    sdproc_destroy (proc);
+    return NULL;
+}
+
+/* Settle a recovered proc whose unit is gone from the exit event systemd
+ * appended to its record, if any.  On success the proc is finished and
+ * inactive.dead, so the finalize gate retains a waitable proc for a wait,
+ * or tears down a non-waitable one now (N.B. proc may be freed).  Return
+ * 0 if the proc was settled, or -1 with errno set if there is no usable
+ * exit event (ENOENT if none was recorded, EPROTO if it is unreadable).
+ */
+static int sdproc_recover_exit (struct sdproc *proc)
+{
+    struct sdexec_ctx *ctx = proc->ctx;
+    const char *name = sdexec_unit_name (proc->unit);
+    struct unit_info dead = {
+        .active_state = "inactive",
+        .sub_state = "dead",
+    };
+    json_t *exit;
+    char id[128];
+    char st[64];
+
+    if (!ctx->record_dir || !proc->record_written) {
+        errno = ENOENT;
+        return -1;
+    }
+    if (!(exit = sdexec_record_read_exit (ctx->record_dir, name)))
+        return -1;
+    (void)sdexec_unit_update (proc->unit, exit);
+    json_decref (exit);
+    /* The unit is gone, so it is already reaped: settle it as
+     * inactive.dead with completion handled, and log the outcome here in
+     * one line rather than through the state machine, which has nothing
+     * left to drive.
+     */
+    (void)sdexec_unit_update_frominfo (proc->unit, &dead);
+    proc->finished_response_sent = 1;
+    if (sdexec_unit_has_finished (proc->unit))
+        status_str (sdexec_unit_wait_status (proc->unit), st, sizeof (st));
+    else
+        snprintf (st, sizeof (st), "could not be started");
+    flux_log (ctx->h,
+              LOG_INFO,
+              "recover %s: %s: %s%s",
+              name,
+              sdproc_logid (proc, id, sizeof (id)),
+              st,
+              sdproc_is_waitable (proc) ? " (held for wait)" : "");
+    finalize_exec_request_if_done (proc);
+    return 0;
+}
+
+/* Record a terminal error on a recovered proc so that a wait fails rather
+ * than parking forever, and tear the proc down now if nobody can wait.
+ */
+static void sdproc_recover_fail (struct sdproc *proc, int errnum, const char *errstr)
+{
+    proc->wait_errnum = errnum;
+    errprintf (&proc->wait_error, "%s", errstr);
+    sdproc_wait_notify (proc);
+    finalize_exec_request_if_done (proc);
+}
+
+/* A recovered unit's GetAll snapshot (all interfaces, so ActiveState and
+ * SubState arrive with ExecMain*) has arrived.  Feed it to the unit object
+ * and drive the state machine so an already-exited unit is reaped and a
+ * still-running unit is left to its per-unit watch (installed before this
+ * request was sent, so no transition between the two is missed).  The
+ * future is a one-shot, freed here.
+ */
+static void sweep_getall_continuation (flux_future_t *f, void *arg)
+{
+    struct sdproc *proc = arg;
+    struct sdexec_ctx *ctx = proc->ctx;
+    flux_t *h = ctx->h;
+    const char *name = sdexec_unit_name (proc->unit);
+    json_t *dict;
+
+    /* dict is borrowed from f, so take a reference to use it past the
+     * flux_future_destroy () below.
+     */
+    dict = json_incref (sdexec_property_get_all_dict (f));
+    if (!dict) {
+        flux_log (h,
+                  LOG_ERR,
+                  "recover %s: GetAll: %s",
+                  name,
+                  future_strerror (f, errno));
+    }
+    /* The one-shot GetAll future is done; drop it before advancing state,
+     * since finalize_exec_request_if_done() may free proc and
+     * sdproc_destroy () frees proc->f_map.
+     */
+    flux_future_destroy (f);
+    proc->f_map = NULL;
+    if (!dict) {
+        /* The unit may have exited and been collected between the unit
+         * list and this request, in which case its record holds the exit
+         * status.  Otherwise the proc is frozen in the state seeded from
+         * the unit list and no property update is coming to clear it, so
+         * record a terminal error rather than let a waiter park forever.
+         */
+        if (sdproc_recover_exit (proc) < 0) {
+            sdproc_recover_fail (proc,
+                                 EIO,
+                                 "unit state could not be recovered"
+                                 " after restart");
+        }
+        return;
+    }
+    (void)sdexec_unit_update (proc->unit, dict);
+    sdproc_advance_state (proc);
+    finalize_exec_request_if_done (proc);
+    json_decref (dict);
+}
+
+/* Adopt one unit found by the startup sweep.
+ *
+ * If the unit is still loaded in systemd ('info' is non-NULL), create a
+ * recovered sdproc, seed its state from the list entry, subscribe to its
+ * PropertiesChanged signals, then request a GetAll snapshot of all its
+ * properties.  Subscribe before GetAll so no state transition between the
+ * snapshot and the first signal is missed.
+ *
+ * If the unit is gone ('info' is NULL), its record is the only trace of
+ * it.  If systemd recorded an exit status (via ExecStopPost), the proc is
+ * created already finished so a wait collects the status, and non-waitable
+ * leftovers are logged and torn down at once since nobody will collect
+ * them.  If there is no exit status, the unit died without running its
+ * stop path, e.g. the user systemd instance was SIGKILLed after a unit
+ * failed to stop within its stop timeout: the process is lost, and the
+ * proc carries a terminal ESRCH so a wait fails loudly rather than
+ * parking forever, or mistaking the loss for a clean exit.
+ */
+static void recover_unit (struct sdexec_ctx *ctx,
+                          const char *name,
+                          struct unit_info *info,
+                          json_t *record)
+{
+    struct sdproc *proc;
+    const char *errstr;
+
+    if (!(proc = sdproc_create_recovered (ctx, name, record))) {
+        flux_log_error (ctx->h, "recover %s: create failed", name);
+        return;
+    }
+    if (!(proc->list_handle = zlistx_add_end (ctx->procs, proc))) {
+        flux_log (ctx->h, LOG_ERR, "recover %s: out of memory", name);
+        sdproc_destroy (proc);
+        return;
+    }
+    if (!info) {
+        if (sdproc_recover_exit (proc) < 0) {
+            const char *why =
+                errno == ENOENT
+                    ? "unit vanished without recording an exit status"
+                    : "unit vanished and its recorded exit status is unreadable";
+            char id[128];
+            flux_log (ctx->h,
+                      LOG_ERR,
+                      "recover %s: %s: lost: %s",
+                      name,
+                      sdproc_logid (proc, id, sizeof (id)),
+                      why);
+            sdproc_recover_fail (proc, ESRCH, why);
+        }
+        return;
+    }
+    sdexec_unit_update_frominfo (proc->unit, info);
+    if (sdproc_start_watch (proc, &errstr) < 0) {
+        flux_log (ctx->h, LOG_ERR, "recover %s: %s", name, errstr);
+        zlistx_delete (ctx->procs, proc->list_handle);
+        return;
+    }
+    if (!(proc->f_map = sdexec_property_get_all (ctx->h,
+                                                 "sdbus",
+                                                 ctx->rank,
+                                                 sdexec_unit_path (proc->unit),
+                                                 ""))
+        || flux_future_then (proc->f_map,
+                             -1,
+                             sweep_getall_continuation,
+                             proc) < 0) {
+        flux_log_error (ctx->h, "recover %s: GetAll request failed", name);
+        zlistx_delete (ctx->procs, proc->list_handle);
+        return;
+    }
+    char id[128];
+    flux_log (ctx->h,
+              LOG_INFO,
+              "recover %s: %s: %s.%s",
+              name,
+              sdproc_logid (proc, id, sizeof (id)),
+              info->active_state,
+              info->sub_state);
+}
+
+/* Re-adopt leftover units at startup so job-exec can reclaim them by label
+ * (via sdexec.wait).
+ *
+ * The set of units to consider is the union of the records in the record
+ * directory and the units loaded in systemd, both filtered by this
+ * instance's suffix.  A record names a unit this module started; the unit
+ * list adds units with no record (started by another tool, or before
+ * records existed) and tells us which recorded units are still loaded.
+ * An inactive loaded unit has nothing to wait on and is left to its record.
+ *
+ * 'f' is the fulfilled unit list.  Return 0 on success, or -1 with 'error'
+ * set if the record directory cannot be read.
+ */
+static int sweep_units (struct sdexec_ctx *ctx, flux_future_t *f, flux_error_t *error)
+{
+    struct unit_info info;
+    json_t *names = NULL;
+    json_t *seen = NULL;
+    size_t index;
+    json_t *entry;
+    int rc = -1;
+
+    if (!(seen = json_object ())) {
+        errprintf (error, "out of memory");
+        goto done;
+    }
+    /* Loaded units first.  Any state but inactive is worth adopting:
+     * activating and active are running, deactivating is an IMP waiting
+     * for its cgroup, and failed retains an exit status until reset.
+     */
+    while (sdexec_list_units_next (f, &info)) {
+        json_t *record = NULL;
+
+        /* The glob already selects on the suffix; this re-check makes the
+         * label inverse in sdproc_create_recovered () safe by construction.
+         */
+        if (!strends (info.name, ctx->sweep_suffix))
+            continue;
+        /* An inactive unit has nothing left to watch.  If it has a
+         * record, leave it to the record pass below, which recovers it
+         * from its exit event as if systemd had already collected it.
+         */
+        if (sdexec_strtostate (info.active_state) == STATE_INACTIVE)
+            continue;
+        if (json_object_set_new (seen, info.name, json_true ()) < 0) {
+            errprintf (error, "out of memory");
+            goto done;
+        }
+        if (ctx->record_dir)
+            record = sdexec_record_read (ctx->record_dir, info.name);
+        recover_unit (ctx, info.name, &info, record);
+        json_decref (record);
+    }
+    /* Then records whose units are gone.  First remove any temporary file
+     * left by a record write interrupted by a crash: no write can be in
+     * progress for this instance's units while the sweep runs.
+     */
+    if (ctx->record_dir) {
+        if (sdexec_record_remove_tmp (ctx->record_dir, ctx->sweep_suffix) < 0
+            && errno != ENOENT)
+            flux_log_error (ctx->h,
+                            "error removing temporary records in %s",
+                            ctx->record_dir);
+        if (!(names = sdexec_record_list (ctx->record_dir,
+                                          ctx->sweep_suffix))) {
+            if (errno != ENOENT) {
+                errprintf (error,
+                           "error listing unit records in %s: %s",
+                           ctx->record_dir,
+                           strerror (errno));
+                goto done;
+            }
+        }
+        else {
+            json_array_foreach (names, index, entry) {
+                const char *name = json_string_value (entry);
+                json_t *record;
+
+                if (json_object_get (seen, name))
+                    continue;
+                if (!(record = sdexec_record_read (ctx->record_dir, name))) {
+                    flux_log_error (ctx->h, "recover %s: reading record", name);
+                    continue;
+                }
+                recover_unit (ctx, name, NULL, record);
+                json_decref (record);
+            }
+        }
+    }
+    rc = 0;
+done:
+    json_decref (names);
+    json_decref (seen);
+    return rc;
+}
+
+/* The sweep is complete: the process table is now authoritative, so
+ * requeue the requests sweep_defer() held, in arrival order, ahead of any
+ * that arrived since.  Pushing each to the head of the queue in reverse
+ * keeps their order.
+ */
+static void sweep_finish (struct sdexec_ctx *ctx)
+{
+    const flux_msg_t *msg;
+
+    ctx->swept = true;
+    flux_watcher_stop (ctx->sweep_timer);
+    if (ctx->sweep_warned)
+        flux_log (ctx->h, LOG_INFO, "unit recovery sweep complete");
+    while ((msg = flux_msglist_last (ctx->deferred))) {
+        if (flux_requeue (ctx->h, msg, FLUX_RQ_HEAD) < 0)
+            flux_log_error (ctx->h, "error requeuing deferred request");
+        flux_msglist_delete (ctx->deferred);
+    }
+}
+
+static int sweep_request (struct sdexec_ctx *ctx);
+
+/* The unit list has arrived.  sdbus holds a request sent before its D-Bus
+ * connection is up and answers it after connecting (retried internally on
+ * a backoff), so a slow or still-starting user bus just delays this; EAGAIN
+ * is answered only if the connection drops, in which case the request is
+ * re-sent after a short delay.  Any other error is fatal: without the list,
+ * leftover units cannot be told apart from new ones.
+ */
+static void sweep_continuation (flux_future_t *f, void *arg)
+{
+    struct sdexec_ctx *ctx = arg;
+    flux_error_t error;
+
+    if (flux_future_get (f, NULL) < 0) {
+        if (errno == EAGAIN) {
+            flux_future_destroy (f);
+            ctx->f_sweep = NULL;
+            flux_timer_watcher_reset (ctx->sweep_timer, sweep_retry_sec, 0.);
+            flux_watcher_start (ctx->sweep_timer);
+            return;
+        }
+        flux_log (ctx->h,
+                  LOG_CRIT,
+                  "unit recovery sweep: ListUnitsByPatterns: %s",
+                  future_strerror (f, errno));
+        goto error;
+    }
+    if (sweep_units (ctx, f, &error) < 0) {
+        flux_log (ctx->h, LOG_CRIT, "unit recovery sweep: %s", error.text);
+        goto error;
+    }
+    flux_future_destroy (f);
+    ctx->f_sweep = NULL;
+    sweep_finish (ctx);
+    return;
+error:
+    flux_future_destroy (f);
+    ctx->f_sweep = NULL;
+    flux_reactor_stop_error (flux_get_reactor (ctx->h));
+}
+
+/* The sweep timer fires either to re-send the unit list request after
+ * EAGAIN, or, while the request is outstanding, to note in the log that
+ * requests are being held behind a slow user bus.  It does not give up:
+ * a user bus that never answers leaves sdexec requests pending, as they
+ * would be without the sweep, rather than failing the module.
+ */
+static void sweep_timer_cb (flux_reactor_t *r,
+                            flux_watcher_t *w,
+                            int revents,
+                            void *arg)
+{
+    struct sdexec_ctx *ctx = arg;
+
+    if (!ctx->f_sweep) {
+        if (sweep_request (ctx) < 0)
+            flux_reactor_stop_error (r);
+        return;
+    }
+    flux_log (ctx->h,
+              LOG_WARNING,
+              "unit recovery sweep has waited %.0fs for sdbus,"
+              " holding %d request(s)",
+              monotime_since (ctx->sweep_t0) / 1000.,
+              flux_msglist_count (ctx->deferred));
+    ctx->sweep_warned = true;
+}
+
+static int sweep_request (struct sdexec_ctx *ctx)
+{
+    char *glob;
+
+    if (asprintf (&glob, "*%s", ctx->sweep_suffix) < 0)
+        return -1;
+    if (!(ctx->f_sweep = sdexec_list_units (ctx->h, "sdbus", ctx->rank, glob))
+        || flux_future_then (ctx->f_sweep, -1, sweep_continuation, ctx) < 0) {
+        flux_log_error (ctx->h, "unit recovery sweep: error listing units");
+        flux_future_destroy (ctx->f_sweep);
+        ctx->f_sweep = NULL;
+        free (glob);
+        return -1;
+    }
+    free (glob);
+    /* Arm the slow-sweep warning, unless it has already been logged.
+     */
+    if (!ctx->sweep_warned) {
+        double elapsed = monotime_since (ctx->sweep_t0) / 1000.;
+        double t = sweep_warn_sec > elapsed ? sweep_warn_sec - elapsed : 0.;
+        flux_timer_watcher_reset (ctx->sweep_timer, t, 0.);
+        flux_watcher_start (ctx->sweep_timer);
+    }
+    return 0;
+}
+
+/* Start the startup sweep.  It runs asynchronously, so module load
+ * completes even if the user bus is slow to come up, but until it finishes
+ * sdexec holds every request that depends on the process table (see
+ * sweep_defer()).  So a wait can never race the sweep and draw a false
+ * ESRCH, which a recovery wait (bgexec) must treat as a lost process: it
+ * is answered once the leftovers have been adopted.
+ */
+static int sweep_start (struct sdexec_ctx *ctx)
+{
+    flux_reactor_t *r = flux_get_reactor (ctx->h);
+
+    if (!(ctx->sweep_timer =
+              flux_timer_watcher_create (r, 0., 0., sweep_timer_cb, ctx)))
+        return -1;
+    monotime (&ctx->sweep_t0);
+    return sweep_request (ctx);
 }
 
 static struct flux_msg_handler_spec htab[] = {
@@ -2153,6 +2927,7 @@ static void sdexec_ctx_destroy (struct sdexec_ctx *ctx)
     if (ctx) {
         int saved_errno = errno;
         flux_msg_handler_delvec (ctx->handlers);
+        ctx->unloading = true;
         if (ctx->procs) {
             struct sdproc *proc;
             proc = zlistx_first (ctx->procs);
@@ -2181,6 +2956,22 @@ static void sdexec_ctx_destroy (struct sdexec_ctx *ctx)
         flux_msglist_destroy (ctx->kills);
         free (ctx->local_uri);
         free (ctx->instance_name);
+        if (ctx->deferred) {
+            const flux_msg_t *msg;
+            while ((msg = flux_msglist_pop (ctx->deferred))) {
+                if (flux_respond_error (ctx->h,
+                                        msg,
+                                        ENOSYS,
+                                        "sdexec module is unloading") < 0)
+                    flux_log_error (ctx->h, "error responding to request");
+                flux_msg_decref (msg);
+            }
+            flux_msglist_destroy (ctx->deferred);
+        }
+        flux_future_destroy (ctx->f_sweep);
+        flux_watcher_destroy (ctx->sweep_timer);
+        free (ctx->sweep_suffix);
+        free (ctx->record_dir);
         free (ctx);
         errno = saved_errno;
     }
@@ -2256,6 +3047,29 @@ static bool node_is_shared (flux_t *h, uint32_t rank)
     return shared;
 }
 
+/* The startup sweep re-adopts units a previous incarnation of this module
+ * started.  Every unit sdexec creates ends with this instance's suffix
+ * (":<instance>.service", with the broker rank before the instance name
+ * when the node is shared), so matching on the suffix finds this sdexec's
+ * units and records and no others: not another instance's, and not a
+ * sibling rank's.
+ */
+static char *sweep_suffix (struct sdexec_ctx *ctx)
+{
+    char *suffix;
+    int rc;
+
+    if (ctx->append_rank) {
+        rc = asprintf (&suffix,
+                       ":%lu-%s.service",
+                       (unsigned long)ctx->rank,
+                       ctx->instance_name);
+    }
+    else
+        rc = asprintf (&suffix, ":%s.service", ctx->instance_name);
+    return rc < 0 ? NULL : suffix;
+}
+
 static struct sdexec_ctx *sdexec_ctx_create (flux_t *h)
 {
     struct sdexec_ctx *ctx;
@@ -2277,8 +3091,11 @@ static struct sdexec_ctx *sdexec_ctx_create (flux_t *h)
         || !(ctx->instance_name = unit_name_suffix (s)))
         goto error;
     ctx->append_rank = node_is_shared (h, ctx->rank);
+    if (!(ctx->sweep_suffix = sweep_suffix (ctx)))
+        goto error;
     if (!(ctx->procs = zlistx_new ())
-        || !(ctx->kills = flux_msglist_create ()))
+        || !(ctx->kills = flux_msglist_create ())
+        || !(ctx->deferred = flux_msglist_create ()))
         goto error;
     zlistx_set_destructor (ctx->procs, sdproc_destructor);
     return ctx;
@@ -2355,6 +3172,8 @@ int mod_main (flux_t *h, int argc, char **argv)
         flux_log (h, LOG_ERR, "%s", error.text);
         goto error;
     }
+    if (sweep_start (ctx) < 0)
+        goto error;
     if (flux_reactor_run (flux_get_reactor (h), 0) < 0) {
         flux_log_error (h, "reactor exited abnormally");
         goto error;
