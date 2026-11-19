@@ -130,6 +130,7 @@ dist_fluxcmd_SCRIPTS = \
 	flux-post-job-event.py \
 	flux-run-housekeeping \
 	flux-housekeeping.py \
+	flux-audit-alloc.py \
 	flux-run-prolog \
 	flux-run-epilog \
 	flux-modprobe.py \
