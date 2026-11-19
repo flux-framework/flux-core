@@ -67,7 +67,7 @@ __get_flux_subcommands() {
           modprobe sproc proxy update hostlist dump restore R keygen logger \
           post-job-event fsck startlog pmi uptime version env cgroup \
           heaptrace lptest relay python python3.13 getattr setattr lsattr \
-          content admin help"
+          content admin audit-alloc help"
 }
 
 # Temp file used to capture COMPREPLY across function calls
@@ -255,6 +255,34 @@ test_expect_success 'restore: completes options' '
 test_expect_success 'restore: non-option arg delegates to file completion' '
     run_completion "flux restore somefile" &&
     completion_empty
+'
+
+#
+# flux-audit-alloc
+#
+test_expect_success 'audit-alloc: command name completes' '
+    run_completion "flux audit" &&
+    completion_has "audit-alloc"
+'
+test_expect_success 'audit-alloc: completes options' '
+    run_completion "flux audit-alloc --" &&
+    completion_has "--outdir=" &&
+    completion_has "--no-collect" &&
+    completion_has "--verbose" &&
+    completion_has "--color="
+'
+test_expect_success 'audit-alloc: --outdir completes directories' '
+    mkdir -p auditdir &&
+    touch auditfile &&
+    run_completion "flux audit-alloc --outdir audit" &&
+    completion_has "auditdir" &&
+    completion_lacks "auditfile"
+'
+test_expect_success 'audit-alloc: --color= completes WHEN values' '
+    run_completion "flux audit-alloc --color=" &&
+    completion_has "never" &&
+    completion_has "always" &&
+    completion_has "auto"
 '
 
 #

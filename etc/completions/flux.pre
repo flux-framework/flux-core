@@ -2298,6 +2298,40 @@ _flux_housekeeping()
     fi
 }
 
+# flux-audit-alloc(1) completions
+_flux_audit_alloc()
+{
+    local cmd=$1
+    local split=false
+    local OPTS="\
+        -o --outdir= \
+        -n --no-collect \
+        -v --verbose \
+        --color= \
+    "
+
+    _flux_split_longopt && split=true
+    case $prev in
+        --outdir | -!(-*)o)
+            compopt -o filenames
+            COMPREPLY=( $(compgen -d -- "$cur") )
+            return
+            ;;
+        --color)
+            COMPREPLY=( $(compgen -W "never always auto" -- "$cur") )
+            return
+            ;;
+    esac
+    $split && return
+
+    COMPREPLY=( $(compgen -W "${OPTS} -h --help" -- "$cur") )
+    if [[ "${COMPREPLY[@]}" == *= ]]; then
+        # Add space if there is not a '=' in suggestions
+        compopt -o nospace
+    fi
+    return 0
+}
+
 # flux-uri(1) completions
 _flux_uri()
 {
@@ -2737,6 +2771,9 @@ _flux_core()
         ;;
     housekeeping)
         _flux_housekeeping $subcmd
+        ;;
+    audit-alloc)
+        _flux_audit_alloc $subcmd
         ;;
     uri)
         _flux_uri $subcmd
