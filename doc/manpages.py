@@ -75,6 +75,7 @@ man_pages = [
     ('man1/flux-update', 'flux-update', 'update active Flux jobs', [author], 1),
     ('man1/flux-hostlist', 'flux-hostlist', 'fetch, combine, and manipulate Flux hostlists', [author], 1),
     ('man1/flux-housekeeping', 'flux-housekeeping', 'list and terminate housekeeping tasks', [author], 1),
+    ('man1/flux-audit-alloc', 'flux-audit-alloc', 'check allocated resources for consistency', [author], 1),
     ('man1/flux-modprobe', 'flux-modprobe', 'efficient and extensible task and module manager', [author], 1),
     ('man1/flux-sproc', 'flux-sproc', 'manage flux subprocesses', [author], 1),
     ('man1/flux-python', 'flux-python', 'invoke Python interpreter with Flux bindings available', [author], 1),
