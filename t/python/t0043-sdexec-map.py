@@ -360,6 +360,176 @@ class TestDiscoverAmdErrors(unittest.TestCase):
         self.assertEqual(ctx.exception.errno, errno.ENODEV)
 
 
+HWLOC_DATA = Path(__file__).resolve().parent.parent / "hwloc-data"
+
+
+class AmdPartitionFixture:
+    """Fake MI300A node in SPX, TPX, or CPX mode.
+
+    Use the tuo hwloc XML and a fake sysfs and /dev, as seen on MI300A:
+    - only the render node of partition 0 is in the PCI drm/ directory
+    - the low three bits of KFD location_id are the partition number
+    - APU a, partition p has render minor 128 + 8 * a + p
+    - amdgpu creates 8 render nodes per APU in all modes
+    """
+
+    APUS = 4
+    MODES = {"SPX": 1, "TPX": 3, "CPX": 6}
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def setup_mode(self, mode):
+        """Create fake sysfs and /dev for mode, return (mapper, render)."""
+        nparts = self.MODES[mode]
+        root = self.root / mode
+        pci = root / "sys/bus/pci/devices"
+        kfd = root / "sys/class/kfd/kfd/topology/nodes"
+        dev = root / "dev"
+        driver = root / "sys/bus/pci/drivers/amdgpu"
+        for d in (pci, kfd, dev / "dri", driver):
+            d.mkdir(parents=True)
+        (dev / "kfd").touch()
+
+        # One CPU node per APU and one node per partition. Number nodes in
+        # reverse, so node order is not location_id order.
+        props = []
+        render = {}
+        for apu in range(self.APUS):
+            addr = f"{apu:04x}:02:00.0"
+            d = pci / addr
+            (d / "drm").mkdir(parents=True)
+            (d / "driver").symlink_to(driver)
+            (d / "drm" / f"card{apu}").mkdir()
+            (dev / "dri" / f"card{apu}").touch()
+            (d / "drm" / f"renderD{128 + 8 * apu}").mkdir()
+            props.append(f"domain {apu}\nlocation_id 0\ndrm_render_minor 0\n")
+            for part in range(8):
+                minor = 128 + 8 * apu + part
+                (dev / "dri" / f"renderD{minor}").touch()
+                if part < nparts:
+                    render[apu * nparts + part] = f"{dev}/dri/renderD{minor}"
+                    props.append(
+                        f"domain {apu}\n"
+                        f"location_id {(2 << 8) | part}\n"
+                        f"drm_render_minor {minor}\n"
+                    )
+        for i, text in enumerate(reversed(props)):
+            (kfd / str(i)).mkdir()
+            (kfd / str(i) / "properties").write_text(text)
+
+        for name, value in (
+            ("SYSFS_PCI_DEVICES", str(pci)),
+            ("SYSFS_KFD_NODES", str(kfd)),
+            ("DEV_PREFIX", str(dev)),
+            ("DEV_DRI", str(dev / "dri")),
+        ):
+            patcher = patch.object(m, name, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+        mapper = HwlocMapper((HWLOC_DATA / f"tuo.{mode}.xml").read_text())
+        return mapper, render
+
+
+class TestAmdPartitionDevices(AmdPartitionFixture, unittest.TestCase):
+    """DeviceAllow for MI300A in SPX, TPX, and CPX modes (issue #7905)."""
+
+    def renders(self, result):
+        entries = result["DeviceAllow"].split(",")
+        return {e.split()[0] for e in entries if "renderD" in e}
+
+    def check_single_gpus(self, mode):
+        mapper, render = self.setup_mode(mode)
+        self.assertEqual(len(render), self.APUS * self.MODES[mode])
+        # The TAP runner does not report subTest() failures, so collect them
+        wrong = {}
+        for gpu, path in render.items():
+            result = mapper.map_gpus(str(gpu))
+            renders = self.renders(result)
+            if renders != {path}:
+                wrong[gpu] = sorted(renders)
+            self.assertIn(f"{m.DEV_PREFIX}/kfd rw", result["DeviceAllow"])
+        self.assertEqual(wrong, {})
+
+    def test_spx_single_gpus(self):
+        self.check_single_gpus("SPX")
+
+    def test_tpx_single_gpus(self):
+        self.check_single_gpus("TPX")
+
+    def test_cpx_single_gpus(self):
+        self.check_single_gpus("CPX")
+
+    def test_cpx_partial_apu(self):
+        """Partitions spanning two APUs get only their own render nodes."""
+        mapper, render = self.setup_mode("CPX")
+        result = mapper.map_gpus("4-7")
+        self.assertEqual(self.renders(result), {render[i] for i in (4, 5, 6, 7)})
+
+    def test_cpx_whole_apu(self):
+        """All partitions of an APU get its render nodes and card node."""
+        mapper, render = self.setup_mode("CPX")
+        result = mapper.map_gpus("6-11")
+        self.assertEqual(self.renders(result), {render[i] for i in range(6, 12)})
+        self.assertIn(f"{m.DEV_DRI}/card1 rw", result["DeviceAllow"])
+
+    def test_cpx_all_gpus(self):
+        mapper, render = self.setup_mode("CPX")
+        result = mapper.map_gpus("0-23")
+        self.assertEqual(self.renders(result), set(render.values()))
+
+    def test_cpx_no_kfd_topology_fails(self):
+        """Part of an APU fails without KFD topology."""
+        mapper, render = self.setup_mode("CPX")
+        with patch.object(m, "SYSFS_KFD_NODES", str(self.root / "nonexistent")):
+            with self.assertRaises(OSError) as ctx:
+                mapper.map_gpus("1")
+        self.assertEqual(ctx.exception.errno, errno.ENODEV)
+
+    def test_tpx_kfd_mismatch_fails(self):
+        """Part of an APU fails if KFD and hwloc GPU counts differ."""
+        mapper, render = self.setup_mode("TPX")
+        with patch.object(mapper, "_kfd_render_minors", return_value=[128, 129]):
+            with self.assertRaises(OSError) as ctx:
+                mapper.map_gpus("1")
+        self.assertEqual(ctx.exception.errno, errno.ENODEV)
+
+
+class TestAmdPartitionEdgeCases(AmdPartitionFixture, unittest.TestCase):
+    def test_gpu_without_pci_device(self):
+        """A GPU with no PCI device does not break mapping of other GPUs."""
+        mapper, render = self.setup_mode("SPX")
+        xml = (HWLOC_DATA / "tuo.SPX.xml").read_text()
+        bridge = '<object type="Bridge" gp_index="865"'
+        osdev = (
+            '<object type="OSDev" name="opencl9d0" subtype="OpenCL"'
+            ' osdev_type="5"><info name="Backend" value="OpenCL"/></object>'
+        )
+        self.assertEqual(xml.count(bridge), 1)
+        mapper = HwlocMapper(xml.replace(bridge, osdev + bridge))
+        self.assertIsNone(mapper._all_gpu_addrs()[0])
+        result = mapper.map_gpus("1")
+        self.assertIn(f"{render[0]} rw", result["DeviceAllow"].split(","))
+        with self.assertRaises(OSError):
+            mapper.map_gpus("0")
+
+    def test_kfd_node_on_other_function(self):
+        """A KFD node on another PCI function is not used."""
+        mapper, render = self.setup_mode("SPX")
+        for props in Path(m.SYSFS_KFD_NODES).glob("*/properties"):
+            if props.read_text().startswith("domain 0\nlocation_id 512\n"):
+                props.write_text("domain 0\nlocation_id 513\ndrm_render_minor 200\n")
+        (Path(m.DEV_DRI) / "renderD200").touch()
+        result = mapper.map_gpus("0")
+        self.assertNotIn("renderD200", result["DeviceAllow"])
+        self.assertIn(f"{render[0]} rw", result["DeviceAllow"].split(","))
+
+
 class TestCustomGpuMapper(unittest.TestCase):
     """Subclass overriding map_gpus; cores mapping is inherited from HwlocMapper."""
 
