@@ -503,6 +503,96 @@ test_expect_success NO_CHAIN_LINT 'eventlog-watch-initial-sentinel works w/ WAIT
 '
 
 #
+# disconnect handling
+#
+
+wait_watchers_eq() {
+	local str=$1
+	local count=$2
+	test_wait_until "flux module stats --parse $str job-info \
+		&& [ \$(flux module stats --parse $str job-info 2> /dev/null) -eq $count ]"
+}
+
+# Usage: guest_watchers.py MODE JOBID1 JOBID2
+# MODE=concurrent: watch both jobs at the same time
+# MODE=serial: watch JOBID2 only after the JOBID1 watch completes
+test_expect_success 'create guest watchers script' '
+	cat <<-EOT >guest_watchers.py &&
+	import sys
+	import flux
+	from flux.job import JobID, event_watch_async
+
+	h = flux.Flux()
+	mode = sys.argv[1]
+	id1 = JobID(sys.argv[2])
+	id2 = JobID(sys.argv[3])
+	f1 = event_watch_async(h, id1, "guest.exec.eventlog")
+	if mode == "concurrent":
+	    f2 = event_watch_async(h, id2, "guest.exec.eventlog")
+	while f1.get_event() is not None:
+	    pass
+	print("watcher1 done", flush=True)
+	if mode == "serial":
+	    f2 = event_watch_async(h, id2, "guest.exec.eventlog")
+	while f2.get_event() is not None:
+	    pass
+	EOT
+	chmod +x guest_watchers.py
+'
+
+# One client creates two guest watchers.  After one completes
+# normally, the remaining watcher must still be cleaned up when
+# the client disconnects, i.e. the per-sender count was decremented
+# exactly once.  Disconnects from unrelated clients (flux job info,
+# flux module stats) occur in between and must not disturb it.
+test_expect_success NO_CHAIN_LINT 'disconnect cleans up remaining guest watcher' '
+	wait_watchers_eq "watchers" 0 &&
+	wait_watchers_eq "guest_watchers" 0 &&
+	jobid1=$(flux job submit --urgency=0 sleeplong.json) &&
+	jobid2=$(flux job submit --urgency=0 sleeplong.json)
+	flux python ./guest_watchers.py concurrent $jobid1 $jobid2 \
+		> concurrent.out &
+	pid=$! &&
+	wait_watchers_eq "guest_watchers" 2 &&
+	flux cancel $jobid1 &&
+	$waitfile --count=1 --timeout=30 \
+		  --pattern="watcher1 done" concurrent.out >/dev/null &&
+	wait_watchers_eq "guest_watchers" 1 &&
+	flux job info $jobid2 eventlog >/dev/null &&
+	test $(flux module stats --parse guest_watchers job-info) -eq 1 &&
+	kill -9 $pid &&
+	! wait $pid &&
+	wait_watchers_eq "guest_watchers" 0 &&
+	wait_watchers_eq "watchers" 0 &&
+	flux cancel $jobid2
+'
+
+# One client creates a guest watcher which completes, dropping its
+# per-sender count to zero.  It then creates a new guest watcher,
+# which must be cleaned up when the client disconnects.
+test_expect_success NO_CHAIN_LINT 'disconnect cleans up guest watcher after count reached zero' '
+	wait_watchers_eq "watchers" 0 &&
+	wait_watchers_eq "guest_watchers" 0 &&
+	jobid1=$(flux job submit --urgency=0 sleeplong.json) &&
+	jobid2=$(flux job submit --urgency=0 sleeplong.json)
+	flux python ./guest_watchers.py serial $jobid1 $jobid2 \
+		> serial.out &
+	pid=$! &&
+	wait_watchers_eq "guest_watchers" 1 &&
+	flux cancel $jobid1 &&
+	$waitfile --count=1 --timeout=30 \
+		  --pattern="watcher1 done" serial.out >/dev/null &&
+	wait_watchers_eq "guest_watchers" 1 &&
+	flux job info $jobid2 eventlog >/dev/null &&
+	test $(flux module stats --parse guest_watchers job-info) -eq 1 &&
+	kill -9 $pid &&
+	! wait $pid &&
+	wait_watchers_eq "guest_watchers" 0 &&
+	wait_watchers_eq "watchers" 0 &&
+	flux cancel $jobid2
+'
+
+#
 # stats & corner cases
 #
 
