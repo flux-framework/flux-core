@@ -1289,3 +1289,6 @@ cword
 lang
 ROCR
 amd
+outdir
+YYYYMMDD
+HHMMSS
