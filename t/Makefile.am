@@ -426,6 +426,7 @@ EXTRA_DIST= \
 	flux-resource \
 	module/testmod.py \
 	scheduler/sched-slowgen.py \
+	scheduler/sched-dupalloc.py \
 	scheduler/sched_tree_amender.py \
 	scheduler/sched-tree-subclass.py \
 	cocci/json_set_new_decref.cocci \
