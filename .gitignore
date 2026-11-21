@@ -13,6 +13,7 @@ depcomp
 install-sh
 ltmain.sh
 missing
+ci-expected-tests
 config.log
 config.status
 config.h

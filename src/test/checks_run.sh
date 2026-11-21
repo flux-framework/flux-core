@@ -59,8 +59,34 @@ fi
 
 ARGS="$@"
 JOBS=${JOBS:-2}
+EXPECTED_TESTS=ci-expected-tests
+rm -f ${EXPECTED_TESTS}
 MAKECMDS="${MAKE} -j ${JOBS}"
 CHECKCMDS="${MAKE} -j ${JOBS} ${DISTCHECK:+dist}check"
+
+#  Print the tests under ./t this build will run, one per line.
+#  Must be run from the top of the configured build tree.
+t_tests() {
+	if test "$COVERAGE" = "t" -a -n "$SYSTEM"; then
+		printf "%s\n" $SYSTEM_TESTS
+	elif test -n "$SHARD"; then
+		make -s --no-print-directory -C t print-tests \
+			| ${WORKDIR}/src/test/shard-tests.sh "$SHARD"
+	else
+		make -s --no-print-directory -C t print-tests
+	fi
+}
+
+#  Record the tests this build is expected to run so that
+#  src/test/checks-annotate.sh can report those that did not run.
+#  Paths are relative to $WORKDIR, where checks-annotate.sh is run.
+#  Skip builds that do not run the tests under ./t via make check.
+write_expected_tests() {
+	local prefix=${BUILD_DIR:+${BUILD_DIR%/}/}t/
+	test -n "${UNIT_TEST_ONLY}${QUICK_CHECK}${INCEPTION}" && return 0
+	test "$DISTCHECK" = "t" && return 0
+	t_tests | sed "s|^|${prefix}|" > ${WORKDIR}/${EXPECTED_TESTS}
+}
 
 #  Run the src/ unit tests and shard $SHARD of the sharness tests.
 #  The unit tests are fast, so they run only in shard 1.
@@ -70,8 +96,7 @@ sharded_check() {
 	if test "${SHARD%/*}" -eq 1; then
 		(cd src && ${MAKE} -j ${JOBS} check) || return 1
 	fi
-	tests=$(make -s --no-print-directory -C t print-tests \
-		| ${WORKDIR}/src/test/shard-tests.sh "$SHARD" | tr '\n' ' ')
+	tests=$(t_tests | tr '\n' ' ')
 	test -n "$tests" || return 1
 	(cd t && ${MAKE} -j ${JOBS} check TESTS="$tests")
 }
@@ -261,6 +286,8 @@ fi
 checks_group "configure ${ARGS}"  ${WORKDIR}/configure ${ARGS} \
 	|| checks_die "configure failed" cat config.log
 checks_group "make clean..." make clean
+write_expected_tests \
+	|| checks_die "failed to determine list of tests to run"
 
 if test "$POISON" = "t" -a "$PROJECT" = "flux-core"; then
   checks_group "Installing poison libflux and commands..." \
