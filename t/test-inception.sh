@@ -19,8 +19,8 @@ flux bulksubmit -o pty --quiet --job-name={./%} \
 	sh -c './{} -d -v --root=$FLUX_JOB_TMPDIR' \
 	::: t[0-9]*.t
 # python and lua tests do not support -d, -v, or --root options
-flux bulksubmit -o pty --quiet --job-name={./%} flux python {} ::: python/t*.py
-flux bulksubmit -o pty --quiet --job-name={./%} ./{} ::: lua/t*.t
+flux bulksubmit -o pty --quiet --job-name={.%} flux python {} ::: python/t*.py
+flux bulksubmit -o pty --quiet --job-name={.%} ./{} ::: lua/t*.t
 flux watch --all
 RC=$?
 kill $PID
