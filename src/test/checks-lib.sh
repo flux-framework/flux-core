@@ -40,7 +40,7 @@ checks_group() {
 checks_die() {
     local MSG="$1"
     shift 1
-    printf "::error::$MSG\n"
+    printf "::error::%s\n" "$MSG"
     if [ $# -gt 0 ]; then
         eval "$@"
     fi
