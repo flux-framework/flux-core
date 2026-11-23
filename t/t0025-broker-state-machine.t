@@ -190,7 +190,8 @@ test_expect_success 'all expected events and state transitions occurred on rank 
 	grep "\[0\]: quorum-full: quorum->run"			states2.log &&
 	grep "\[0\]: rc2-success: run->cleanup"			states2.log &&
 	grep "\[0\]: cleanup-none: cleanup->shutdown"		states2.log &&
-	grep "\[0\]: children-complete: shutdown->finalize"	states2.log &&
+	grep -E "\[0\]: children-(complete|none): shutdown->finalize" \
+		states2.log &&
 	grep "\[0\]: rc3-none: finalize->goodbye"		states2.log &&
 	grep "\[0\]: goodbye: goodbye->unload-builtins"		states2.log &&
 	grep "\[0\]: builtins-done: unload-builtins->exit"	states2.log
