@@ -65,6 +65,8 @@ int proctable_append_proctable_destroy (struct proctable *p1,
  *   MPIR_proctable_size is returned in this variable.
  *
  *  Returns NULL on failure with a message in `errp` if non-NULL.
+ *   Fails if the table has a host or executable name that is not
+ *   valid (see proctable.c).
  */
 MPIR_PROCDESC *proctable_get_mpir_proctable (struct proctable *p,
                                              int *sizep,

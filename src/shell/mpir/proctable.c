@@ -32,6 +32,8 @@
 #endif
 
 #include <errno.h>
+#include <ctype.h>
+#include <stdbool.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/errno_safe.h"
@@ -231,6 +233,36 @@ static char * proctable_cache_string (struct proctable *p, char *s)
     return copy;
 }
 
+/*  Host names may be passed to tools on a command line, so reject empty
+ *  names, names that begin with '-', and names that contain whitespace
+ *  or control characters.
+ */
+static bool host_name_valid (const char *s)
+{
+    if (s[0] == '\0' || s[0] == '-')
+        return false;
+    for (const char *cp = s; *cp != '\0'; cp++) {
+        if (isspace ((unsigned char) *cp) || iscntrl ((unsigned char) *cp))
+            return false;
+    }
+    return true;
+}
+
+/*  The executable name is argv[0] of the task as given in the jobspec,
+ *  so it may be relative (e.g. "hostname"). Reject empty names, names
+ *  that begin with '-', and names that contain control characters.
+ */
+static bool executable_name_valid (const char *s)
+{
+    if (s[0] == '\0' || s[0] == '-')
+        return false;
+    for (const char *cp = s; *cp != '\0'; cp++) {
+        if (iscntrl ((unsigned char) *cp))
+            return false;
+    }
+    return true;
+}
+
 static MPIR_PROCDESC *mpir_proctable_create (struct proctable *p,
                                              flux_error_t *errp)
 {
@@ -267,6 +299,20 @@ static MPIR_PROCDESC *mpir_proctable_create (struct proctable *p,
         }
         if (table[id].host_name != NULL) {
             errprintf (errp, "duplicate task id %d in proctable", (int) id);
+            goto err;
+        }
+        /*  Do not echo the bad value: it may contain control characters.
+         */
+        if (!host_name_valid (host)) {
+            errprintf (errp,
+                       "invalid host name in proctable for task %d",
+                       (int) id);
+            goto err;
+        }
+        if (!executable_name_valid (exe)) {
+            errprintf (errp,
+                       "invalid executable name in proctable for task %d",
+                       (int) id);
             goto err;
         }
 
