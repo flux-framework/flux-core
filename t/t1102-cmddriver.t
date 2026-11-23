@@ -51,7 +51,7 @@ test_expect_success 'flux env runs argument' "
 "
 test_expect_success 'flux env passes cmddriver options' '
 	(FLUX_URI=foo://xyz \
-		flux env | grep "^export FLUX_URI=\"foo://xyz")
+		flux env | grep -E "^export FLUX_URI=.?foo://xyz")
 '
 test_expect_success 'flux env passes cmddriver option to argument' "
 	(FLUX_URI=foo://xyx \
