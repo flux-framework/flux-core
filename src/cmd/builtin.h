@@ -8,6 +8,7 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
+#include <stdio.h>
 #include <flux/core.h>
 #include <flux/optparse.h>
 #include "src/common/libutil/xzmalloc.h"
@@ -26,6 +27,7 @@ struct builtin_cmd {
 
 void usage (optparse_t *p);
 void builtin_env_add_pythonpath (struct environment *env);
+void builtin_env_fputs_quoted (FILE *fp, const char *s);
 flux_t *builtin_get_flux_handle (optparse_t *p);
 
 #endif /* !HAVE_CMD_BUILTIN_H */
