@@ -34,6 +34,7 @@
 #include <errno.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
+#include "src/common/libutil/errno_safe.h"
 
 #include "mpir/rangelist.h"
 #include "mpir/nodelist.h"
@@ -149,8 +150,10 @@ struct proctable * proctable_from_json (json_t *o)
                         "executables", &exe,
                         "hosts", &nodes,
                         "pids", &pids,
-                        "ranks", &ranks) < 0)
+                        "ranks", &ranks) < 0) {
+        errno = EINVAL;
         return NULL;
+    }
     if (!(p = proctable_alloc ()))
         return NULL;
     if (!(p->nodes = nodelist_from_json (nodes))
@@ -158,7 +161,7 @@ struct proctable * proctable_from_json (json_t *o)
         || !(p->taskids = rangelist_from_json (taskids))
         || !(p->pids = rangelist_from_json (pids))
         || (ranks && !(p->ranks = rangelist_from_json (ranks)))) {
-        proctable_destroy (p);
+        ERRNO_SAFE_WRAP (proctable_destroy, p);
         return NULL;
     }
     return p;
@@ -170,10 +173,12 @@ struct proctable * proctable_from_json_string (const char *s)
     struct proctable *p = NULL;
     json_t *o;
 
-    if (!(o = json_loads (s, 0, &err)))
+    if (!(o = json_loads (s, 0, &err))) {
+        errno = EINVAL;
         return NULL;
+    }
     p = proctable_from_json (o);
-    json_decref (o);
+    ERRNO_SAFE_WRAP (json_decref, o);
     return p;
 }
 
@@ -271,6 +276,7 @@ err:
     free (host);
     free (exe);
     free (table);
+    errno = EINVAL;
     return NULL;
 }
 

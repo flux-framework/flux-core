@@ -51,6 +51,7 @@
 #include <errno.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
+#include "src/common/libutil/errno_safe.h"
 
 #include "rangelist.h"
 
@@ -406,7 +407,7 @@ struct rangelist *rangelist_from_json (json_t *o)
     }
     return rl;
 err:
-    rangelist_destroy (rl);
+    ERRNO_SAFE_WRAP (rangelist_destroy, rl);
     return NULL;
 }
 
