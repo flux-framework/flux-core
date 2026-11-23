@@ -1,0 +1,219 @@
+version = 1
+
+[[annotations]]
+path = "**"
+SPDX-FileCopyrightText = "2014-2026 Lawrence Livermore National Security, LLC and Flux developers"
+SPDX-License-Identifier = "LGPL-3.0-only"
+
+[[annotations]]
+path = "src/common/libccan/ccan/**"
+SPDX-FileCopyrightText = "Rusty Russell <rusty@rustcorp.com.au>"
+SPDX-License-Identifier = "CC0-1.0"
+
+[[annotations]]
+path = "src/common/libccan/ccan/base64/**"
+SPDX-FileCopyrightText = "Peter Barker <pb-ccan@barker.dropbear.id.au>"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "src/common/libccan/ccan/bitmap/**"
+SPDX-FileCopyrightText = "David Gibson <david@gibson.dropbear.id.au>"
+SPDX-License-Identifier = "LGPL-2.1-or-later"
+
+[[annotations]]
+path = "src/common/libccan/ccan/list/**"
+SPDX-FileCopyrightText = "Rusty Russell <rusty@rustcorp.com.au>"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "src/common/libccan/ccan/ptrint/**"
+SPDX-FileCopyrightText = "David Gibson <david@gibson.dropbear.id.au>"
+SPDX-License-Identifier = "CC0-1.0"
+
+[[annotations]]
+path = "src/common/libczmqcontainers/*"
+SPDX-License-Identifier = "MPL-2.0"
+
+[[annotations]]
+path = "src/common/libev/*"
+SPDX-FileCopyrightText = "2007-2013 Marc Alexander Lehmann"
+SPDX-License-Identifier = "BSD-2-Clause OR GPL-2.0-or-later"
+
+[[annotations]]
+path = "src/common/libidset/veb*"
+SPDX-FileCopyrightText = "2010 Jani Lahtinen <jani.lahtinen8@gmail.com>"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = [
+  "src/common/liblsd/*",
+  "src/common/libmissing/argz.*",
+  "src/common/libmissing/envz.*",
+  "src/common/libmissing/strerrorname_np.*",
+  "src/common/liboptparse/getopt*",
+  "src/common/libtap/tap.*",
+]
+SPDX-License-Identifier = "LGPL-2.1-or-later"
+
+[[annotations]]
+path = [
+  "src/common/libmissing/json_object_update_recursive.c",
+  "src/common/libutil/mnemonic.*",
+  "src/common/libutil/mn_wordlist.c",
+]
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "src/common/libmissing/strlc*"
+SPDX-FileCopyrightText = "1998 Todd C. Miller <Todd.Miller@courtesan.com>"
+SPDX-License-Identifier = "ISC"
+
+[[annotations]]
+path = "src/common/libtomlc99/*"
+SPDX-FileCopyrightText = "2017 CK Tan"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "src/common/libtomlc99/BurntSushi_input/**"
+SPDX-FileCopyrightText = "2004 Sam Hocevar <sam@hocevar.net>"
+SPDX-License-Identifier = "WTFPL"
+
+[[annotations]]
+path = "src/common/libutil/fdwalk.h"
+SPDX-License-Identifier = "BSD-3-Clause"
+
+[[annotations]]
+path = "src/common/libutil/fdwalk.c"
+SPDX-License-Identifier = "BSD-3-Clause AND LGPL-2.1-or-later"
+
+[[annotations]]
+path = ["src/common/libutil/sha", "src/common/libutil/test/sha*"]
+SPDX-FileCopyrightText = "Brad Conte <brad@bradconte.com>"
+SPDX-License-Identifier = "LicenseRef-crypto-PD"
+
+[[annotations]]
+path = "src/common/libyuarel/**"
+SPDX-FileCopyrightText = "2016,2017 Jack Engqvist Johansson"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "src/bindings/lua/lalarm.c"
+SPDX-FileCopyrightText = "2009 Luiz Henrique de Figueiredo <lhf@tecgraf.puc-rio.br>"
+SPDX-License-Identifier = "LicenseRef-lalarm-PD"
+
+[[annotations]]
+path = "src/bindings/python/flux/utils/parsedatetime/**"
+SPDX-FileCopyrightText = "2004-2019 Mike Taylor <bear@bear.im>"
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = "src/bindings/python/flux/utils/tomli/*"
+SPDX-FileCopyrightText = "2021 Taneli Hukkinen"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "src/bindings/python/flux/utils/graphlib/*"
+SPDX-FileCopyrightText = "Marius Helf <helfsmarius@gmail.com>"
+SPDX-License-Identifier = "PSF-2.0"
+
+[[annotations]]
+path = "src/bindings/python/flux/utils/dataclasses/**"
+SPDX-FileCopyrightText = "2017-2022 Eric V. Smith, all rights reserved"
+SPDX-License-Identifier = "Apache-2.0"
+
+
+# ============================================================================
+# TEST AND BUILD-ONLY FILES - NOT PART OF ANY DISTRIBUTED ARTIFACT
+# ============================================================================
+# The following files are used only for testing and/or building. They are not
+# compiled into, linked against, or included in any distributed binary or
+# library. Their code is not part of the final distribution and thus do not
+# subject the distributed artifacts to the GPL or other strong copyleft terms.
+
+[[annotations]]
+path = "src/common/**/Makefile.am"
+SPDX-FileCopyrightText = "2014-2026 Lawrence Livermore National Security, LLC and Flux developers"
+SPDX-License-Identifier = "LGPL-3.0-only"
+
+[[annotations]]
+path = "debian/**"
+SPDX-FileCopyrightText = "2023 Mark A. Grondona <grondo@unknown>"
+SPDX-License-Identifier = "GPL-2.0-or-later"
+
+[[annotations]]
+path = "config/ac_pkgconfig.m4"
+SPDX-FileCopyrightText = "Arnaud Quette"
+# Using default Flux license as no specific info found
+SPDX-License-Identifier = "LGPL-3.0-only"
+
+[[annotations]]
+path = "config/adl_recursive_eval.m4"
+SPDX-FileCopyrightText = "2008 Alexandre Duret-Lutz <adl@gnu.org>"
+SPDX-License-Identifier = "GPL-2.0-or-later WITH Autoconf-exception-macro"
+
+[[annotations]]
+path = "config/ax_code_coverage.m4"
+SPDX-License-Identifier = "LGPL-2.1-or-later"
+
+[[annotations]]
+path = [
+  "config/ax_compare_version.m4",
+  "config/ax_compiler_version.m4",
+  "config/ax_cxx_compile_stdcxx.m4",
+  "config/ax_split_version.m4",
+]
+SPDX-License-Identifier = "FSFAP"
+
+[[annotations]]
+path = [
+  "config/ax_compile_check_sizeof.m4",
+  "config/ax_compiler_vendor.m4",
+  "config/ax_lua.m4",
+  "config/ax_python_devel.m4",
+]
+SPDX-License-Identifier = "GPL-3.0-or-later WITH Autoconf-exception-macro"
+
+[[annotations]]
+path = "config/ax_valgrind.m4"
+SPDX-License-Identifier = "GPL-2.0-or-later"
+
+[[annotations]]
+path = "config/lx_find_mpi.m4"
+SPDX-License-Identifier = "BSD-3-Clause"
+
+[[annotations]]
+path = ["config/pkg.m4", "config/tap-driver.sh"]
+SPDX-License-Identifier = "GPL-2.0-or-later WITH Autoconf-exception-generic"
+
+[[annotations]]
+path = "config/systemd.m4"
+SPDX-License-Identifier = "FSFULLR"
+
+[[annotations]]
+path = [
+  "config/x_ac_check_cond_lib.m4",
+  "config/x_ac_check_pthreads.m4",
+  "config/x_ac_expand_install_dirs.m4",
+]
+SPDX-FileCopyrightText = "Chris Dunlap <cdunlap@llnl.gov>"
+SPDX-License-Identifier = "GPL-3.0-or-later"
+
+[[annotations]]
+path = [
+  "t/sharness.sh",
+  "t/aggregate-results.sh",
+  "t/t0000-sharness.t",
+  "t/test-terminal.perl",
+]
+SPDX-FileCopyrightText = [
+  "2011-2013 Mathias Lafeldt",
+  "2005-2013 Git project",
+  "2005-2013 Junio C Hamano",
+  "2019-2023 Felipe Contreras",
+]
+SPDX-License-Identifier = "GPL-2.0-or-later"
+
+[[annotations]]
+path = "t/fluxometer/conf.lua.in*"
+SPDX-License-Identifier = "GPL-2.0-or-later"
+
