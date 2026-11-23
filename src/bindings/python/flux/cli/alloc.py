@@ -10,6 +10,7 @@
 
 import argparse
 import os
+import subprocess
 import sys
 import time
 
@@ -96,7 +97,11 @@ class AllocCmd(base.BatchAllocCmd):
             #  The job has unexpectedly exited since we're at the end
             #   of the eventlog. Run `flux job attach` since this will dump
             #   any errors or output, then raise an exception.
-            os.system(f"flux job attach {jobid} >&2")
+            subprocess.run(
+                ["flux", "job", "attach", str(jobid)],
+                stdout=sys.stderr,
+                check=False,
+            )
             raise OSError(f"{jobid}: unexpectedly exited")
 
         if not self.t0:
