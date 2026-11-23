@@ -181,6 +181,31 @@ test_expect_success 'environment variables are prepended in correct order' '
 test_expect_success 'flux-env output can be passed to eval' '
     (eval $(flux env))
 '
+test_expect_success 'flux-env output is quoted for the shell' '
+	rm -f cmd-ran1 cmd-ran2 &&
+	val="a\"b \$(touch cmd-ran1) \`touch cmd-ran2\` it'\''s \\ z" &&
+	( FLUX_URI="$val" flux env >quote.out &&
+	  unset FLUX_URI &&
+	  eval "$(cat quote.out)" &&
+	  test "$FLUX_URI" = "$val" ) &&
+	test ! -e cmd-ran1 &&
+	test ! -e cmd-ran2
+'
+test_expect_success 'flux-env output preserves an empty value' '
+	( FLUX_URI= flux env >empty.out &&
+	  unset FLUX_URI &&
+	  eval "$(cat empty.out)" &&
+	  test "${FLUX_URI+set}" = set &&
+	  test -z "$FLUX_URI" )
+'
+test_expect_success 'flux -v output is quoted for the shell' "
+	cat >verbose.exp <<-\EOF &&
+	FLUX_URI='a b'\\''c'
+	EOF
+	FLUX_URI=\"a b'c\" flux -v env true >verbose.out 2>&1 &&
+	grep '^FLUX_URI=' verbose.out >verbose.act &&
+	test_cmp verbose.exp verbose.act
+"
 test_expect_success 'flux finds flux-* commands in PATH' '
     EXTDIR=$(mktemp -d) &&
     cat >$EXTDIR/flux-myextcmd <<-EOF &&
