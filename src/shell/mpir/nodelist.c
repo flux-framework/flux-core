@@ -291,6 +291,7 @@ struct nodelist *nodelist_from_json (json_t *o)
     json_array_foreach (o, i, val) {
         struct prefix_list *pl = prefix_list_from_json (val);
         if (!pl || nodelist_append_prefix_list (nl, pl) < 0) {
+            prefix_list_destroy (pl);
             nodelist_destroy (nl);
             return NULL;
         }

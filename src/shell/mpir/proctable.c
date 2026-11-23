@@ -168,9 +168,11 @@ struct proctable * proctable_from_json_string (const char *s)
 {
     json_error_t err;
     struct proctable *p = NULL;
-    json_t *o = json_loads (s, 0, &err);
-    if (!o || !(p = proctable_from_json (o)))
+    json_t *o;
+
+    if (!(o = json_loads (s, 0, &err)))
         return NULL;
+    p = proctable_from_json (o);
     json_decref (o);
     return p;
 }
@@ -259,8 +261,15 @@ static MPIR_PROCDESC *mpir_proctable_create (struct proctable *p)
         id = rangelist_next (p->taskids);
         pid = rangelist_next (p->pids);
     }
+    /*  host and exe are only non-NULL here if their lists are longer
+     *  than the task id list.
+     */
+    free (host);
+    free (exe);
     return table;
 err:
+    free (host);
+    free (exe);
     free (table);
     return NULL;
 }
