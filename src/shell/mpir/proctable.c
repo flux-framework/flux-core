@@ -35,6 +35,7 @@
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/errno_safe.h"
+#include "src/common/libutil/errprintf.h"
 
 #include "mpir/rangelist.h"
 #include "mpir/nodelist.h"
@@ -230,7 +231,8 @@ static char * proctable_cache_string (struct proctable *p, char *s)
     return copy;
 }
 
-static MPIR_PROCDESC *mpir_proctable_create (struct proctable *p)
+static MPIR_PROCDESC *mpir_proctable_create (struct proctable *p,
+                                             flux_error_t *errp)
 {
     char *host;
     char *exe;
@@ -240,11 +242,14 @@ static MPIR_PROCDESC *mpir_proctable_create (struct proctable *p)
     MPIR_PROCDESC *table = NULL;
 
     if (!p || (size = rangelist_size (p->taskids)) <= 0) {
+        errprintf (errp, "empty proctable");
         errno = EINVAL;
         return NULL;
     }
-    if (!(table = calloc (size, sizeof (MPIR_PROCDESC))))
+    if (!(table = calloc (size, sizeof (MPIR_PROCDESC)))) {
+        errprintf (errp, "out of memory");
         return NULL;
+    }
 
     host = nodelist_first (p->nodes);
     exe = nodelist_first (p->executables);
@@ -252,8 +257,18 @@ static MPIR_PROCDESC *mpir_proctable_create (struct proctable *p)
     pid = rangelist_first (p->pids);
 
     for (int i = 0; i < size; i++) {
-        if (!host || !exe || id < 0 || pid <= 0)
+        if (!host || !exe || id < 0 || pid <= 0) {
+            errprintf (errp, "malformed proctable");
             goto err;
+        }
+        if (id >= size) {
+            errprintf (errp, "task id %d out of range in proctable", (int) id);
+            goto err;
+        }
+        if (table[id].host_name != NULL) {
+            errprintf (errp, "duplicate task id %d in proctable", (int) id);
+            goto err;
+        }
 
         table[id] = (MPIR_PROCDESC) {
             .host_name = proctable_cache_string (p, host),
@@ -280,10 +295,12 @@ err:
     return NULL;
 }
 
-MPIR_PROCDESC *proctable_get_mpir_proctable (struct proctable *p, int *sizep)
+MPIR_PROCDESC *proctable_get_mpir_proctable (struct proctable *p,
+                                             int *sizep,
+                                             flux_error_t *errp)
 {
     if (!p->mpir_proctable)
-        p->mpir_proctable = mpir_proctable_create (p);
+        p->mpir_proctable = mpir_proctable_create (p, errp);
     if (sizep)
         *sizep = proctable_get_size (p);
     return p->mpir_proctable;

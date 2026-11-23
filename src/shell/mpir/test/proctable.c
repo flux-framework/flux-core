@@ -117,7 +117,7 @@ static void proctable_check (struct proctable *p, const struct entry e[])
     int size = 0;
     int expected_size = entry_count (e);
 
-    ok ((table = proctable_get_mpir_proctable (p, &size)) != NULL,
+    ok ((table = proctable_get_mpir_proctable (p, &size, NULL)) != NULL,
         "proctable_get_mpir_proctable");
     ok (size == expected_size,
         "proctable_get_mpir_proctable returned expected size=%d", size);
