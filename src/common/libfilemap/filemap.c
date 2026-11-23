@@ -12,6 +12,9 @@
 #include "config.h"
 #endif
 
+#include <sys/stat.h>
+#include <stdbool.h>
+#include <string.h>
 #include <unistd.h>
 #include <limits.h>
 #include <stdlib.h>
@@ -123,12 +126,48 @@ static int extract_blob (flux_t *h,
     return 0;
 }
 
+/* Return true if the last component of 'path' is a symbolic link, and
+ * 'path' is relative, has no '..' component, and has no symbolic link
+ * before the last component. libarchive rejects the other cases.
+ */
+static bool is_symlink_in_place (const char *path)
+{
+    char buf[PATH_MAX];
+    size_t pos = 0;
+    struct stat sb;
+
+    /* Most entries do not exist yet or are not symlinks. Check the full
+     * path first, and walk the components only if it is a symlink.
+     */
+    if (lstat (path, &sb) < 0
+        || !S_ISLNK (sb.st_mode)
+        || *path == '/'
+        || strlen (path) >= sizeof (buf))
+        return false;
+    while (path[pos] != '\0') {
+        size_t len = strcspn (path + pos, "/");
+
+        if (len == 2 && strstarts (path + pos, ".."))
+            return false;
+        pos += len;
+        memcpy (buf, path, pos);
+        buf[pos] = '\0';
+        pos += strspn (path + pos, "/");
+        if (lstat (buf, &sb) < 0)
+            return false;
+        if (S_ISLNK (sb.st_mode))
+            return path[pos] == '\0';
+    }
+    return false;
+}
+
 /*  Extract a single file from a 'fileref' object using an existing
  *  libarchive object 'archive' and using 'path' as the default path
  *  if no path is encoded in 'fileref'.
  */
 static int extract_file (flux_t *h,
                          struct archive *archive,
+                         bool no_overwrite,
                          const char *path,
                          json_t *fileref,
                          flux_error_t *errp,
@@ -163,6 +202,19 @@ static int extract_file (flux_t *h,
 
     if (trace_cb)
         (*trace_cb) (arg, fileref, path, mode, size, mtime, ctime, encoding);
+
+    /* With ARCHIVE_EXTRACT_SECURE_SYMLINKS, libarchive removes a symlink at
+     * the destination path even if ARCHIVE_EXTRACT_NO_OVERWRITE is set.
+     * Leave the symlink in place, as libarchive does for other existing
+     * files: fail if the entry has file data to write, otherwise skip it.
+     */
+    if (no_overwrite && is_symlink_in_place (path)) {
+        if (S_ISREG (mode) && data != NULL && size != 0)
+            return errprintf (errp,
+                              "%s: write: Attempt to overwrite existing file",
+                              path);
+        return 0;
+    }
 
     /* metadata
      */
@@ -280,7 +332,15 @@ int filemap_extract (flux_t *h,
     size_t index;
     json_t *entry;
     struct archive *archive;
+    bool no_overwrite = libarchive_flags & ARCHIVE_EXTRACT_NO_OVERWRITE;
     int rc = -1;
+
+    /* Do not write outside the current directory. Callers cannot turn off
+     * these flags.
+     */
+    libarchive_flags |= ARCHIVE_EXTRACT_SECURE_NODOTDOT
+                        | ARCHIVE_EXTRACT_SECURE_SYMLINKS
+                        | ARCHIVE_EXTRACT_SECURE_NOABSOLUTEPATHS;
 
     if (!(archive = archive_write_disk_new ())
         || archive_write_disk_set_options (archive,
@@ -293,6 +353,7 @@ int filemap_extract (flux_t *h,
         json_array_foreach (files, index, entry) {
             if (extract_file (h,
                               archive,
+                              no_overwrite,
                               NULL,
                               entry,
                               errp,
@@ -304,6 +365,7 @@ int filemap_extract (flux_t *h,
         json_object_foreach (files, key, entry) {
             if (extract_file (h,
                               archive,
+                              no_overwrite,
                               key,
                               entry,
                               errp,
