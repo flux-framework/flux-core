@@ -26,12 +26,30 @@ static void set_pythonpath (void)
     environment_destroy (env);
 }
 
+/* Write s to fp in single quotes, with each embedded ' written as '\''.
+ * The result is a single shell word with no special characters.
+ */
+void builtin_env_fputs_quoted (FILE *fp, const char *s)
+{
+    fputc ('\'', fp);
+    for (; *s; s++) {
+        if (*s == '\'')
+            fputs ("'\\''", fp);
+        else
+            fputc (*s, fp);
+    }
+    fputc ('\'', fp);
+}
+
 static void print_environment (struct environment *env)
 {
     const char *val;
 
-    for (val = environment_first (env); val; val = environment_next (env))
-        printf("export %s=\"%s\"\n", environment_cursor (env), val);
+    for (val = environment_first (env); val; val = environment_next (env)) {
+        printf ("export %s=", environment_cursor (env));
+        builtin_env_fputs_quoted (stdout, val);
+        putchar ('\n');
+    }
     fflush(stdout);
 }
 
