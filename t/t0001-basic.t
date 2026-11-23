@@ -694,6 +694,30 @@ test_expect_success HAVE_MAN 'flux-help returns nonzero exit code from man(1)' '
 	test_expect_code $(missing_man_code) \
 		eval FLUX_IGNORE_NO_DOCS=y flux help notacommand
 '
+test_expect_success 'create fake man(1)' '
+	mkdir -p fakeman &&
+	cat <<-EOF >fakeman/man &&
+	#!/bin/sh
+	echo "\$@" >man.args
+	EOF
+	chmod +x fakeman/man
+'
+test_expect_success 'flux-help does not run topic through the shell' '
+	rm -f foo &&
+	PATH=$(pwd)/fakeman:$PATH FLUX_IGNORE_NO_DOCS=y \
+		flux help "x;touch foo" &&
+	test ! -e foo &&
+	echo "-- flux-x;touch foo" >man.args.exp &&
+	test_cmp man.args.exp man.args
+'
+test_expect_success 'flux-help runs man(1) with page name after --' '
+	PATH=$(pwd)/fakeman:$PATH FLUX_IGNORE_NO_DOCS=y flux help "a b" &&
+	echo "-- flux-a b" >man.args.exp &&
+	test_cmp man.args.exp man.args &&
+	PATH=$(pwd)/fakeman:$PATH FLUX_IGNORE_NO_DOCS=y flux help flux_foo &&
+	echo "-- flux_foo" >man.args.exp &&
+	test_cmp man.args.exp man.args
+'
 test_expect_success 'flux appends colon to missing or unset MANPATH' '
 	(unset MANPATH && flux $path_printenv | grep "MANPATH=.*:$") &&
 	MANPATH= flux $path_printenv | grep "MANPATH=.*:$"
