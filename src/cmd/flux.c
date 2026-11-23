@@ -660,8 +660,11 @@ static void push_parent_environment (optparse_t *p, struct environment *env)
 static void print_environment (struct environment *env)
 {
     const char *val;
-    for (val = environment_first (env); val; val = environment_next (env))
-        printf("%s=%s\n", environment_cursor (env), val);
+    for (val = environment_first (env); val; val = environment_next (env)) {
+        printf ("%s=", environment_cursor (env));
+        builtin_env_fputs_quoted (stdout, val);
+        putchar ('\n');
+    }
     fflush(stdout);
 }
 
