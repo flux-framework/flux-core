@@ -11,6 +11,7 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <errno.h>
 
 #include "src/common/libtap/tap.h"
 #include "mpir/proctable.h"
@@ -117,7 +118,7 @@ static void proctable_check (struct proctable *p, const struct entry e[])
     int size = 0;
     int expected_size = entry_count (e);
 
-    ok ((table = proctable_get_mpir_proctable (p, &size)) != NULL,
+    ok ((table = proctable_get_mpir_proctable (p, &size, NULL)) != NULL,
         "proctable_get_mpir_proctable");
     ok (size == expected_size,
         "proctable_get_mpir_proctable returned expected size=%d", size);
@@ -182,9 +183,101 @@ static void test_append (void)
     proctable_destroy (p1);
 }
 
+static struct proctable *proctable_from_entries (const struct entry *e)
+{
+    struct proctable *p = proctable_create ();
+    if (!p)
+        BAIL_OUT ("proctable_create failed");
+    while (e->host) {
+        if (proctable_append_task (p,
+                                   e->broker_rank,
+                                   e->host,
+                                   e->executable,
+                                   e->taskid,
+                                   e->pid) < 0)
+            BAIL_OUT ("proctable_append_task failed");
+        e++;
+    }
+    return p;
+}
+
+static void test_invalid (const struct entry *e, const char *expected)
+{
+    flux_error_t error;
+    struct proctable *p = proctable_from_entries (e);
+
+    error.text[0] = '\0';
+    errno = 0;
+    ok (proctable_get_mpir_proctable (p, NULL, &error) == NULL
+        && errno == EINVAL,
+        "proctable_get_mpir_proctable fails with EINVAL: %s", expected);
+    like (error.text, expected,
+        "error message is as expected: %s", error.text);
+    proctable_destroy (p);
+
+    /*  errp may be NULL */
+    p = proctable_from_entries (e);
+    ok (proctable_get_mpir_proctable (p, NULL, NULL) == NULL,
+        "proctable_get_mpir_proctable fails with errp == NULL");
+    proctable_destroy (p);
+}
+
+static void test_validation (void)
+{
+    struct proctable *p;
+    flux_error_t error;
+
+    struct entry empty_host[] = {
+        { "", 0, "/bin/true", 0, 1234 }, { NULL, 0, NULL, 0, 0 } };
+    struct entry dash_host[] = {
+        { "-foo", 0, "/bin/true", 0, 1234 }, { NULL, 0, NULL, 0, 0 } };
+    struct entry space_host[] = {
+        { "foo 0", 0, "/bin/true", 0, 1234 }, { NULL, 0, NULL, 0, 0 } };
+    struct entry tab_host[] = {
+        { "foo\t0", 0, "/bin/true", 0, 1234 }, { NULL, 0, NULL, 0, 0 } };
+    struct entry nl_host[] = {
+        { "foo\n0", 0, "/bin/true", 0, 1234 }, { NULL, 0, NULL, 0, 0 } };
+    struct entry ctl_host[] = {
+        { "foo\x01", 0, "/bin/true", 0, 1234 }, { NULL, 0, NULL, 0, 0 } };
+    struct entry empty_exe[] = {
+        { "foo0", 0, "", 0, 1234 }, { NULL, 0, NULL, 0, 0 } };
+    struct entry dash_exe[] = {
+        { "foo0", 0, "-x", 0, 1234 }, { NULL, 0, NULL, 0, 0 } };
+    struct entry nl_exe[] = {
+        { "foo0", 0, "/bin/tr\nue", 0, 1234 }, { NULL, 0, NULL, 0, 0 } };
+    struct entry range_id[] = {
+        { "foo0", 0, "myapp", 1, 1234 }, { NULL, 0, NULL, 0, 0 } };
+    struct entry dup_id[] = {
+        { "foo0", 0, "myapp", 0, 1234 },
+        { "foo0", 0, "myapp", 0, 1235 },
+        { NULL, 0, NULL, 0, 0 } };
+    struct entry relative[] = {
+        { "foo-0.example", 0, "hostname", 0, 1234 },
+        { NULL, 0, NULL, 0, 0 } };
+
+    test_invalid (empty_host, "invalid host name.*task 0");
+    test_invalid (dash_host, "invalid host name");
+    test_invalid (space_host, "invalid host name");
+    test_invalid (tab_host, "invalid host name");
+    test_invalid (nl_host, "invalid host name");
+    test_invalid (ctl_host, "invalid host name");
+    test_invalid (empty_exe, "invalid executable name.*task 0");
+    test_invalid (dash_exe, "invalid executable name");
+    test_invalid (nl_exe, "invalid executable name");
+    test_invalid (range_id, "out of range");
+    test_invalid (dup_id, "duplicate task id");
+
+    /*  Relative executable names are valid (argv[0] as submitted) */
+    p = proctable_from_entries (relative);
+    ok (proctable_get_mpir_proctable (p, NULL, &error) != NULL,
+        "proctable with relative executable name and dashed host is valid");
+    proctable_destroy (p);
+}
+
 int main (int argc, char **argv)
 {
     plan (NO_PLAN);
+    test_validation ();
     test_proctable (basic);
     test_proctable (leadingzeros);
     test_proctable (moreleadingzeros);

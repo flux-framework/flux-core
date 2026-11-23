@@ -64,16 +64,17 @@ static zlistx_t *processes = NULL;
 
 static void setup_mpir_proctable (const char *s)
 {
+    flux_error_t error;
+
     if (!(proctable = proctable_from_json_string (s))) {
         errno = EINVAL;
         log_err_exit ("proctable_from_json_string");
     }
     MPIR_proctable = proctable_get_mpir_proctable (proctable,
-                                                   &MPIR_proctable_size);
-    if (!MPIR_proctable) {
-        errno = EINVAL;
-        log_err_exit ("proctable_get_mpir_proctable");
-    }
+                                                   &MPIR_proctable_size,
+                                                   &error);
+    if (!MPIR_proctable)
+        log_msg_exit ("MPIR: %s", error.text);
 }
 
 static void gen_attach_signal (flux_t *h, flux_jobid_t id)

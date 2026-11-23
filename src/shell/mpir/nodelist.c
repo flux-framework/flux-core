@@ -44,6 +44,7 @@
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "ccan/str/str.h"
+#include "src/common/libutil/errno_safe.h"
 
 #include "nodelist.h"
 #include "rangelist.h"
@@ -265,12 +266,15 @@ static struct prefix_list *prefix_list_from_json (json_t *o)
         hostname_split (name, &suffix);
         return prefix_list_create (name, suffix);
     }
-    else if (json_unpack (o, "[so]", &prefix, &suffixes) < 0
-        || !(pl = prefix_list_new ()))
+    else if (json_unpack (o, "[so]", &prefix, &suffixes) < 0) {
+        errno = EINVAL;
+        return NULL;
+    }
+    if (!(pl = prefix_list_new ()))
         return NULL;
     if (!(pl->prefix = strdup (prefix))
         || !(pl->suffixes = rangelist_from_json (suffixes))) {
-        prefix_list_destroy (pl);
+        ERRNO_SAFE_WRAP (prefix_list_destroy, pl);
         return NULL;
     }
     return pl;
@@ -291,7 +295,8 @@ struct nodelist *nodelist_from_json (json_t *o)
     json_array_foreach (o, i, val) {
         struct prefix_list *pl = prefix_list_from_json (val);
         if (!pl || nodelist_append_prefix_list (nl, pl) < 0) {
-            nodelist_destroy (nl);
+            ERRNO_SAFE_WRAP (prefix_list_destroy, pl);
+            ERRNO_SAFE_WRAP (nodelist_destroy, nl);
             return NULL;
         }
     }

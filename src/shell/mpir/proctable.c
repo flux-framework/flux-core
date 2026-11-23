@@ -32,8 +32,12 @@
 #endif
 
 #include <errno.h>
+#include <ctype.h>
+#include <stdbool.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
+#include "src/common/libutil/errno_safe.h"
+#include "src/common/libutil/errprintf.h"
 
 #include "mpir/rangelist.h"
 #include "mpir/nodelist.h"
@@ -149,8 +153,10 @@ struct proctable * proctable_from_json (json_t *o)
                         "executables", &exe,
                         "hosts", &nodes,
                         "pids", &pids,
-                        "ranks", &ranks) < 0)
+                        "ranks", &ranks) < 0) {
+        errno = EINVAL;
         return NULL;
+    }
     if (!(p = proctable_alloc ()))
         return NULL;
     if (!(p->nodes = nodelist_from_json (nodes))
@@ -158,7 +164,7 @@ struct proctable * proctable_from_json (json_t *o)
         || !(p->taskids = rangelist_from_json (taskids))
         || !(p->pids = rangelist_from_json (pids))
         || (ranks && !(p->ranks = rangelist_from_json (ranks)))) {
-        proctable_destroy (p);
+        ERRNO_SAFE_WRAP (proctable_destroy, p);
         return NULL;
     }
     return p;
@@ -168,10 +174,14 @@ struct proctable * proctable_from_json_string (const char *s)
 {
     json_error_t err;
     struct proctable *p = NULL;
-    json_t *o = json_loads (s, 0, &err);
-    if (!o || !(p = proctable_from_json (o)))
+    json_t *o;
+
+    if (!(o = json_loads (s, 0, &err))) {
+        errno = EINVAL;
         return NULL;
-    json_decref (o);
+    }
+    p = proctable_from_json (o);
+    ERRNO_SAFE_WRAP (json_decref, o);
     return p;
 }
 
@@ -223,7 +233,38 @@ static char * proctable_cache_string (struct proctable *p, char *s)
     return copy;
 }
 
-static MPIR_PROCDESC *mpir_proctable_create (struct proctable *p)
+/*  Host names may be passed to tools on a command line, so reject empty
+ *  names, names that begin with '-', and names that contain whitespace
+ *  or control characters.
+ */
+static bool host_name_valid (const char *s)
+{
+    if (s[0] == '\0' || s[0] == '-')
+        return false;
+    for (const char *cp = s; *cp != '\0'; cp++) {
+        if (isspace ((unsigned char) *cp) || iscntrl ((unsigned char) *cp))
+            return false;
+    }
+    return true;
+}
+
+/*  The executable name is argv[0] of the task as given in the jobspec,
+ *  so it may be relative (e.g. "hostname"). Reject empty names, names
+ *  that begin with '-', and names that contain control characters.
+ */
+static bool executable_name_valid (const char *s)
+{
+    if (s[0] == '\0' || s[0] == '-')
+        return false;
+    for (const char *cp = s; *cp != '\0'; cp++) {
+        if (iscntrl ((unsigned char) *cp))
+            return false;
+    }
+    return true;
+}
+
+static MPIR_PROCDESC *mpir_proctable_create (struct proctable *p,
+                                             flux_error_t *errp)
 {
     char *host;
     char *exe;
@@ -233,11 +274,14 @@ static MPIR_PROCDESC *mpir_proctable_create (struct proctable *p)
     MPIR_PROCDESC *table = NULL;
 
     if (!p || (size = rangelist_size (p->taskids)) <= 0) {
+        errprintf (errp, "empty proctable");
         errno = EINVAL;
         return NULL;
     }
-    if (!(table = calloc (size, sizeof (MPIR_PROCDESC))))
+    if (!(table = calloc (size, sizeof (MPIR_PROCDESC)))) {
+        errprintf (errp, "out of memory");
         return NULL;
+    }
 
     host = nodelist_first (p->nodes);
     exe = nodelist_first (p->executables);
@@ -245,8 +289,32 @@ static MPIR_PROCDESC *mpir_proctable_create (struct proctable *p)
     pid = rangelist_first (p->pids);
 
     for (int i = 0; i < size; i++) {
-        if (!host || !exe || id < 0 || pid <= 0)
+        if (!host || !exe || id < 0 || pid <= 0) {
+            errprintf (errp, "malformed proctable");
             goto err;
+        }
+        if (id >= size) {
+            errprintf (errp, "task id %d out of range in proctable", (int) id);
+            goto err;
+        }
+        if (table[id].host_name != NULL) {
+            errprintf (errp, "duplicate task id %d in proctable", (int) id);
+            goto err;
+        }
+        /*  Do not echo the bad value: it may contain control characters.
+         */
+        if (!host_name_valid (host)) {
+            errprintf (errp,
+                       "invalid host name in proctable for task %d",
+                       (int) id);
+            goto err;
+        }
+        if (!executable_name_valid (exe)) {
+            errprintf (errp,
+                       "invalid executable name in proctable for task %d",
+                       (int) id);
+            goto err;
+        }
 
         table[id] = (MPIR_PROCDESC) {
             .host_name = proctable_cache_string (p, host),
@@ -259,16 +327,26 @@ static MPIR_PROCDESC *mpir_proctable_create (struct proctable *p)
         id = rangelist_next (p->taskids);
         pid = rangelist_next (p->pids);
     }
+    /*  host and exe are only non-NULL here if their lists are longer
+     *  than the task id list.
+     */
+    free (host);
+    free (exe);
     return table;
 err:
+    free (host);
+    free (exe);
     free (table);
+    errno = EINVAL;
     return NULL;
 }
 
-MPIR_PROCDESC *proctable_get_mpir_proctable (struct proctable *p, int *sizep)
+MPIR_PROCDESC *proctable_get_mpir_proctable (struct proctable *p,
+                                             int *sizep,
+                                             flux_error_t *errp)
 {
     if (!p->mpir_proctable)
-        p->mpir_proctable = mpir_proctable_create (p);
+        p->mpir_proctable = mpir_proctable_create (p, errp);
     if (sizep)
         *sizep = proctable_get_size (p);
     return p->mpir_proctable;
