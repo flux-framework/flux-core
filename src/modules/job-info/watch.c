@@ -186,6 +186,7 @@ static int watch_key (struct watch_ctx *w)
 
 static void delete_watcher (struct info_ctx *ctx, struct watch_ctx *w)
 {
+    uuid_count_decr (ctx->watchers_uuid_count, w->msg);
     zhashx_delete (ctx->watchers_matchtags, w->matchtag_key);
     zlistx_delete (ctx->watchers, w->handle);
 }
@@ -454,6 +455,7 @@ static int watch (struct info_ctx *ctx,
         errno = EINVAL;
         goto error;
     }
+    uuid_count_incr (ctx->watchers_uuid_count, w->msg);
     w = NULL;
 
     return 0;
@@ -565,10 +567,12 @@ void watchers_cancel (struct info_ctx *ctx, const flux_msg_t *msg, bool cancel)
             send_kvs_watch_cancel (ctx, w, msg, cancel);
             return;
         }
-        /* else fallthrough to loop over everything */
+        /* else fallthrough to possibly loop over everything */
     }
 
  fallthrough:
+    if (!uuid_count_contains (ctx->watchers_uuid_count, msg))
+        return;
     w = zlistx_first (ctx->watchers);
     while (w) {
         send_kvs_watch_cancel (ctx, w, msg, cancel);
@@ -590,7 +594,8 @@ int watch_setup (struct info_ctx *ctx)
     if (!(ctx->watchers = zlistx_new ()))
         return -1;
     zlistx_set_destructor (ctx->watchers, watch_ctx_destroy_wrapper);
-    if (!(ctx->watchers_matchtags = zhashx_new ()))
+    if (!(ctx->watchers_matchtags = zhashx_new ())
+        || !(ctx->watchers_uuid_count = zhashx_new ()))
         return -1;
     return 0;
 }
@@ -618,6 +623,8 @@ void watch_cleanup (struct info_ctx *ctx)
     }
     if (ctx->watchers_matchtags)
         zhashx_destroy (&ctx->watchers_matchtags);
+    if (ctx->watchers_uuid_count)
+        zhashx_destroy (&ctx->watchers_uuid_count);
 }
 
 /*
