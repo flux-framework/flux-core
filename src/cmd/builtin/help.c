@@ -11,7 +11,9 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 #include "src/common/libutil/setenvf.h"
 #include "ccan/str/str.h"
@@ -33,11 +35,10 @@ static int no_docs_set (optparse_t *p)
 static int cmd_help (optparse_t *p, int ac, char *av[])
 {
     int n = optparse_option_index (p);
-    char *cmd;
 
     if (n < ac) {
         const char *topic = av [n];
-        int rc;
+        char *argv[] = { "man", "--", NULL, NULL };
 
         if (no_docs_set (p))
             log_msg_exit ("flux manual pages not built");
@@ -51,17 +52,16 @@ static int cmd_help (optparse_t *p, int ac, char *av[])
          *   so prepend flux-
          */
         if (strstarts (topic, "flux"))
-            cmd = xasprintf ("man %s", topic);
+            argv[2] = xstrdup (topic);
         else
-            cmd = xasprintf ("man flux-%s", topic);
+            argv[2] = xasprintf ("flux-%s", topic);
 
-        if ((rc = system (cmd)) < 0)
-            log_err_exit ("man");
-        else if (WIFEXITED (rc) && ((rc = WEXITSTATUS (rc)) != 0))
-            exit (rc);
-        else if (WIFSIGNALED (rc))
-            log_errn_exit (1, "man: %s\n", strsignal (WTERMSIG (rc)));
-        free (cmd);
+        /*  Exec man(1) directly rather than via the shell. The "--"
+         *  keeps the page name from being parsed as an option.
+         */
+        fflush (stdout);
+        execvp ("man", argv);
+        log_err_exit ("man");
     } else
         usage (optparse_get_parent (p));
     return (0);

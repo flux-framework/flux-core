@@ -13,6 +13,6 @@ ExecStopPost=-sh -c '\
         if test "${EXIT_CODE}${EXIT_STATUS}"; then \
             message="$message: $EXIT_CODE $EXIT_STATUS"; \
         fi; \
-        flux resource drain $(flux getattr rank) $message; \
+        flux resource drain $(flux getattr rank) "$message"; \
     fi \
 '
