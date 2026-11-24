@@ -632,6 +632,18 @@ int hostlist_append_list (struct hostlist * h1, struct hostlist * h2)
         return -1;
     }
 
+    /*  Appending to h1 modifies h2 if they are the same list,
+     *   so append from a copy.
+     */
+    if (h1 == h2) {
+        struct hostlist *copy;
+        if (!(copy = hostlist_copy (h2)))
+            return -1;
+        n = hostlist_append_list (h1, copy);
+        hostlist_destroy (copy);
+        return n;
+    }
+
     for (i = 0; i < h2->nranges; i++)
         n += hostlist_append_range (h1, h2->hr[i]);
 
