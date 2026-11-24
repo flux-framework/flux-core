@@ -125,6 +125,7 @@ void hostlist_sort (struct hostlist * hl);
 
 /*
  *  Sort the hostlist hl and remove duplicate entries.
+ *  Resets the cursor to the start of the list.
  */
 void hostlist_uniq (struct hostlist *hl);
 

@@ -994,27 +994,10 @@ void hostlist_sort (struct hostlist *hl)
     hostlist_coalesce (hl);
 }
 
-/* attempt to join ranges at loc and loc-1 in a hostlist  */
-/* delete duplicates, return the number of hosts deleted  */
-/* assumes that the hostlist hl has been locked by caller */
-/* returns -1 if no range join occurred */
-static int attempt_range_join (struct hostlist *hl, int loc)
-{
-    int ndup;
-    assert (hl != NULL);
-    assert (loc > 0);
-    assert (loc < hl->nranges);
-    ndup = hostrange_join (hl->hr[loc - 1], hl->hr[loc]);
-    if (ndup >= 0) {
-        hostlist_delete_range (hl, loc);
-        hl->nhosts -= ndup;
-    }
-    return ndup;
-}
-
 void hostlist_uniq (struct hostlist *hl)
 {
-    int i = 1;
+    int i, n;
+
     if (hl == NULL)
         return;
 
@@ -1023,10 +1006,24 @@ void hostlist_uniq (struct hostlist *hl)
 
     qsort (hl->hr, hl->nranges, sizeof (struct hostrange *), &_cmp);
 
-    while (i < hl->nranges) {
-        if (attempt_range_join (hl, i) < 0) /* No range join occurred */
-            i++;
+    /*  Join each range into the last kept range if possible, otherwise
+     *   keep it. This compacts the array in a single pass.
+     */
+    for (i = 1, n = 0; i < hl->nranges; i++) {
+        int ndup = hostrange_join (hl->hr[n], hl->hr[i]);
+        if (ndup >= 0) {
+            hostrange_destroy (hl->hr[i]);
+            hl->nhosts -= ndup;
+        }
+        else
+            hl->hr[++n] = hl->hr[i];
     }
+    for (i = n + 1; i < hl->nranges; i++)
+        hl->hr[i] = NULL;
+    hl->nranges = n + 1;
+
+    /* Sorting invalidates the cursor, so reset it to the start */
+    set_current (&hl->current, 0, -1);
 }
 
 /* return true if a bracket is needed for the range at i in hostlist hl */
