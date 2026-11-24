@@ -153,7 +153,15 @@ int hostrange_delete_host (struct hostrange * hr,
 
     assert (n >= hr->lo && n <= hr->hi);
 
-    if (n == hr->lo)
+    /* Empty a range of one host with lo > hi without wrapping lo or hi
+     */
+    if (hr->lo == hr->hi) {
+        if (hr->lo == 0)
+            hr->lo = 1;
+        else
+            hr->hi--;
+    }
+    else if (n == hr->lo)
         hr->lo++;
     else if (n == hr->hi)
         hr->hi--;
@@ -263,7 +271,7 @@ int hostrange_width_combine (struct hostrange * h0, struct hostrange * h1)
 int hostrange_empty (struct hostrange * hr)
 {
     assert (hr != NULL);
-    return ((hr->hi < hr->lo) || (hr->hi == (unsigned long) -1));
+    return hr->hi < hr->lo;
 }
 
 /* join two hostrange objects.
