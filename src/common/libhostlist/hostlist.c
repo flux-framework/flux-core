@@ -140,18 +140,15 @@ fail:
  */
 static int hostlist_resize (struct hostlist *hl, size_t newsize)
 {
-    int i;
-    size_t oldsize;
+    struct hostrange **hr;
+
     assert (hl != NULL);
-    oldsize = hl->size;
-    hl->size = newsize;
-    hl->hr = realloc ((void *) hl->hr, hl->size*sizeof (struct hostrange *));
-    if (!(hl->hr))
+    if (!(hr = realloc (hl->hr, newsize * sizeof (*hr))))
         return 0;
-
-    for (i = oldsize; i < newsize; i++)
-        hl->hr[i] = NULL;
-
+    for (size_t i = hl->size; i < newsize; i++)
+        hr[i] = NULL;
+    hl->hr = hr;
+    hl->size = newsize;
     return 1;
 }
 
@@ -581,18 +578,21 @@ struct hostlist * hostlist_copy (const struct hostlist *hl)
         return NULL;
 
     if (!(new = hostlist_create ()))
-        goto done;
+        return NULL;
 
-    new->nranges = hl->nranges;
+    if (hl->nranges > new->size && !hostlist_resize (new, hl->nranges))
+        goto error;
+
+    for (i = 0; i < hl->nranges; i++) {
+        if (!(new->hr[i] = hostrange_copy (hl->hr[i])))
+            goto error;
+        new->nranges++;
+    }
     new->nhosts = hl->nhosts;
-    if (new->nranges > new->size)
-        hostlist_resize (new, new->nranges);
-
-    for (i = 0; i < hl->nranges; i++)
-        new->hr[i] = hostrange_copy (hl->hr[i]);
-
-  done:
     return new;
+error:
+    hostlist_destroy (new);
+    return NULL;
 }
 
 
