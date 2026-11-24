@@ -799,10 +799,11 @@ static int hostlist_remove_at (struct hostlist *hl, struct current *cur)
     else if (hl->current.index == cur->index
             && hl->current.depth >= cur->depth) {
         /*
-         *  Current range affected, but range was not split. Adjust
-         *   current cursor appropriately
+         *  Current range affected, but range was not split. The host
+         *   was removed from the start or end of the range, so hosts
+         *   at or after the cursor shift down by one.
          */
-        hl->current.depth = hl->current.depth - cur->depth - 1;
+        hl->current.depth--;
     }
 
     hl->nhosts--;
