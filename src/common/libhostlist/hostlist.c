@@ -38,9 +38,6 @@
 /* max host suffix value */
 #define MAX_HOST_SUFFIX 1<<25
 
-/* max number of ranges that will be processed between brackets */
-#define MAX_RANGES    10240    /* 10K Ranges */
-
 /* max size of internal hostrange buffer */
 #define MAXHOSTRANGELEN 1024
 
@@ -417,21 +414,28 @@ static int hostlist_append_host (struct hostlist *hl, const char *str)
 
 /*
  * Convert 'str' containing comma separated digits and ranges into an array
- *  of struct _range types (max 'len' elements).
+ *  of struct _range types. The array is grown as needed, and its address
+ *  and size are returned in 'rangesp' and 'sizep'.
  *
  * Return number of ranges created, or -1 on error.
  */
-static int parse_range_list (char *str, struct _range *ranges, int len)
+static int parse_range_list (char *str, struct _range **rangesp, int *sizep)
 {
     char *p;
     int count = 0;
 
     while (str) {
-        if (count == len)
-            return -1;
+        if (count == *sizep) {
+            int size = *sizep ? *sizep * 2 : 16;
+            struct _range *new;
+            if (!(new = realloc (*rangesp, size * sizeof (*new))))
+                return -1;
+            *rangesp = new;
+            *sizep = size;
+        }
         if ((p = strchr (str, ',')))
             *p++ = '\0';
-        if (parse_next_range (str, &ranges[count++]) < 0)
+        if (parse_next_range (str, &(*rangesp)[count++]) < 0)
             return -1;
         str = p;
     }
@@ -492,7 +496,8 @@ static struct hostlist * hostlist_create_bracketed (const char *hostlist,
                                                     char *r_op)
 {
     struct hostlist * new = hostlist_create ();
-    struct _range *ranges;
+    struct _range *ranges = NULL;
+    int size = 0;
     int nr;
     int rc;
     char *p, *tok, *str, *orig;
@@ -503,10 +508,8 @@ static struct hostlist * hostlist_create_bracketed (const char *hostlist,
     if (hostlist == NULL)
         return new;
 
-    if (!(orig = str = strdup (hostlist))
-        || !(ranges = calloc (MAX_RANGES, sizeof (*ranges)))) {
+    if (!(orig = str = strdup (hostlist))) {
         hostlist_destroy (new);
-        ERRNO_SAFE_WRAP (free, orig);
         return NULL;
     }
 
@@ -520,7 +523,7 @@ static struct hostlist * hostlist_create_bracketed (const char *hostlist,
                 if (strchr (prefix, ']') || strpbrk (q + 1, "[]"))
                     goto error_unmatched;
                 *q = '\0';
-                nr = parse_range_list (p, ranges, MAX_RANGES);
+                nr = parse_range_list (p, &ranges, &size);
                 if (nr < 0)
                     goto error;
 
