@@ -757,7 +757,10 @@ static int hostlist_remove_at (struct hostlist *hl, struct current *cur)
     struct hostrange *hr;
     struct hostrange *new;
 
-    if (cur->index > hl->nhosts - 1)
+    if (cur->index < 0
+        || cur->index >= hl->nranges
+        || cur->depth < 0
+        || cur->depth >= hostrange_count (hl->hr[cur->index]))
         return 0;
 
     hr = hl->hr[cur->index];
