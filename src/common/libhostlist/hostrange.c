@@ -307,36 +307,32 @@ int hostrange_join (struct hostrange * h1, struct hostrange * h2)
     return duplicated;
 }
 
-/* hostrange intersect returns the intersection (common hosts)
- * of hostrange objects h1 and h2. If there is no intersection,
- * NULL is returned.
+/* hostrange_intersect_ids() returns true if hostrange objects h1 and h2
+ * intersect, and stores the common ids in 'lo' and 'hi'.
  *
  * It is assumed that h1 <= h2 (i.e. h1->lo <= h2->lo)
  */
-struct hostrange * hostrange_intersect (struct hostrange * h1,
-                                        struct hostrange * h2)
+bool hostrange_intersect_ids (struct hostrange * h1,
+                              struct hostrange * h2,
+                              unsigned long *lo,
+                              unsigned long *hi)
 {
-    struct hostrange * new = NULL;
-
     assert (h1 != NULL);
     assert (h2 != NULL);
 
     if (h1->singlehost || h2->singlehost)
-        return NULL;
+        return false;
 
     assert (hostrange_cmp (h1, h2) <= 0);
 
     if ((hostrange_prefix_cmp (h1, h2) == 0)
         && (h1->hi > h2->lo)
         && (hostrange_width_combine (h1, h2))) {
-
-        if (!(new = hostrange_copy (h1)))
-            return NULL;
-        new->lo = h2->lo;
-        new->hi = h2->hi < h1->hi ? h2->hi : h1->hi;
+        *lo = h2->lo;
+        *hi = h2->hi < h1->hi ? h2->hi : h1->hi;
+        return true;
     }
-
-    return new;
+    return false;
 }
 
 /* return offset of hn if it is in the hostlist or

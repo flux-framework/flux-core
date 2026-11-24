@@ -120,6 +120,7 @@ int hostlist_count (struct hostlist * hl);
 
 /*
  *  Sort the hostlist hl.
+ *  Resets the cursor to the start of the list.
  */
 void hostlist_sort (struct hostlist * hl);
 

@@ -11,6 +11,8 @@
 #ifndef HAVE_FLUX_HOSTRANGE_H
 #define HAVE_FLUX_HOSTRANGE_H
 
+#include <stdbool.h>
+
 #include "hostname.h"
 
 /* A single prefix with `hi' and `lo' numeric suffix values
@@ -56,8 +58,10 @@ int hostrange_empty (struct hostrange *);
 
 int hostrange_join (struct hostrange *, struct hostrange *);
 
-struct hostrange * hostrange_intersect (struct hostrange *,
-                                        struct hostrange *);
+bool hostrange_intersect_ids (struct hostrange *h1,
+                              struct hostrange *h2,
+                              unsigned long *lo,
+                              unsigned long *hi);
 
 int hostrange_hn_within (struct hostrange *, struct stack_hostname *);
 

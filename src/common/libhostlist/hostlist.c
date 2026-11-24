@@ -21,6 +21,7 @@
 #include <ctype.h>
 #include <sys/param.h>
 #include <unistd.h>
+#include <limits.h>
 
 #include "src/common/libutil/errno_safe.h"
 
@@ -884,19 +885,73 @@ int hostlist_delete (struct hostlist *hl, const char *hosts)
  */
 static void hostlist_collapse (struct hostlist *hl)
 {
-    int i;
+    int i, n;
 
-    for (i = hl->nranges - 1; i > 0; i--) {
-        struct hostrange * hprev = hl->hr[i - 1];
+    if (hl->nranges <= 1)
+        return;
+
+    for (i = 1, n = 0; i < hl->nranges; i++) {
+        struct hostrange * hprev = hl->hr[n];
         struct hostrange * hnext = hl->hr[i];
 
         if (hostrange_prefix_cmp (hprev, hnext) == 0 &&
             hprev->hi == hnext->lo - 1 &&
             hostrange_width_combine (hprev, hnext)) {
             hprev->hi = hnext->hi;
-            hostlist_delete_range (hl, i);
+            hostrange_destroy (hnext);
         }
+        else
+            hl->hr[++n] = hnext;
     }
+    for (i = n + 1; i < hl->nranges; i++)
+        hl->hr[i] = NULL;
+    hl->nranges = n + 1;
+}
+
+/* Insert the duplicated ids lo to hi of range 'hr' at position 'n' of hl
+ * in sorted order, i.e. lo+1 to hi-1 twice each, preceded by lo and
+ * followed by hi. Hosts are inserted as single host ranges and are
+ * joined later by hostlist_collapse(). The hostlist is unchanged on
+ * failure.
+ */
+static int hostlist_insert_dups (struct hostlist *hl,
+                                 int n,
+                                 struct hostrange *hr,
+                                 unsigned long lo,
+                                 unsigned long hi)
+{
+    unsigned long count = 2 * (hi - lo);
+    struct hostrange **ranges;
+    unsigned long k;
+
+    if (count == 0)
+        return 0;
+    if (count > INT_MAX - hl->size) {
+        errno = ERANGE;
+        return -1;
+    }
+    if (hl->nranges + count > hl->size
+        && !hostlist_resize (hl, hl->nranges + count + HOSTLIST_CHUNK))
+        return -1;
+    if (!(ranges = calloc (count, sizeof (*ranges))))
+        return -1;
+    for (k = 0; k < count; k++) {
+        unsigned long id = lo + (k + 1) / 2;
+        if (!(ranges[k] = hostrange_create (hr->prefix, id, id, hr->width)))
+            goto error;
+    }
+    memmove (&hl->hr[n + count],
+             &hl->hr[n],
+             (hl->nranges - n) * sizeof (hl->hr[0]));
+    memcpy (&hl->hr[n], ranges, count * sizeof (ranges[0]));
+    hl->nranges += count;
+    free (ranges);
+    return 0;
+error:
+    for (k = 0; k < count; k++)
+        hostrange_destroy (ranges[k]);
+    ERRNO_SAFE_WRAP (free, ranges);
+    return -1;
 }
 
 /* search through hostlist (hl) for intersecting ranges
@@ -904,8 +959,7 @@ static void hostlist_collapse (struct hostlist *hl)
  */
 static void hostlist_coalesce (struct hostlist *hl)
 {
-    int i, j;
-    struct hostrange * new;
+    int i;
 
     /*  Scan backwards through hostranges, and determine if the
      *   current and previous ranges intersect. If so, then
@@ -914,59 +968,35 @@ static void hostlist_coalesce (struct hostlist *hl)
     for (i = hl->nranges - 1; i > 0; i--) {
         struct hostrange * hprev = hl->hr[i - 1];
         struct hostrange * hnext = hl->hr[i];
+        unsigned long lo, hi;
 
         /* If ranges intersect, then the common (duplicated) hosts
-         *  are returned in 'new'.
+         *  are lo to hi.
          */
-        new = hostrange_intersect (hprev, hnext);
-        if (new) {
-            j = i;
+        if (hostrange_intersect_ids (hprev, hnext, &lo, &hi)) {
+            /*  Insert duplicated hosts between hprev and hnext first,
+             *   so that the list is unchanged on failure.
+             */
+            if (hostlist_insert_dups (hl, i, hprev, lo, hi) < 0)
+                break;
 
             /*  Upper bound of duplicated range is below hprev -
              *   hnext will now hold duplicates, set next->hi to prev->hi
              */
-            if (new->hi < hprev->hi)
+            if (hi < hprev->hi)
                 hnext->hi = hprev->hi;
 
             /*
-             *  The duplicated range will inserted piecemeal below,
+             *  The duplicated range was inserted piecemeal above,
              *   e.g. [5-7,6-8] -> [5-6,6-7,7-8]
-             *  Therefore adjust the end of hprev to new->lo (the
-             *   first duplicated host), and the start of hnext to
-             *   new->hi (the last duplicated host). The rest of the
-             *   duplicates will be inserted below.
+             *  Therefore adjust the end of hprev to lo (the first
+             *   duplicated host), and the start of hnext to hi (the
+             *   last duplicated host).
              */
-            hprev->hi = new->lo;
-            hnext->lo = new->hi;
+            hprev->hi = lo;
+            hnext->lo = hi;
 
-            /*  N.B.: It should not be possible that hprev is now
-             *   empty, so the below should be deadcode
-             *
-             *if (hostrange_empty (hprev))
-             *   hostlist_delete_range (hl, i);
-             */
-
-            /*  Now insert each duplicated number between hprev and
-             *   hnext:
-             */
-            while (new->lo <= new->hi) {
-                struct hostrange * hr = hostrange_create (new->prefix,
-                                                          new->lo,
-                                                          new->lo,
-                                                          new->width);
-
-                if (new->lo > hprev->hi)
-                    hostlist_insert_range (hl, hr, j++);
-
-                if (new->lo < hnext->lo)
-                    hostlist_insert_range (hl, hr, j++);
-
-                hostrange_destroy (hr);
-
-                new->lo++;
-            }
             i = hl->nranges;
-            hostrange_destroy (new);
         }
     }
 
@@ -992,6 +1022,9 @@ void hostlist_sort (struct hostlist *hl)
         return;
     qsort (hl->hr, hl->nranges, sizeof (struct hostrange *), _cmp);
     hostlist_coalesce (hl);
+
+    /* Sorting invalidates the cursor, so reset it to the start */
+    set_current (&hl->current, 0, -1);
 }
 
 void hostlist_uniq (struct hostlist *hl)

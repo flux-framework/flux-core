@@ -278,29 +278,19 @@ void test_intersect ()
     struct hostrange *hr3 = hostrange_create ("foo", 11, 15, 0);
     struct hostrange *hr4 = hostrange_create ("foo", 8, 9, 0);
     struct hostrange *hr5 = hostrange_create_single ("foo");
-    struct hostrange *result;
+    unsigned long lo, hi;
 
-    result = hostrange_intersect (hr1, hr2);
-    ok (result != NULL,
-        "hostrange_intersect works");
-    is (result->prefix, "foo",
-        "hostrange_intersect returned range with prefix");
-    ok (result->lo == 9 && result->hi == 10,
-        "hostrange_intersect got expected result");
-    hostrange_destroy (result);
+    if (!hr1 || !hr2 || !hr3 || !hr4 || !hr5)
+        BAIL_OUT ("hostrange_create failed");
 
-    ok (hostrange_intersect (hr1, hr3) == NULL,
-        "hostrange_intersect returns NULL for nonintersecting sets");
-
-    result = hostrange_intersect (hr1, hr4);
-    ok (result != NULL,
-        "hostrange_intersect works");
-    ok (hostrange_cmp (result, hr4) == 0,
-        "hostrange_intersect got expected result");
-    hostrange_destroy (result);
-
-    ok (hostrange_intersect (hr5, hr1) == NULL,
-        "hostrange_intersect returns NULL if one of the hosts is a singlehost");
+    ok (hostrange_intersect_ids (hr1, hr2, &lo, &hi) && lo == 9 && hi == 10,
+        "hostrange_intersect_ids (foo[5-10], foo[9-15]) = [9-10]");
+    ok (!hostrange_intersect_ids (hr1, hr3, &lo, &hi),
+        "hostrange_intersect_ids returns false for nonintersecting sets");
+    ok (hostrange_intersect_ids (hr1, hr4, &lo, &hi) && lo == 8 && hi == 9,
+        "hostrange_intersect_ids (foo[5-10], foo[8-9]) = [8-9]");
+    ok (!hostrange_intersect_ids (hr5, hr1, &lo, &hi),
+        "hostrange_intersect_ids returns false if one host is a singlehost");
 
     hostrange_destroy (hr1);
     hostrange_destroy (hr2);
