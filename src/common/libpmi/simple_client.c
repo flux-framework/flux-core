@@ -68,6 +68,18 @@ struct barrier_out {
     struct barrier_out *next;
 };
 
+/* Wake the reader, if any, from its poll.  Call with lock held.
+ */
+static void reader_wake (struct pmi_simple_client *pmi)
+{
+    if (pmi->reader) {
+        ssize_t n;
+        do {
+            n = write (pmi->wakefd[1], "", 1);
+        } while (n < 0 && errno == EINTR);
+    }
+}
+
 /* Park a barrier_out for its owner and wake the waiters.  Call with
  * lock held.
  * On ENOMEM the owner would wait forever, so callers fail the client.
@@ -87,12 +99,7 @@ static int pending_push (struct pmi_simple_client *pmi, int tag, int rc)
     b->next = pmi->pending;
     pmi->pending = b;
     pthread_cond_broadcast (&pmi->cond);
-    if (pmi->reader) {
-        ssize_t n;
-        do {
-            n = write (pmi->wakefd[1], "", 1);
-        } while (n < 0 && errno == EINTR);
-    }
+    reader_wake (pmi);
     return 0;
 }
 
@@ -103,12 +110,7 @@ static void client_fail (struct pmi_simple_client *pmi)
 {
     pmi->failed = true;
     pthread_cond_broadcast (&pmi->cond);
-    if (pmi->reader) {
-        ssize_t n;
-        do {
-            n = write (pmi->wakefd[1], "", 1);
-        } while (n < 0 && errno == EINTR);
-    }
+    reader_wake (pmi);
 }
 
 /* Return true if a barrier with 'tag' is in flight.  Call with lock
@@ -158,7 +160,10 @@ static bool pending_pop (struct pmi_simple_client *pmi, int tag, int *rcp)
 }
 
 /* Read one line from the fd into pmi->buf.  Buffering is done here
- * rather than in stdio so the fd can be polled.
+ * rather than in stdio so the fd can be polled.  One read() may
+ * deliver several lines.  If a line is left buffered while another
+ * thread is the reader, wake it, since its poll of the fd cannot see
+ * that line.
  * Returns 0 on success, 1 if !block and no line is ready, -1 on error
  * or EOF.  Call with lock held.
  */
@@ -176,6 +181,8 @@ static int read_line (struct pmi_simple_client *pmi, bool block)
             pmi->buf[linelen] = '\0';
             memmove (pmi->rbuf, nl + 1, pmi->rlen - linelen);
             pmi->rlen -= linelen;
+            if (memchr (pmi->rbuf, '\n', pmi->rlen))
+                reader_wake (pmi);
             return 0;
         }
         if (pmi->rlen == pmi->rbufsize) {
