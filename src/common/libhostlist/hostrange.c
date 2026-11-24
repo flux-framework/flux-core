@@ -98,7 +98,6 @@ unsigned long hostrange_count (struct hostrange * hr)
         errno = EINVAL;
         return 0;
     }
-    errno = 0;
     if (hr->singlehost)
         return 1;
     else
