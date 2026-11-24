@@ -116,25 +116,13 @@ struct stack_hostname *hostname_stack_copy_one_less_digit (
     dst->suffix = dst->hostname + dst->len_prefix;
 
     dst->width = dst->len - dst->len_prefix;
-    if (dst->width < 0 || dst->width >= 10) {
+    if (dst->width < 0) {
         errno = EINVAL;
         return NULL;
     }
 
-    // remove the most significant decimal digit without reparsing
-    // lookup table because pow is slow
-    static const int pow10[10] = {
-        1,
-        10,
-        100,
-        1000,
-        10000,
-        100000,
-        1000000,
-        10000000,
-        100000000,
-        1000000000};
-    dst->num = src->num % pow10[dst->width];
+    /* Removing a leading digit cannot overflow, so reparse the suffix */
+    dst->num = strtoul (dst->suffix, NULL, 10);
     return dst;
 }
 
