@@ -185,8 +185,9 @@ static int hostlist_append_range (struct hostlist *hl, struct hostrange * hr)
         && hostrange_width_combine (tail, hr)) {
         tail->hi = hr->hi;
     } else {
-        if (!(hl->hr[hl->nranges++] = hostrange_copy (hr)))
+        if (!(hl->hr[hl->nranges] = hostrange_copy (hr)))
             goto error;
+        hl->nranges++;
     }
 
     retval = hostrange_count (hr);
@@ -222,8 +223,7 @@ static int hostlist_insert_range (struct hostlist *hl,
                                   struct hostrange * hr,
                                   int n)
 {
-    int i;
-    struct hostrange * tmp;
+    struct hostrange *copy;
 
     assert (hl != NULL);
     assert (hr != NULL);
@@ -234,16 +234,14 @@ static int hostlist_insert_range (struct hostlist *hl,
     if (hl->size == hl->nranges && !hostlist_expand (hl))
         return 0;
 
-    /* copy new hostrange into slot "n" in array */
-    tmp = hl->hr[n];
-    hl->hr[n] = hostrange_copy (hr);
+    if (!(copy = hostrange_copy (hr)))
+        return 0;
 
-    /* push remaining hostrange entries up */
-    for (i = n + 1; i < hl->nranges + 1; i++) {
-        struct hostrange * last = hl->hr[i];
-        hl->hr[i] = tmp;
-        tmp = last;
-    }
+    /* push remaining hostrange entries up and copy hr into slot "n" */
+    memmove (&hl->hr[n + 1],
+             &hl->hr[n],
+             (hl->nranges - n) * sizeof (hl->hr[0]));
+    hl->hr[n] = copy;
     hl->nranges++;
 
     /* adjust current if necessary
@@ -622,8 +620,7 @@ int hostlist_append (struct hostlist *hl, const char *hosts)
     new = hostlist_decode (hosts);
     if (!new)
         return -1;
-    retval = new->nhosts;
-    hostlist_append_list (hl, new);
+    retval = hostlist_append_list (hl, new);
     hostlist_destroy (new);
     return retval;
 }
@@ -649,9 +646,12 @@ int hostlist_append_list (struct hostlist * h1, struct hostlist * h2)
         return n;
     }
 
-    for (i = 0; i < h2->nranges; i++)
-        n += hostlist_append_range (h1, h2->hr[i]);
-
+    for (i = 0; i < h2->nranges; i++) {
+        int count = hostlist_append_range (h1, h2->hr[i]);
+        if (count < 0)
+            return -1;
+        n += count;
+    }
     return n;
 }
 
@@ -793,7 +793,12 @@ static int hostlist_remove_at (struct hostlist *hl, struct current *cur)
     if (hostrange_delete_host (hr, hr->lo + cur->depth, &new) < 0)
         return -1;
     if (new) {
-        hostlist_insert_range (hl, new, cur->index + 1);
+        if (!hostlist_insert_range (hl, new, cur->index + 1)) {
+            /* undo the split of hr */
+            hr->hi = new->hi;
+            hostrange_destroy (new);
+            return -1;
+        }
         hostrange_destroy (new);
 
         /*  If the split hostrange affects the cursor, adjust it now
@@ -861,7 +866,12 @@ int hostlist_delete (struct hostlist *hl, const char *hosts)
 
     host = hostlist_first (hltmp);
     while (host) {
-        n += hostlist_delete_host (hl, host);
+        int rc = hostlist_delete_host (hl, host);
+        if (rc < 0) {
+            hostlist_destroy (hltmp);
+            return -1;
+        }
+        n += rc;
         host = hostlist_next (hltmp);
     }
     hostlist_destroy (hltmp);
