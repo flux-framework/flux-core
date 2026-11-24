@@ -274,6 +274,13 @@ int hostrange_empty (struct hostrange * hr)
     return hr->hi < hr->lo;
 }
 
+/* Return true if h2 starts immediately after the end of h1.
+ */
+bool hostrange_adjacent (struct hostrange *h1, struct hostrange *h2)
+{
+    return h2->lo > 0 && h1->hi == h2->lo - 1;
+}
+
 /* join two hostrange objects.
  *
  * returns:
@@ -300,7 +307,7 @@ int hostrange_join (struct hostrange * h1, struct hostrange * h2)
 
         if (h1->singlehost && h2->singlehost) {    /* matching singlets  */
             duplicated = 1;
-        } else if (h1->hi == h2->lo - 1) {    /* perfect join       */
+        } else if (hostrange_adjacent (h1, h2)) {    /* perfect join       */
             h1->hi = h2->hi;
             duplicated = 0;
         } else if (h1->hi >= h2->lo) {    /* some duplication   */

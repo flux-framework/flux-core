@@ -182,7 +182,7 @@ static int hostlist_append_range (struct hostlist *hl, struct hostrange * hr)
 
     if (hl->nranges > 0
         && hostrange_prefix_cmp (tail, hr) == 0
-        && tail->hi == hr->lo - 1
+        && hostrange_adjacent (tail, hr)
         && hostrange_width_combine (tail, hr)) {
         tail->hi = hr->hi;
     } else {
@@ -895,7 +895,7 @@ static void hostlist_collapse (struct hostlist *hl)
         struct hostrange * hnext = hl->hr[i];
 
         if (hostrange_prefix_cmp (hprev, hnext) == 0 &&
-            hprev->hi == hnext->lo - 1 &&
+            hostrange_adjacent (hprev, hnext) &&
             hostrange_width_combine (hprev, hnext)) {
             hprev->hi = hnext->hi;
             hostrange_destroy (hnext);

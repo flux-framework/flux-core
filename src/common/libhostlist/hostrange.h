@@ -56,6 +56,8 @@ int hostrange_within_range (struct hostrange *, struct hostrange *);
 int hostrange_width_combine (struct hostrange *, struct hostrange *);
 int hostrange_empty (struct hostrange *);
 
+bool hostrange_adjacent (struct hostrange *h1, struct hostrange *h2);
+
 int hostrange_join (struct hostrange *, struct hostrange *);
 
 bool hostrange_intersect_ids (struct hostrange *h1,
