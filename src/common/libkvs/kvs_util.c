@@ -17,6 +17,10 @@
 #include <string.h>
 #include <errno.h>
 
+#ifndef HAVE_SECURE_GETENV
+#include "src/common/libmissing/secure_getenv.h"
+#endif
+
 #include "kvs.h"
 
 char *kvs_util_normalize_key (const char *key, bool *want_directory)
@@ -62,7 +66,7 @@ const char *kvs_get_namespace (void)
 {
     const char *ns;
 
-    if ((ns = getenv ("FLUX_KVS_NAMESPACE")))
+    if ((ns = secure_getenv ("FLUX_KVS_NAMESPACE")))
         return ns;
 
     return KVS_PRIMARY_NAMESPACE;

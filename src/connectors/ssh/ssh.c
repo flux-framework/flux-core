@@ -34,6 +34,9 @@
 #ifndef HAVE_STRLCAT
 #include "src/common/libmissing/strlcat.h"
 #endif
+#ifndef HAVE_SECURE_GETENV
+#include "src/common/libmissing/secure_getenv.h"
+#endif
 #include "src/common/librouter/usock.h"
 
 struct ssh_connector {
@@ -87,7 +90,7 @@ static void op_fini (void *impl)
 
 static const char *which_dir (const char *prog, char *buf, size_t size)
 {
-    char *path = getenv ("PATH");
+    char *path = secure_getenv ("PATH");
     char *cpy = path ? strdup (path) : NULL;
     char *dir, *saveptr = NULL, *a1 = cpy;
     struct stat sb;
@@ -271,12 +274,12 @@ flux_t *connector_init (const char *path, int flags, flux_error_t *errp)
     /* FLUX_SSH may be used to select a different remote shell command
      * from the compiled-in default.  Most rsh variants ought to work.
      */
-    if (!(ssh_cmd = getenv ("FLUX_SSH")))
+    if (!(ssh_cmd = secure_getenv ("FLUX_SSH")))
         ssh_cmd = PATH_SSH;
     /* FLUX_SSH_RCMD may be used to force a specific path to the flux
      * command front end.
      */
-    flux_cmd = getenv ("FLUX_SSH_RCMD");
+    flux_cmd = secure_getenv ("FLUX_SSH_RCMD");
 
     /* ssh and rsh do not forward environment variables, thus LD_LIBRARY_PATH
      * is not guaranteed to be set on the remote node where the flux command is
@@ -285,7 +288,7 @@ flux_t *connector_init (const char *path, int flags, flux_error_t *errp)
      * run over ssh.  Grab the client-side LD_LIBRARY_PATH so that we can
      * manually forward it. See flux-core issue #3457 for more details.
      */
-    ld_lib_path = getenv ("LD_LIBRARY_PATH");
+    ld_lib_path = secure_getenv ("LD_LIBRARY_PATH");
 
     /* Construct argv for ssh command from uri "path" (non-scheme part)
      * and flux and ssh command paths.

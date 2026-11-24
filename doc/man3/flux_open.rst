@@ -40,7 +40,9 @@ a possible instance ancestor like "/" for the top-level or root instance,
 or ".." for the parent instance. See `ANCESTOR PATHS`_ below.
 
 If :var:`uri` is NULL, the value of :envvar:`FLUX_URI` is used.
-If :envvar:`FLUX_URI` is not set, a compiled-in default URI is used.
+If :envvar:`FLUX_URI` is not set, or the program is running in secure
+execution mode (see :man7:`flux-environment`), a compiled-in default URI
+is used.
 
 When :var:`uri` contains a native URI, the scheme (before "://") specifies
 the "connector" that will be used to establish the connection. The :var:`uri`
