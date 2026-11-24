@@ -50,6 +50,7 @@ void test_basic ()
         "hostlist_decode (NULL) returns empty hostlist");
     hostlist_destroy (hl);
 
+    errno = 0;
     ok (hostlist_decode ("foo[0-1048576]") == NULL && errno == ERANGE,
         "hostlist_decode () fails with ERANGE for too large host range");
     errno = 0;
@@ -63,6 +64,7 @@ void test_basic ()
 
     ok (hostlist_copy (NULL) == NULL,
         "hostlist_copy (NULL) returns NULL");
+    errno = 0;
     ok (hostlist_append (NULL, "foo") < 0 && errno == EINVAL,
         "hostlist_append (NULL, 'foo') returns EINVAL");
 
@@ -72,17 +74,22 @@ void test_basic ()
     ok (hostlist_append (hl, "") == 0,
         "hostlist_append (hl, '') returns 0");
 
+    errno = 0;
     ok (hostlist_append_list (NULL, NULL) < 0 && errno == EINVAL,
         "hostlist_append_list (NULL, NULL) returns EINVAL");
 
+    errno = 0;
     ok (hostlist_nth (NULL, 0) == NULL && errno == EINVAL,
         "hostlist_nth (NULL, 0) returns NULL");
+    errno = 0;
     ok (hostlist_nth (hl, -1) == NULL && errno == EINVAL,
         "hostlist_nth (hl, -1) returns EINVAL");
 
+    errno = 0;
     ok (hostlist_find (NULL, NULL) < 0 && errno == EINVAL,
         "hostlist_find (NULL, NULL) returns EINVAL");
 
+    errno = 0;
     ok (hostlist_delete (NULL, NULL) < 0 && errno == EINVAL,
         "hostlist_delete (NULL, NULL) returns EINVAL");
 
@@ -103,8 +110,10 @@ void test_encode_decode_basic ()
     struct hostlist * hl;
     char *s;
 
+    errno = 0;
     ok (hostlist_encode (NULL) == NULL && errno == EINVAL,
         "hostlist_encode (NULL) returns EINVAL");
+    errno = 0;
     ok (hostlist_decode (NULL) == NULL && errno == EINVAL,
         "hostlist_decode (NULL) returns EINVAL");
 
@@ -131,14 +140,19 @@ void test_iteration_basic ()
     if (hl == NULL)
         BAIL_OUT ("hostlist_create failed!");
 
+    errno = 0;
     ok (hostlist_first (NULL) == NULL && errno == EINVAL,
         "hostlist_first (NULL) returns EINVAL");
+    errno = 0;
     ok (hostlist_last (NULL) == NULL && errno == EINVAL,
         "hostlist_last (NULL) returns EINVAL");
+    errno = 0;
     ok (hostlist_next (NULL) == NULL && errno == EINVAL,
         "hostlist_next (NULL) returns EINVAL");
+    errno = 0;
     ok (hostlist_current (NULL) == NULL && errno == EINVAL,
         "hostlist_current (NULL) returns EINVAL");
+    errno = 0;
     ok (hostlist_remove_current (NULL) < 0 && errno == EINVAL,
         "hostlist_remove_current (NULL) returns EINVAL");
 
@@ -310,6 +324,7 @@ void test_nth ()
     if (!hl)
         BAIL_OUT ("hostlist_create failed");
 
+    errno = 0;
     ok (hostlist_nth (hl, 0) == NULL && errno == ENOENT,
         "hostlist_nth (hl, 0) on empty list returns ENOENT");
 
@@ -317,6 +332,7 @@ void test_nth ()
     ok (count == 5,
         "Added 5 hosts to hostlist");
 
+    errno = 0;
     ok (hostlist_nth (hl, count) == NULL && errno == ENOENT,
         "hostlist_nth (hl, hostlist_count (hl)) returns ENOENT");
 
@@ -399,6 +415,7 @@ void test_find_hostname ()
 {
     struct find_test *t = find_tests;
 
+    errno = 0;
     ok (hostlist_find_hostname (NULL, NULL) == -1 && errno == EINVAL,
         "hostlist_find_hostname (NULL, NULL) returns EINVAL");
 

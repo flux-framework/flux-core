@@ -25,6 +25,7 @@ void test_create_single ()
 {
     struct hostrange *hr;
 
+    errno = 0;
     ok (hostrange_create_single (NULL) == NULL && errno == EINVAL,
         "hostrange_create_single (NULL) returns EINVAL");
     hr = hostrange_create_single ("");
@@ -54,10 +55,13 @@ void test_create ()
 {
     struct hostrange *hr;
 
+    errno = 0;
     ok (hostrange_create (NULL, 0, 0, 0) == NULL && errno == EINVAL,
         "hostrange_create (NULL, 0, 0, 0) returns EINVAL");
+    errno = 0;
     ok (hostrange_create ("foo", 1, 0, 0) == NULL && errno == EINVAL,
         "hostrange_create ('foo', 1, 0, 0) returns EINVAL");
+    errno = 0;
     ok (hostrange_create ("foo", 0, 1, -1) == NULL && errno == EINVAL,
         "hostrange_create ('foo', 0, 1, -1) returns EINVAL");
 
@@ -503,10 +507,13 @@ void test_host_tostring ()
     if (!hr)
         BAIL_OUT ("hostrange_create failed!");
 
+    errno = 0;
     ok (hostrange_host_tostring (NULL, 0) == NULL && errno == EINVAL,
         "hostrange_host_tostring (NULL, 0) returns EINVAL");
+    errno = 0;
     ok (hostrange_host_tostring (hr, -1) == NULL && errno == EINVAL,
         "hostrange_host_tostring (hr, -1) returns EINVAL");
+    errno = 0;
     ok (hostrange_host_tostring (hr, 42) == NULL && errno == ERANGE,
         "hostrange_host_tostring (hr, 42) return ERANGE");
 
