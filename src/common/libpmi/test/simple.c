@@ -18,6 +18,7 @@
 #include <poll.h>
 #include <stdbool.h>
 #include <string.h>
+#include <time.h>
 #include "src/common/libutil/oom.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libpmi/simple_client.h"
@@ -362,6 +363,130 @@ static void test_barrier_duplicate_tag (void)
         BAIL_OUT ("pthread_join failed");
     ok (a.result == PMI_SUCCESS && c.result == PMI_SUCCESS,
         "duplicate: barriers in flight still complete");
+    pmi_simple_client_destroy (cli);
+    close (sfd);
+}
+
+/* A barrier thread whose completion can be waited for with a timeout,
+ * since pthread_timedjoin_np() is not portable.
+ */
+struct timed_barrier {
+    struct barrier_arg arg;
+    pthread_mutex_t lock;
+    pthread_cond_t cond;
+    bool done;
+};
+
+static void *timed_barrier_thread (void *arg)
+{
+    struct timed_barrier *tb = arg;
+
+    barrier_thread (&tb->arg);
+    pthread_mutex_lock (&tb->lock);
+    tb->done = true;
+    pthread_cond_signal (&tb->cond);
+    pthread_mutex_unlock (&tb->lock);
+    return NULL;
+}
+
+/* Wait up to 10s for a timed barrier thread to finish.  Return true
+ * if it did.
+ */
+static bool timed_barrier_wait (struct timed_barrier *tb)
+{
+    struct timespec ts;
+    int rc = 0;
+
+    clock_gettime (CLOCK_REALTIME, &ts);
+    ts.tv_sec += 10;
+    pthread_mutex_lock (&tb->lock);
+    while (!tb->done && rc == 0)
+        rc = pthread_cond_timedwait (&tb->cond, &tb->lock, &ts);
+    pthread_mutex_unlock (&tb->lock);
+    return tb->done;
+}
+
+/* Wait until the client has a reader blocked polling the fd.
+ */
+static void wait_reader (struct pmi_simple_client *cli)
+{
+    bool reader = false;
+
+    while (!reader) {
+        pthread_mutex_lock (&cli->lock);
+        reader = cli->reader;
+        pthread_mutex_unlock (&cli->lock);
+        if (!reader)
+            usleep (1000);
+    }
+}
+
+struct kvs_get_arg {
+    struct pmi_simple_client *cli;
+    char val[64];
+    int result;
+};
+
+static void *kvs_get_thread (void *arg)
+{
+    struct kvs_get_arg *g = arg;
+
+    g->result = pmi_simple_client_kvs_get (g->cli,
+                                           "kvs",
+                                           "key",
+                                           g->val,
+                                           sizeof (g->val));
+    return NULL;
+}
+
+/* A request read by one thread may pull in a barrier_out for a waiting
+ * thread in the same read().  The waiting thread, polling the fd as the
+ * reader, must be woken to take it.
+ */
+static void test_barrier_out_read_ahead (void)
+{
+    struct pmi_simple_client *cli;
+    int sfd;
+    char buf[SIMPLE_MAX_PROTO_LINE];
+    pthread_t ta, tg;
+    struct timed_barrier tb = {
+        .arg = { .group = "WORLD", .tag = 7, .result = -1 },
+        .lock = PTHREAD_MUTEX_INITIALIZER,
+        .cond = PTHREAD_COND_INITIALIZER,
+    };
+    struct kvs_get_arg g = { .result = -1 };
+
+    cli = scripted_client_init (&sfd);
+    tb.arg.cli = g.cli = cli;
+    if (pthread_create (&ta, NULL, timed_barrier_thread, &tb) != 0)
+        BAIL_OUT ("pthread_create failed");
+    scripted_recv (sfd, buf, sizeof (buf));
+    ok (streq (buf, "cmd=barrier_in group=WORLD:7\n"),
+        "read-ahead: group barrier tag 7 sent");
+    wait_reader (cli);
+
+    /* The kvs get holds the client lock from its request until it reads
+     * the response, so the reader cannot read the lines sent below.
+     * Both arrive in one write, so the kvs get reads both.
+     */
+    if (pthread_create (&tg, NULL, kvs_get_thread, &g) != 0)
+        BAIL_OUT ("pthread_create failed");
+    scripted_recv (sfd, buf, sizeof (buf));
+    ok (streq (buf, "cmd=get kvsname=kvs key=key\n"),
+        "read-ahead: kvs get sent while barrier is pending");
+    scripted_send (sfd,
+                   "cmd=get_result rc=0 value=v\n"
+                   "cmd=barrier_out tag=7 rc=0\n");
+    if (pthread_join (tg, NULL) != 0)
+        BAIL_OUT ("pthread_join failed");
+    ok (g.result == PMI_SUCCESS && streq (g.val, "v"),
+        "read-ahead: kvs get works while barrier is pending");
+    if (!timed_barrier_wait (&tb))
+        BAIL_OUT ("read-ahead: barrier did not complete from buffered line");
+    if (pthread_join (ta, NULL) != 0)
+        BAIL_OUT ("pthread_join failed");
+    ok (tb.arg.result == PMI_SUCCESS,
+        "read-ahead: barrier completes from buffered barrier_out");
     pmi_simple_client_destroy (cli);
     close (sfd);
 }
@@ -1016,6 +1141,7 @@ int main (int argc, char *argv[])
     test_init_failure ();
     test_barrier_lost_connection ();
     test_barrier_duplicate_tag ();
+    test_barrier_out_read_ahead ();
 
     done_testing ();
     return 0;
