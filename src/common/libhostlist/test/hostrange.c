@@ -15,6 +15,7 @@
 
 #include <string.h>
 #include <errno.h>
+#include <limits.h>
 #include <stdbool.h>
 
 #include "src/common/libtap/tap.h"
@@ -125,6 +126,13 @@ void test_count ()
     errno = 0;
     ok (hostrange_count (NULL) == 0 && errno == EINVAL,
         "hostrange_count (NULL) returns 0 with errno set");
+
+    if (!(hr = hostrange_create ("foo", 0, 9, 0)))
+        BAIL_OUT ("hostrange_create failed");
+    errno = 42;
+    ok (hostrange_count (hr) == 10 && errno == 42,
+        "hostrange_count does not modify errno on success");
+    hostrange_destroy (hr);
 }
 
 void test_delete ()
@@ -153,6 +161,34 @@ void test_delete ()
 
     hostrange_destroy (hr);
     hostrange_destroy (result);
+
+    hr = hostrange_create ("foo", 0, 0, 0);
+    if (!hr)
+        BAIL_OUT ("hostrange_create failed");
+    ok (hostrange_delete_host (hr, 0, &result) == 0
+        && result == NULL
+        && hostrange_empty (hr),
+        "hostrange_delete of only host at 0 leaves empty range");
+    hostrange_destroy (hr);
+
+    hr = hostrange_create ("foo", ULONG_MAX, ULONG_MAX, 0);
+    if (!hr)
+        BAIL_OUT ("hostrange_create failed");
+    ok (hostrange_delete_host (hr, ULONG_MAX, &result) == 0
+        && result == NULL
+        && hostrange_empty (hr),
+        "hostrange_delete of only host at ULONG_MAX leaves empty range");
+    hostrange_destroy (hr);
+
+    hr = hostrange_create ("foo", ULONG_MAX - 2, ULONG_MAX, 0);
+    if (!hr)
+        BAIL_OUT ("hostrange_create failed");
+    ok (hostrange_delete_host (hr, ULONG_MAX - 2, &result) == 0
+        && result == NULL
+        && !hostrange_empty (hr)
+        && hostrange_count (hr) == 2,
+        "hostrange_delete from range ending at ULONG_MAX works");
+    hostrange_destroy (hr);
 }
 
 struct cmp_test {
@@ -188,6 +224,14 @@ struct cmp_test cmp_tests[] = {
     },
     { { "", 0,   15,  15, 0, 0 },
       { "", 0,   12,  12, 0, 0 },
+      1,
+    },
+    { { "", 0,   1,  1, 0, 0 },
+      { "", 0,   3000000000,  3000000000, 0, 0 },
+      -1,
+    },
+    { { "", 0,   ULONG_MAX,  ULONG_MAX, 0, 0 },
+      { "", 0,   0,  0, 0, 0 },
       1,
     },
     { { 0 }, { 0 }, 0 },
@@ -269,6 +313,26 @@ void test_join ()
     hostrange_destroy (hr4);
     hostrange_destroy (hr5);
     hostrange_destroy (hr6);
+
+    hr1 = hostrange_create ("foo", ULONG_MAX, ULONG_MAX, 0);
+    hr2 = hostrange_create ("foo", 0, 0, 0);
+    if (!hr1 || !hr2)
+        BAIL_OUT ("hostrange_create failed");
+    ok (!hostrange_adjacent (hr1, hr2),
+        "hostrange_adjacent (foo[ULONG_MAX], foo0) is false");
+    hostrange_destroy (hr1);
+    hostrange_destroy (hr2);
+
+    hr1 = hostrange_create ("foo", 0, 3, 0);
+    hr2 = hostrange_create ("foo", 4, 5, 0);
+    if (!hr1 || !hr2)
+        BAIL_OUT ("hostrange_create failed");
+    ok (hostrange_adjacent (hr1, hr2),
+        "hostrange_adjacent (foo[0-3], foo[4-5]) is true");
+    ok (!hostrange_adjacent (hr2, hr1),
+        "hostrange_adjacent (foo[4-5], foo[0-3]) is false");
+    hostrange_destroy (hr1);
+    hostrange_destroy (hr2);
 }
 
 void test_intersect ()
@@ -468,6 +532,27 @@ void test_host_tostring ()
         "hostrange_host_tostring (hr, 4) preserves width");
     free (host);
 
+    hostrange_destroy (hr);
+
+    char prefix[1025];
+    char expected[1100];
+    memset (prefix, 'a', sizeof (prefix) - 1);
+    prefix[sizeof (prefix) - 1] = '\0';
+    if (!(hr = hostrange_create (prefix, 1, 10, 0)))
+        BAIL_OUT ("hostrange_create failed!");
+    snprintf (expected, sizeof (expected), "%s5", prefix);
+    host = hostrange_host_tostring (hr, 4);
+    is (host, expected,
+        "hostrange_host_tostring works with 1024 character prefix");
+    free (host);
+    hostrange_destroy (hr);
+
+    if (!(hr = hostrange_create_single (prefix)))
+        BAIL_OUT ("hostrange_create_single failed!");
+    host = hostrange_host_tostring (hr, 0);
+    is (host, prefix,
+        "hostrange_host_tostring works with 1024 character single host");
+    free (host);
     hostrange_destroy (hr);
 }
 
