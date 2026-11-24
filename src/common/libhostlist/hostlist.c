@@ -752,7 +752,7 @@ int hostlist_find_hostname (struct hostlist *hl, struct hostlist_hostname *hn)
     }
 
     shn = hostname_stack_create_from_hostname (&hn_storage, hn);
-    if (!hn)
+    if (!shn)
         return -1;
     return hostlist_find_host (hl, shn, &hl->current);
 }
