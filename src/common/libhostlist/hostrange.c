@@ -453,28 +453,24 @@ size_t hostrange_numstr (struct hostrange * hr, size_t n, char *buf)
 
 char * hostrange_host_tostring (struct hostrange * hr, int depth)
 {
-    char buf[_POSIX_HOST_NAME_MAX + 16];
-    int len;
+    char *host;
+    int rc;
 
     if (!hr || depth < 0) {
         errno = EINVAL;
         return NULL;
     }
+    if (hr->singlehost)
+        return strdup (hr->prefix);
 
-    len = snprintf (buf, sizeof (buf), "%s", hr->prefix);
-    if (len < 0 || len >= sizeof (buf))
+    if (depth > hr->hi - hr->lo) {
+        errno = ERANGE;
         return NULL;
-
-    if (!hr->singlehost) {
-        unsigned long n = hr->lo + depth;
-        if (n > hr->hi) {
-            errno = ERANGE;
-            return NULL;
-        }
-        snprintf (buf+len, sizeof (buf) - len, "%0*lu",
-                 hr->width, hr->lo + depth);
     }
-    return strdup (buf);
+    rc = asprintf (&host, "%s%0*lu", hr->prefix, hr->width, hr->lo + depth);
+    if (rc < 0)
+        return NULL;
+    return host;
 }
 
 /*
