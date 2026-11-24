@@ -559,14 +559,14 @@ static void state_continuation (flux_future_t *f, void *arg)
             ov->spurn_hello = true;
             break;
         case STATE_SHUTDOWN:
-            /* When the (online) child peer count drops to zero while
-             * in SHUTDOWN state, children-complete will be posted in
-             * overlay_monitor_notify().  If that is already true, for example
-             * if there are no children or they are not connected, post
-             * children-none here.
+            /* Leaf brokers post children-none.  Non-leaf brokers post
+             * children-complete once no children are online: here if that
+             * is already true, else in overlay_monitor_notify().
              */
-            if (children_get_online_count (ov->children) == 0)
+            if (!ov->children)
                 overlay_state_machine_post (ov, "children-none", false);
+            else if (children_get_online_count (ov->children) == 0)
+                overlay_state_machine_post (ov, "children-complete", false);
             ov->spurn_hello = true;
             break;
         case STATE_FINALIZE:
