@@ -1091,7 +1091,7 @@ fail:
 static struct hostrange * hr_current (struct hostlist *hl)
 {
     assert (hl != NULL);
-    assert (hl->current.index <= hl->nhosts);
+    assert (hl->current.index < hl->nranges);
     return hl->hr[hl->current.index];
 }
 
@@ -1105,7 +1105,7 @@ const char *hostlist_current (struct hostlist *hl)
     }
 
     depth = hl->current.depth;
-    if (depth < 0 || hl->current.index > hl->nhosts - 1)
+    if (depth < 0 || hl->current.index >= hl->nranges)
         return NULL;
     if (!hl->current.host)
         hl->current.host = hostrange_host_tostring (hr_current (hl), depth);
