@@ -212,9 +212,12 @@ int hostrange_cmp (struct hostrange * h1, struct hostrange * h2)
     assert (h1 != NULL);
     assert (h2 != NULL);
 
-    if ((retval = hostrange_prefix_cmp (h1, h2)) == 0)
-        retval = hostrange_width_combine (h1, h2) ?
-            h1->lo - h2->lo : h1->width - h2->width;
+    if ((retval = hostrange_prefix_cmp (h1, h2)) == 0) {
+        if (hostrange_width_combine (h1, h2))
+            retval = (h1->lo > h2->lo) - (h1->lo < h2->lo);
+        else
+            retval = h1->width - h2->width;
+    }
 
     /*  Only return -1, 0, or 1 */
     if (retval != 0)
