@@ -517,6 +517,9 @@ static struct hostlist * hostlist_create_bracketed (const char *hostlist,
             *p++ = '\0';
 
             if ((q = strchr (p, ']'))) {
+                /* Only one bracketed idlist is allowed per expression */
+                if (strchr (prefix, ']') || strpbrk (q + 1, "[]"))
+                    goto error_unmatched;
                 *q = '\0';
                 nr = parse_range_list (p, ctx->ranges, MAX_RANGES);
                 if (nr < 0)
