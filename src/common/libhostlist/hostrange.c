@@ -25,15 +25,6 @@
 #include "util.h"
 #include "hostrange.h"
 
-/* max host range: anything larger will be assumed to be an error */
-#define MAX_RANGE    16384    /* 16K Hosts */
-
-/* max number of ranges that will be processed between brackets */
-#define MAX_RANGES    10240    /* 10K Ranges */
-
-/* max size of internal hostrange buffer */
-#define MAXHOSTRANGELEN 1024
-
 
 /* allocate a new hostrange object
  */

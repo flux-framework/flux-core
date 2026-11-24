@@ -36,12 +36,6 @@
 /* max host range: anything larger will be assumed to be an error */
 #define MAX_RANGE    1<<20    /* 1M Hosts */
 
-/* max host suffix value */
-#define MAX_HOST_SUFFIX 1<<25
-
-/* max size of internal hostrange buffer */
-#define MAXHOSTRANGELEN 1024
-
 /* Helper structure for hostlist iteration
  */
 struct current {
@@ -488,8 +482,7 @@ static int append_range_list_with_suffix (struct hostlist *hl,
  * Create a hostlist from a string with brackets '[' ']'
  */
 static struct hostlist * hostlist_create_bracketed (const char *hostlist,
-                                                    char *sep,
-                                                    char *r_op)
+                                                    char *sep)
 {
     struct hostlist * new = hostlist_create ();
     struct _range *ranges = NULL;
@@ -565,7 +558,7 @@ struct hostlist * hostlist_decode (const char *str)
         errno = EINVAL;
         return NULL;
     }
-    return hostlist_create_bracketed (str, "\t, ", "-");
+    return hostlist_create_bracketed (str, "\t, ");
 }
 
 struct hostlist * hostlist_copy (const struct hostlist *hl)
