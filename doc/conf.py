@@ -33,9 +33,11 @@ import docutils.nodes
 # -- Project information -----------------------------------------------------
 
 project = 'flux-core'
+# REUSE-IgnoreStart
 copyright = '''Copyright 2014 Lawrence Livermore National Security, LLC and Flux developers.
 
 SPDX-License-Identifier: LGPL-3.0'''
+# REUSE-IgnoreEnd
 
 # -- General configuration ---------------------------------------------------
 
