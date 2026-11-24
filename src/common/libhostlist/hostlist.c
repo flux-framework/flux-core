@@ -790,7 +790,8 @@ static int hostlist_remove_at (struct hostlist *hl, struct current *cur)
         hl->current.host = NULL;
     }
 
-    new = hostrange_delete_host (hr, hr->lo + cur->depth);
+    if (hostrange_delete_host (hr, hr->lo + cur->depth, &new) < 0)
+        return -1;
     if (new) {
         hostlist_insert_range (hl, new, cur->index + 1);
         hostrange_destroy (new);

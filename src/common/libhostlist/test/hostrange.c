@@ -136,14 +136,15 @@ void test_delete ()
     if (!hr)
         BAIL_OUT ("hostrange_create failed");
 
-    result = hostrange_delete_host (hr, 0);
-    ok (result == NULL && hr->lo == 1,
+    ok (hostrange_delete_host (hr, 0, &result) == 0
+        && result == NULL
+        && hr->lo == 1,
         "hostrange_delete first host works");
-    result = hostrange_delete_host (hr, 10);
-    ok (result == NULL && hr->hi == 9,
+    ok (hostrange_delete_host (hr, 10, &result) == 0
+        && result == NULL
+        && hr->hi == 9,
         "hostrange_delete first host works");
-    result = hostrange_delete_host (hr, 5);
-    ok (result != NULL,
+    ok (hostrange_delete_host (hr, 5, &result) == 0 && result != NULL,
         "hostrange_delete host in middle of range returns result");
     ok (result->lo == 6 && result->hi == 9,
         "hostrange_delete returns corrects range in result");

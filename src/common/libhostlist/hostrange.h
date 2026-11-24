@@ -43,7 +43,9 @@ struct hostrange * hostrange_copy (struct hostrange *);
 
 void hostrange_destroy (struct hostrange *);
 
-struct hostrange * hostrange_delete_host (struct hostrange *, unsigned long);
+int hostrange_delete_host (struct hostrange *hr,
+                           unsigned long n,
+                           struct hostrange **newp);
 
 int hostrange_cmp (struct hostrange *, struct hostrange *);
 

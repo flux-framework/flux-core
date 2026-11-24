@@ -134,22 +134,23 @@ void hostrange_destroy (struct hostrange * hr)
 }
 
 /* hostrange_delete_host() deletes a specific host from the range.
- * If the range is split into two, the greater range is returned,
- * and `hi' of the lesser range is adjusted accordingly. If the
- * highest or lowest host is deleted from a range, NULL is returned
+ * If the range is split into two, the greater range is returned in
+ * 'newp', and `hi' of the lesser range is adjusted accordingly. If the
+ * highest or lowest host is deleted from a range, 'newp' is set to NULL
  * and the hostrange hr is adjusted properly.
+ * Returns 0 on success, -1 on failure with errno set.
  */
-struct hostrange * hostrange_delete_host (struct hostrange * hr,
-                                          unsigned long n)
+int hostrange_delete_host (struct hostrange * hr,
+                           unsigned long n,
+                           struct hostrange **newp)
 {
     struct hostrange * new = NULL;
 
-    if (!hr) {
+    if (!hr || !newp) {
         errno = EINVAL;
-        return NULL;
+        return -1;
     }
 
-    assert (hr != NULL);
     assert (n >= hr->lo && n <= hr->hi);
 
     if (n == hr->lo)
@@ -158,12 +159,12 @@ struct hostrange * hostrange_delete_host (struct hostrange * hr,
         hr->hi--;
     else {
         if (!(new = hostrange_copy (hr)))
-            return NULL;
+            return -1;
         hr->hi = n - 1;
         new->lo = n + 1;
     }
-
-    return new;
+    *newp = new;
+    return 0;
 }
 
 /* compare the prefixes of two hostrange objects.
