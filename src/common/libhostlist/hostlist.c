@@ -325,54 +325,63 @@ static void hostlist_delete_range (struct hostlist *hl, int n)
 }
 
 
+/* Convert str to an unsigned long. Unlike strtoul(3), fail with EINVAL
+ * for leading whitespace or sign, or trailing characters, and with
+ * ERANGE on overflow.
+ */
+static int parse_ulong (const char *str, unsigned long *valp)
+{
+    char *endptr;
+    unsigned long val;
+
+    if (!isdigit ((unsigned char) *str)) {
+        errno = EINVAL;
+        return -1;
+    }
+    errno = 0;
+    val = strtoul (str, &endptr, 10);
+    if (errno != 0)
+        return -1;
+    if (*endptr != '\0') {
+        errno = EINVAL;
+        return -1;
+    }
+    *valp = val;
+    return 0;
+}
+
 /* Grab a single range from str
  * returns 0 if str contained a valid number or range,
  *        -1 if conversion of str to a range failed.
  */
-static int parse_next_range (const char *str, struct _range *range)
+static int parse_next_range (char *str, struct _range *range)
 {
-    int saved_errno;
-    char *p, *q;
-    char *orig = strdup (str);
-    if (!orig)
-        return -1;
+    char *p;
 
-    if ((p = strchr (orig, '-'))) {
+    if ((p = strchr (str, '-')))
         *p++ = '\0';
-        if (*p == '-') {  /* don't allow negative numbers */
-            errno = EINVAL;
-            goto error;
-        }
+
+    if (parse_ulong (str, &range->lo) < 0)
+        return -1;
+    if (p) {
+        if (parse_ulong (p, &range->hi) < 0)
+            return -1;
     }
-    range->lo = strtoul (orig, &q, 10);
-    if (q == orig)  {
+    else
+        range->hi = range->lo;
+
+    if (range->lo > range->hi) {
         errno = EINVAL;
-        goto error;
+        return -1;
     }
 
-    range->hi = (p && *p) ? strtoul (p, &q, 10) : range->lo;
-
-    errno = EINVAL;
-    if (q == p || *q != '\0')
-        goto error;
-
-    if (range->lo > range->hi)
-        goto error;
-
-    if (range->hi - range->lo + 1 > MAX_RANGE ) {
+    if (range->hi - range->lo >= MAX_RANGE) {
         errno = ERANGE;
-        goto error;
+        return -1;
     }
 
-    range->width = strlen (orig);
-    free (orig);
+    range->width = strlen (str);
     return 0;
-
-  error:
-    saved_errno = errno;
-    free (orig);
-    errno = saved_errno;
-    return -1;
 }
 
 static int hostlist_append_host (struct hostlist *hl, const char *str)
