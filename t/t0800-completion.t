@@ -67,7 +67,7 @@ __get_flux_subcommands() {
           modprobe sproc proxy update hostlist dump restore R keygen logger \
           post-job-event fsck startlog pmi uptime version env cgroup \
           heaptrace lptest relay python python3.13 getattr setattr lsattr \
-          content admin help"
+          content admin debug help"
 }
 
 # Temp file used to capture COMPREPLY across function calls
@@ -255,6 +255,38 @@ test_expect_success 'restore: completes options' '
 test_expect_success 'restore: non-option arg delegates to file completion' '
     run_completion "flux restore somefile" &&
     completion_empty
+'
+
+#
+# flux-debug
+#
+test_expect_success 'debug: command name completes' '
+    run_completion "flux deb" &&
+    completion_has "debug"
+'
+test_expect_success 'debug: completes subcommands' '
+    run_completion "flux debug " &&
+    completion_has "alloc-check"
+'
+test_expect_success 'debug alloc-check: completes options' '
+    run_completion "flux debug alloc-check --" &&
+    completion_has "--outdir=" &&
+    completion_has "--no-collect" &&
+    completion_has "--verbose" &&
+    completion_has "--color="
+'
+test_expect_success 'debug alloc-check: --outdir completes directories' '
+    mkdir -p bundledir &&
+    touch bundlefile &&
+    run_completion "flux debug alloc-check --outdir bundle" &&
+    completion_has "bundledir" &&
+    completion_lacks "bundlefile"
+'
+test_expect_success 'debug alloc-check: --color= completes WHEN values' '
+    run_completion "flux debug alloc-check --color=" &&
+    completion_has "never" &&
+    completion_has "always" &&
+    completion_has "auto"
 '
 
 #

@@ -2298,6 +2298,47 @@ _flux_housekeeping()
     fi
 }
 
+# flux-debug(1) completions
+_flux_debug()
+{
+    local cmd=$1
+    local subcmds="alloc-check"
+    local split=false
+    local alloc_check_OPTS="\
+        -o --outdir= \
+        -n --no-collect \
+        -v --verbose \
+        --color= \
+    "
+
+    if [[ $cmd == "debug" ]]; then
+        COMPREPLY=( $(compgen -W "${subcmds}" -- "$cur") )
+        return 0
+    fi
+
+    _flux_split_longopt && split=true
+    case $prev in
+        --outdir | -!(-*)o)
+            compopt -o filenames
+            COMPREPLY=( $(compgen -d -- "$cur") )
+            return
+            ;;
+        --color)
+            COMPREPLY=( $(compgen -W "never always auto" -- "$cur") )
+            return
+            ;;
+    esac
+    $split && return
+
+    local var="${cmd//-/_}_OPTS"
+    COMPREPLY=( $(compgen -W "${!var} -h --help" -- "$cur") )
+    if [[ "${COMPREPLY[@]}" == *= ]]; then
+        # Add space if there is not a '=' in suggestions
+        compopt -o nospace
+    fi
+    return 0
+}
+
 # flux-uri(1) completions
 _flux_uri()
 {
@@ -2737,6 +2778,9 @@ _flux_core()
         ;;
     housekeeping)
         _flux_housekeeping $subcmd
+        ;;
+    debug)
+        _flux_debug $subcmd
         ;;
     uri)
         _flux_uri $subcmd
