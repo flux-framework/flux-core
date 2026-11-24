@@ -53,6 +53,13 @@ struct hostlist {
     struct hostrange **hr;  /* pointer to hostrange array */
 
     struct current current; /* iterator cursor */
+
+    /* hostlist_nth() lookup cache: nth_count is the number of hosts in
+     * ranges before range nth_index. Appending ranges keeps this valid,
+     * other modifications must call nth_cache_reset().
+     */
+    int nth_index;
+    int nth_count;
 };
 
 /* _range struct helper for parsing hostlist strings
@@ -662,6 +669,12 @@ static inline int nth_args_valid (struct hostlist *hl, int n)
     return 0;
 }
 
+static void nth_cache_reset (struct hostlist *hl)
+{
+    hl->nth_index = 0;
+    hl->nth_count = 0;
+}
+
 static void set_current (struct current *cur, int index, int depth)
 {
     if (cur) {
@@ -679,12 +692,19 @@ const char * hostlist_nth (struct hostlist *hl, int n)
     if (nth_args_valid (hl, n) < 0)
         return NULL;
 
-    count = 0;
-    for (i = 0; i < hl->nranges; i++) {
+    /* Start from the last range found if possible, so that access in
+     * order is not quadratic.
+     */
+    if (n < hl->nth_count)
+        nth_cache_reset (hl);
+    count = hl->nth_count;
+    for (i = hl->nth_index; i < hl->nranges; i++) {
         int num_in_range = hostrange_count (hl->hr[i]);
 
         if (n <= (num_in_range - 1 + count)) {
             int d = n - count;
+            hl->nth_index = i;
+            hl->nth_count = count;
             set_current (&hl->current, i, d);
             return hostlist_current (hl);
         } else
@@ -773,6 +793,8 @@ static int hostlist_remove_at (struct hostlist *hl, struct current *cur)
         || cur->depth < 0
         || cur->depth >= hostrange_count (hl->hr[cur->index]))
         return 0;
+
+    nth_cache_reset (hl);
 
     hr = hl->hr[cur->index];
 
@@ -1013,6 +1035,7 @@ void hostlist_sort (struct hostlist *hl)
         return;
     if (hl->nranges <= 1)
         return;
+    nth_cache_reset (hl);
     qsort (hl->hr, hl->nranges, sizeof (struct hostrange *), _cmp);
     hostlist_coalesce (hl);
 
@@ -1030,6 +1053,7 @@ void hostlist_uniq (struct hostlist *hl)
     if (hl->nranges <= 1)
         return;
 
+    nth_cache_reset (hl);
     qsort (hl->hr, hl->nranges, sizeof (struct hostrange *), &_cmp);
 
     /*  Join each range into the last kept range if possible, otherwise
