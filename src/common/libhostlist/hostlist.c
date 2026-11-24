@@ -458,31 +458,26 @@ static int append_range_list_with_suffix (struct hostlist *hl,
                                           struct _range *rng,
                                           int n)
 {
-    int i;
-    unsigned long j;
+    for (int i = 0; i < n; i++) {
+        unsigned long j = rng->lo;
+        while (1) {
+            char *host;
+            struct hostrange *hr;
+            int rc;
 
-    /* compute max buffer size for this set of hosts */
-    int size = strlen (pfx) + strlen (sfx) + 20 + rng->width;
-
-
-    for (i = 0; i < n; i++) {
-        for (j = rng->lo; j <= rng->hi; j++) {
-            char host[size];
-            struct hostrange * hr;
-            snprintf (host,
-                      sizeof (host),
-                      "%s%0*lu%s",
-                      pfx,
-                      rng->width,
-                      j,
-                      sfx);
-            if (!(hr = hostrange_create_single (host)))
+            if (asprintf (&host, "%s%0*lu%s", pfx, rng->width, j, sfx) < 0)
                 return -1;
-            hostlist_append_range (hl, hr);
-            /*
-             * hr is copied in hostlist_append_range. Need to free here.
-             */
+            hr = hostrange_create_single (host);
+            ERRNO_SAFE_WRAP (free, host);
+            if (!hr)
+                return -1;
+            rc = hostlist_append_range (hl, hr);
             hostrange_destroy (hr);
+            if (rc < 0)
+                return -1;
+            /* N.B. rng->hi may be ULONG_MAX, so do not increment past it */
+            if (j++ == rng->hi)
+                break;
         }
         rng++;
     }
