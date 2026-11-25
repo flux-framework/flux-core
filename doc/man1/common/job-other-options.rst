@@ -71,6 +71,8 @@
    permissions of 0600.  The file will be extracted by the job shell into
    the job temporary directory and may be referenced as ``{{tmpdir}}/NAME``
    on the command line, or ``$FLUX_JOB_TMPDIR/NAME`` in a batch script.
+   ``NAME`` must be a relative path with no ``..`` components. Any ``.``
+   components are removed.
    This option may be specified multiple times to encode multiple files.
    Note: As documented in RFC 14, the file names ``script`` and ``conf.json``
    are both reserved.
