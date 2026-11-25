@@ -50,6 +50,11 @@ If a *PATH* refers to a directory, the directory is recursively archived.
 If a file is encountered that is not readable, or has a type other than
 regular file, directory, or symbolic link, a fatal error occurs.
 
+Each *PATH* is stored as a relative path. A leading ``/`` and any ``.``
+components are removed. It is an error if a *PATH* contains a ``..``
+component. To archive files from another directory, use
+:option:`--directory`.
+
 .. option:: -n, --name=NAME
 
    Specify the archive name.  If a name is not specified, ``main`` is used.
@@ -189,6 +194,12 @@ extract
 :program:`flux archive extract` extracts files from a KVS archive.
 If *PATTERN* is specified, only the files that match the :linux:man7:`glob`
 pattern are extracted.
+
+Files are only written below the target directory. Extraction fails if an
+archive entry has an absolute path or a ``..`` component. Extraction also
+fails if the path of an entry goes through a symbolic link. This applies to
+a link that the archive creates, and to a link that is already in the target
+directory. A symbolic link in the archive can point to any location.
 
 .. option:: -t, --list-only
 

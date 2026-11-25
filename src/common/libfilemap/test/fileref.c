@@ -68,12 +68,30 @@ const char *mkpath (const char *name)
     snprintf (tmppath, sizeof (tmppath), "%s/%s", testdir, name);
     return tmppath;
 }
+/* Return the path that fileref_create() stores for mkpath (name).
+ * testdir may contain empty or '.' components, e.g. if TMPDIR ends in '/'.
+ */
 const char *mkpath_relative (const char *name)
 {
+    static char tmppath[2048];
     const char *cp = mkpath (name);
-    while (*cp == '/')
-        cp++;
-    return cp;
+    char *out = tmppath;
+
+    while (*cp != '\0') {
+        size_t len = strcspn (cp, "/");
+
+        if (len > 0 && !(len == 1 && *cp == '.')) {
+            if (out > tmppath)
+                *out++ = '/';
+            memcpy (out, cp, len);
+            out += len;
+        }
+        cp += len;
+        if (*cp == '/')
+            cp++;
+    }
+    *out = '\0';
+    return tmppath;
 }
 
 void rmfile (const char *name)
@@ -554,6 +572,66 @@ void test_link (void)
     rmfile ("testlink");
 }
 
+struct pathtest {
+    const char *path;
+    const char *expected; // NULL if fileref_create() should fail
+};
+
+static const struct pathtest pathtests[] = {
+    { "d/f", "d/f" },
+    { "./d/f", "d/f" },
+    { "d/./f", "d/f" },
+    { "d//f", "d/f" },
+    { "./d/", "d" },
+    { ".", "." },
+    { "/", "." },
+    { "x..y", "x..y" },
+    { "../f", NULL },
+    { "d/../d/f", NULL },
+    { "..", NULL },
+};
+
+void test_path (void)
+{
+    char *cwd;
+
+    if (!(cwd = getcwd (NULL, 0)))
+        BAIL_OUT ("getcwd failed");
+    if (mkdir (mkpath ("d"), 0700) < 0)
+        BAIL_OUT ("could not create test directory");
+    mkfile_empty ("d/f", 0);
+    mkfile_empty ("x..y", 0);
+    if (chdir (testdir) < 0)
+        BAIL_OUT ("chdir %s failed", testdir);
+
+    for (int i = 0; i < ARRAY_SIZE (pathtests); i++) {
+        const struct pathtest *t = &pathtests[i];
+        flux_error_t error;
+        const char *s = NULL;
+        json_t *o;
+
+        errno = 0;
+        o = fileref_create (t->path, &error);
+        if (t->expected)
+            ok (o != NULL
+                && json_unpack (o, "{s:s}", "path", &s) == 0
+                && streq (s, t->expected),
+                "fileref_create %s stores path %s", t->path, t->expected);
+        else
+            ok (o == NULL && errno == EINVAL && strstr (error.text, "'..'"),
+                "fileref_create %s fails with EINVAL", t->path);
+        json_decref (o);
+    }
+
+    if (chdir (cwd) < 0)
+        BAIL_OUT ("chdir %s failed", cwd);
+    rmfile ("d/f");
+    rmfile ("x..y");
+    if (rmdir (mkpath ("d")) < 0)
+        BAIL_OUT ("could not remove test directory");
+    free (cwd);
+}
+
 void test_small (void)
 {
     json_t *o;
@@ -719,6 +797,7 @@ int main (int argc, char *argv[])
     test_link ();
     test_small ();
     test_empty ();
+    test_path ();
     test_expfail ();
     test_pretty_print ();
 
