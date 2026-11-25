@@ -183,5 +183,160 @@ test_expect_success 'Ensure example 1 of flux-archive(1) works' '
 	flux exec -r 1 rm -r tmp.project &&
 	flux archive remove
 '
+test_expect_success 'flux archive create refuses a .. path' '
+	mkdir -p dotdot-create/sub &&
+	echo data >dotdot-create/file &&
+	test_must_fail flux archive create -n dc1 dotdot-create/sub/../file \
+	    2>dc1.err &&
+	grep "path contains" dc1.err &&
+	test_must_fail flux archive create -n dc2 -C dotdot-create/sub .. \
+	    2>dc2.err &&
+	grep "path contains" dc2.err
+'
+test_expect_success 'flux archive create removes . components' '
+	flux archive create -n dc3 ./dotdot-create/./file &&
+	flux archive list -n dc3 >dc3.out &&
+	echo dotdot-create/file >dc3.exp &&
+	test_cmp dc3.exp dc3.out
+'
+# Hand-written archives (RFC 37) that flux archive create cannot make.
+# modes: 33188=0100644 (file), 41471=0120777 (symlink)
+#
+# Usage: extract_refused NAME PATTERN OUTSIDE
+# Store NAME.json as archive NAME, then check that extraction fails with
+# an error that matches PATTERN, with and without --overwrite, and that
+# OUTSIDE is not created.
+extract_refused() {
+	flux kvs put archive.$1="$(cat $1.json)" &&
+	mkdir -p $1-target &&
+	for opt in "" --overwrite; do
+		test_must_fail flux archive extract $opt -n $1 -C $1-target \
+		    2>$1.err &&
+		test_debug "cat $1.err" &&
+		grep "$2" $1.err &&
+		test ! -e $3 || return 1
+	done
+}
+# Use a short absolute path, since the error message includes the path
+# and a long trash directory path can truncate it.
+test_expect_success 'flux archive extract refuses an absolute path' '
+	absdir=$(mktemp -d) &&
+	test_when_finished "rm -rf $absdir" &&
+	cat >abs.json <<-EOT &&
+	[{"path":"$absdir/abs-outside","mode":33188,"size":4,
+	  "encoding":"utf-8","data":"data"}]
+	EOT
+	extract_refused abs "abs-outside.*Path is absolute" $absdir/abs-outside
+'
+test_expect_success 'flux archive extract refuses a .. path' '
+	cat >dotdot.json <<-EOT &&
+	[{"path":"../dotdot-outside","mode":33188,"size":4,
+	  "encoding":"utf-8","data":"data"}]
+	EOT
+	extract_refused dotdot "dotdot-outside.*Path contains" dotdot-outside
+'
+test_expect_success 'flux archive extract refuses to extract through symlink' '
+	mkdir symlink-outside &&
+	cat >symlink.json <<-EOT &&
+	[{"path":"sl","mode":41471,"encoding":"utf-8",
+	  "data":"$(pwd)/symlink-outside"},
+	 {"path":"sl/file","mode":33188,"size":4,
+	  "encoding":"utf-8","data":"data"}]
+	EOT
+	extract_refused symlink "sl/file.*Cannot extract through symlink" \
+	    symlink-outside/file
+'
+test_expect_success 'flux archive extract refuses a chain of symlinks' '
+	mkdir chain-outside &&
+	cat >chain.json <<-EOT &&
+	[{"path":"a","mode":41471,"encoding":"utf-8","data":"b"},
+	 {"path":"b","mode":41471,"encoding":"utf-8",
+	  "data":"$(pwd)/chain-outside"},
+	 {"path":"a/file","mode":33188,"size":4,
+	  "encoding":"utf-8","data":"data"}]
+	EOT
+	extract_refused chain "a/file.*Cannot extract through symlink" \
+	    chain-outside/file
+'
+test_expect_success 'flux archive extract refuses .. in a dictionary key' '
+	cat >dictdd.json <<-EOT &&
+	{"../dictdd-outside":{"mode":33188,"size":4,
+	  "encoding":"utf-8","data":"data"}}
+	EOT
+	extract_refused dictdd "dictdd-outside.*Path contains" dictdd-outside
+'
+test_expect_success 'a file entry replaces a symlink, not its target' '
+	echo original >replace-victim &&
+	cat >replace.json <<-EOT &&
+	[{"path":"lf","mode":41471,"encoding":"utf-8",
+	  "data":"$(pwd)/replace-victim"},
+	 {"path":"lf","mode":33188,"size":4,
+	  "encoding":"utf-8","data":"data"}]
+	EOT
+	flux kvs put archive.replace="$(cat replace.json)" &&
+	mkdir replace-target &&
+	flux archive extract --overwrite -n replace -C replace-target &&
+	test "$(cat replace-victim)" = original &&
+	test ! -L replace-target/lf
+'
+test_expect_success 'extract without --overwrite does not replace a symlink' '
+	cat >noover.json <<-EOT &&
+	[{"path":"lf","mode":33188,"size":4,
+	  "encoding":"utf-8","data":"data"}]
+	EOT
+	flux kvs put archive.noover="$(cat noover.json)" &&
+	mkdir noover-target &&
+	ln -s ../replace-victim noover-target/lf &&
+	test_must_fail flux archive extract -n noover -C noover-target \
+	    2>noover.err &&
+	test_debug "cat noover.err" &&
+	grep "lf: write: Attempt to overwrite existing file" noover.err &&
+	test -L noover-target/lf &&
+	test "$(cat replace-victim)" = original
+'
+test_expect_success 'create archive with an absolute symlink target' '
+	cat >abslink.json <<-EOT &&
+	[{"path":"abslink","mode":41471,"encoding":"utf-8",
+	  "data":"$(pwd)/abslink-outside"}]
+	EOT
+	flux kvs put archive.abslink="$(cat abslink.json)"
+'
+test_expect_success 'symlink with an absolute target is extracted as a link' '
+	mkdir abslink-target abslink-outside &&
+	flux archive extract -n abslink -C abslink-target &&
+	test "$(readlink abslink-target/abslink)" = "$(pwd)/abslink-outside" &&
+	test ! -e abslink-outside/file
+'
+test_expect_success 'create archive with a file in a directory' '
+	mkdir -p datatree/data &&
+	echo new >datatree/data/file &&
+	flux archive create -n datadir -C datatree data
+'
+test_expect_success 'flux archive extract works if -C dir is a symlink' '
+	mkdir realdir &&
+	ln -s realdir linkdir &&
+	flux archive extract -n datadir -C linkdir &&
+	test "$(cat realdir/data/file)" = new
+'
+test_expect_success 'flux archive extract refuses an existing symlink in path' '
+	mkdir -p existing-target existing-real &&
+	ln -s ../existing-real existing-target/data &&
+	test_must_fail flux archive extract --overwrite -n datadir \
+	    -C existing-target 2>existing.err &&
+	test_debug "cat existing.err" &&
+	grep "data/file.*Cannot extract through symlink" existing.err &&
+	test ! -e existing-real/file
+'
+test_expect_success 'relative symlinks within an archive still extract' '
+	mkdir -p reltree/dir &&
+	echo hello >reltree/dir/file &&
+	ln -s dir reltree/link &&
+	ln -s dir/file reltree/filelink &&
+	flux archive create -n rel -C reltree dir link filelink &&
+	mkdir rel-target &&
+	flux archive extract -n rel -C rel-target &&
+	test "$(readlink rel-target/link)" = dir &&
+	test "$(cat rel-target/filelink)" = hello
+'
 
 test_done
