@@ -637,7 +637,9 @@ class Jobspec(object):
         into jobspec. For filesystem
 
         Args:
-            path (str): path or file name to encode ``data`` as in Jobspec
+            path (str): path or file name to encode ``data`` as in Jobspec.
+                Must be relative, with no ``..`` components. Any ``.``
+                components are removed.
             data (dict, str): content of file or a local path to load
             perms (int): file permissions, default 0o0600 (octal). If ``data``
                 is a file system path, then permissions of the local file
@@ -649,6 +651,13 @@ class Jobspec(object):
         """
         if not (isinstance(data, abc.Mapping) or isinstance(data, str)):
             raise TypeError("data must be a Mapping or string")
+
+        #  RFC 37 paths must be relative, with no "." or ".." components.
+        #  Remove "." and empty components. Reject absolute paths and "..".
+        parts = [x for x in path.split("/") if x not in ("", ".")]
+        if path.startswith("/") or not parts or ".." in parts:
+            raise ValueError(f"invalid file name: {path}")
+        path = "/".join(parts)
 
         if perms is None:
             perms = 0o600
