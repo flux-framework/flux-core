@@ -158,17 +158,27 @@ test_expect_success NO_CHAIN_LINT 'start background streaming RPC' '
 test_expect_success NO_CHAIN_LINT 'wait for first response to RPC' '
 	$waitfile -t 15 stream.out
 '
-test_expect_success 'simulated module segfault causes module to exit' '
+# N.B. simulated segfault will lead to an error log being generated.
+# So when running under ASAN, skip this test and run the next one,
+# which will just kill the module.
+test_expect_success NO_ASAN 'simulated module segfault causes module to exit (sigsegv)' '
 	flux dmesg -C &&
 	flux event pub testmod.segfault &&
 	sh -c "while flux module stats testmod; do true; done" &&
-	flux dmesg >segfault.out
+	flux dmesg >module_fail.out
 '
-test_expect_success 'segfault is reported' '
-	grep "killed by Segmentation fault" segfault.out
+test_expect_success ASAN 'make module exit (kill)' '
+	flux dmesg -C &&
+	flux event pub testmod.kill &&
+	sh -c "while flux module stats testmod; do true; done" &&
+	flux dmesg >module_fail.out
+'
+# N.B. skip under ASAN, as it may capture segfault signal and report differently
+test_expect_success NO_ASAN 'segfault is reported' '
+	grep "killed by Segmentation fault" module_fail.out
 '
 test_expect_success 'broker treats this the same as spurious module exit' '
-	grep "module runtime failure" segfault.out
+	grep "module runtime failure" module_fail.out
 '
 test_expect_success NO_CHAIN_LINT 'streaming RPC was terminated' '
 	pid=$(cat stream.pid) &&
