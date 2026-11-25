@@ -357,4 +357,19 @@ test_expect_success 'flux submit --add-file complains for non-regular files' '
 test_expect_success 'flux submit --add-file complains for missing files' '
 	test_must_fail flux submit -n1 --add-file=doesnotexist hostname
 '
+test_expect_success 'flux submit --add-file rejects invalid file names' '
+	for name in /abs ../up a/../b . ./; do
+		test_must_fail flux submit -n1 --dry-run \
+		    --add-file=$name="data\n" hostname 2>badname.err &&
+		grep "invalid file name" badname.err || return 1
+	done
+'
+test_expect_success 'flux submit --add-file allows a name with a directory' '
+	flux submit -n1 --dry-run --add-file=a/b="data\n" hostname \
+	    | jq -e ".attributes.system.files[\"a/b\"]"
+'
+test_expect_success 'flux submit --add-file removes . components' '
+	flux submit -n1 --dry-run --add-file=./a/./b="data\n" hostname \
+	    | jq -e ".attributes.system.files | keys == [\"a/b\"]"
+'
 test_done
