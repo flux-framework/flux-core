@@ -54,6 +54,14 @@ test_expect_success 'load sdbus,sdexec modules' '
 	flux exec flux module load sdbus &&
 	flux exec flux module load sdexec
 '
+# On systemd < 249, sdexec runs Type=exec commands through /bin/sh to work
+# around a systemd bug (see version_continuation() in sdexec.c), so a
+# command that cannot be executed fails as it would from a shell.
+sdversion=$(systemctl --user show --property Version --value | sed "s/[^0-9].*//")
+test "${sdversion:-0}" -lt 249 && test_set_prereq EXEC_WRAP
+test_expect_success EXEC_WRAP 'sdexec logs that it wraps commands' '
+	flux dmesg | grep "running Type=exec commands via /bin/sh"
+'
 test_expect_success 'clear broker logs' '
 	flux dmesg -C
 '
@@ -68,6 +76,14 @@ test_expect_success 'sdexec false fails with exit code 1' '
 '
 test_expect_success 'sdexec /notacmd fails with exit code 127' '
 	test_expect_code 127 $sdexec -r 0 /notacmd
+'
+test_expect_success EXEC_WRAP 'sdexec non-executable command fails with 126' '
+	test_expect_code 126 $sdexec -r 0 /etc/passwd
+'
+test_expect_success EXEC_WRAP 'sdexec wrapped command keeps its arguments' '
+	$sdexec -r 0 /bin/echo "a  b" "*" "c\"d" >wrap.out &&
+	echo "a  b * c\"d" >wrap.exp &&
+	test_cmp wrap.exp wrap.out
 '
 test_expect_success 'capture broker logs' '
 	flux dmesg >dmesg.log

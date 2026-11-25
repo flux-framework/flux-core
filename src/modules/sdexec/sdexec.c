@@ -86,6 +86,8 @@ struct sdexec_ctx {
     struct timespec sweep_t0; // sweep start time
     bool sweep_warned;  // slow sweep warning has been logged
     bool swept;         // startup sweep is complete (see sweep_defer())
+    flux_future_t *f_version; // user manager Version (see version_request())
+    bool exec_wrap;     // work around systemd < 249 (see version_continuation())
     struct flux_msglist *deferred; // requests held until the sweep completes
 };
 
@@ -1535,6 +1537,14 @@ static void map_continuation (flux_future_t *f, void *arg)
         || sdproc_start_watch (proc, &errstr) < 0)
         goto error;
 
+    if (ctx->exec_wrap
+        && set_dict (proc->cmd,
+                     "opts",
+                     "SDEXEC_EXEC_WRAP",
+                     sdexec_unit_name (proc->unit)) < 0) {
+        errstr = "error setting SDEXEC_EXEC_WRAP";
+        goto error;
+    }
     sdexec_log_debug (h, "start %s", sdexec_unit_name (proc->unit));
     if (!(proc->f_start = sdexec_start_transient_unit (h,
                                              ctx->rank,
@@ -2246,6 +2256,8 @@ static void teardown_units (struct sdexec_ctx *ctx)
      */
     flux_future_destroy (ctx->f_sweep);
     ctx->f_sweep = NULL;
+    flux_future_destroy (ctx->f_version);
+    ctx->f_version = NULL;
     flux_watcher_stop (ctx->sweep_timer);
     proc = zlistx_first (ctx->procs);
     while (proc) {
@@ -2754,6 +2766,8 @@ static void sweep_finish (struct sdexec_ctx *ctx)
 {
     const flux_msg_t *msg;
 
+    if (ctx->f_sweep || ctx->f_version)
+        return; // wait for both the unit list and the version
     ctx->swept = true;
     flux_watcher_stop (ctx->sweep_timer);
     if (ctx->sweep_warned)
@@ -2805,6 +2819,65 @@ error:
     flux_future_destroy (f);
     ctx->f_sweep = NULL;
     flux_reactor_stop_error (flux_get_reactor (ctx->h));
+}
+
+/* Before v249, systemd can busy-loop or crash if the main process of a
+ * Type=exec unit with an ExecStopPost command (which every unit with a
+ * record has) exits before systemd has seen it exec (systemd commit
+ * bc989831e6).  On such a user manager, run Type=exec commands through a
+ * shell that waits for systemd to see the exec before running them (see
+ * SDEXEC_EXEC_WRAP in libsdexec/start.h).  The cost is that a command that
+ * cannot be executed is reported as exit code 126 or 127, as from a shell,
+ * rather than as a systemd exec failure.
+ *
+ * The version string is like "257.13-1~deb13u1" or "239 (239-82.el8_10)".
+ * If it cannot be read or parsed, assume the bug is present.  Exec requests
+ * are held until this is known, along with the sweep (see sweep_defer()).
+ */
+static const int exec_fd_fix_version = 249;
+
+static void version_continuation (flux_future_t *f, void *arg)
+{
+    struct sdexec_ctx *ctx = arg;
+    const char *version = NULL;
+    char *endptr;
+    long v = 0;
+
+    if (sdexec_property_get_read (f, "s", &version) == 0) {
+        errno = 0;
+        v = strtol (version, &endptr, 10);
+        if (errno != 0 || endptr == version)
+            v = 0;
+    }
+    ctx->exec_wrap = v < exec_fd_fix_version;
+    if (ctx->exec_wrap)
+        flux_log (ctx->h,
+                  LOG_INFO,
+                  "systemd %s: running Type=exec commands via /bin/sh"
+                  " to avoid a bug fixed in v%d",
+                  version ? version : "version unknown",
+                  exec_fd_fix_version);
+    flux_future_destroy (f);
+    ctx->f_version = NULL;
+    sweep_finish (ctx);
+}
+
+static int version_request (struct sdexec_ctx *ctx)
+{
+    if (!(ctx->f_version = sdexec_property_get_manager (ctx->h,
+                                                        "sdbus",
+                                                        ctx->rank,
+                                                        "Version"))
+        || flux_future_then (ctx->f_version,
+                             -1,
+                             version_continuation,
+                             ctx) < 0) {
+        flux_log_error (ctx->h, "error requesting systemd version");
+        flux_future_destroy (ctx->f_version);
+        ctx->f_version = NULL;
+        return -1;
+    }
+    return 0;
 }
 
 /* The sweep timer fires either to re-send the unit list request after
@@ -2875,6 +2948,8 @@ static int sweep_start (struct sdexec_ctx *ctx)
               flux_timer_watcher_create (r, 0., 0., sweep_timer_cb, ctx)))
         return -1;
     monotime (&ctx->sweep_t0);
+    if (version_request (ctx) < 0)
+        return -1;
     return sweep_request (ctx);
 }
 
@@ -2969,6 +3044,7 @@ static void sdexec_ctx_destroy (struct sdexec_ctx *ctx)
             flux_msglist_destroy (ctx->deferred);
         }
         flux_future_destroy (ctx->f_sweep);
+        flux_future_destroy (ctx->f_version);
         flux_watcher_destroy (ctx->sweep_timer);
         free (ctx->sweep_suffix);
         free (ctx->record_dir);
