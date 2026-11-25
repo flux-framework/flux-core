@@ -53,6 +53,36 @@ static void prop_add_exec (struct sdexec_proplist *pl,
     json_decref (val);
 }
 
+/* Before v249, systemd can busy-loop or crash if the main process of a
+ * Type=exec unit that also has an ExecStopPost command exits before systemd
+ * has seen its execve() succeed (fixed upstream by commit bc989831e6).  To
+ * avoid this, the command may be run through a shell that waits until
+ * systemd reports the unit active, which it does only once it has seen the
+ * exec, and then execs the command.  The unit name and the command are
+ * passed as positional parameters, so no quoting is needed.  The wait is
+ * bounded (about 5s) so that a broken environment, e.g. no systemctl,
+ * degrades to running the command at once rather than hanging.  A command
+ * that cannot be executed is then reported as the shell's exit code 126 or
+ * 127, not as a systemd exec failure.
+ */
+static const char *exec_wrap_script =
+    "n=0;"
+    " until /usr/bin/systemctl --user -q is-active \"$0\""
+    " || [ $((n+=1)) -gt 500 ]; do sleep 0.01; done;"
+    " exec \"$@\"";
+
+static json_t *exec_wrap (json_t *cmdline, const char *unit)
+{
+    json_t *wrapped;
+
+    if (!(wrapped = json_pack ("[ssss]", "/bin/sh", "-c", exec_wrap_script, unit))
+        || json_array_extend (wrapped, cmdline) < 0) {
+        json_decref (wrapped);
+        return NULL;
+    }
+    return wrapped;
+}
+
 /* An Exec* property set through an SDEXEC_PROP_ option is a string, so
  * the command line is encoded as a JSON array of strings.
  */
@@ -315,7 +345,9 @@ static json_t *prop_create (json_t *cmd,
     json_t *opts;
     const char *key;
     json_t *val;
-    bool type_is_set = false;
+    const char *type = "exec";
+    const char *wrap_unit;
+    json_t *wrapped = NULL;
 
     // Not unpacked: channels
     if (json_unpack_ex (cmd,
@@ -335,6 +367,16 @@ static json_t *prop_create (json_t *cmd,
         errprintf (error, "out of memory");
         errno = ENOMEM;
         return NULL;
+    }
+    (void)json_unpack (opts, "{s:s}", "SDEXEC_PROP_Type", &type);
+    if (streq (type, "exec")
+        && json_unpack (opts, "{s:s}", "SDEXEC_EXEC_WRAP", &wrap_unit) == 0) {
+        if (!(wrapped = exec_wrap (cmdline, wrap_unit))) {
+            errprintf (error, "out of memory");
+            errno = ENOMEM;
+            goto done;
+        }
+        cmdline = wrapped;
     }
     prop_add_exec (pl, "ExecStart", cmdline);
     if (cwd)
@@ -366,15 +408,14 @@ static json_t *prop_create (json_t *cmd,
                 errno = EINVAL;
                 goto done;
             }
-            if (streq (key + 12, "Type"))
-                type_is_set = true;
         }
     }
-    if (!type_is_set)
+    if (!json_object_get (opts, "SDEXEC_PROP_Type"))
         sdexec_proplist_add (pl, "Type", "s", "exec");
     prop = sdexec_proplist_finish (pl, error);
 done:
     sdexec_proplist_destroy (pl);
+    json_decref (wrapped);
     return prop;
 }
 

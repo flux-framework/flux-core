@@ -62,6 +62,13 @@
  * Other service unit properties are assumed to be of type string and are
  * set without conversion.  For example, Description may be set to a string
  * that is shown in list-units output.
+ *
+ * If the SDEXEC_EXEC_WRAP command option is set to the unit name and the
+ * unit is Type=exec (the default), the command is run through a shell that
+ * waits until systemd reports the unit active before exec'ing it.  This
+ * works around a systemd bug before v249 (see start.c).  A command that
+ * cannot be executed is then reported as exit code 126 or 127 rather than
+ * as a systemd exec failure.
  */
 flux_future_t *sdexec_start_transient_unit (flux_t *h,
                                             uint32_t rank,

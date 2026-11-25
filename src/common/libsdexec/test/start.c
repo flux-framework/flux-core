@@ -334,6 +334,115 @@ void test_execstoppost (void)
     flux_close (h);
 }
 
+/* Find property 'name' of D-Bus type a(sasb) in the StartTransientUnit
+ * request 'msg' and return its argv array (borrowed), or NULL.
+ */
+static json_t *find_exec (const flux_msg_t *msg, const char *name)
+{
+    const char *uname, *mode, *pname, *type, *path;
+    json_t *props, *aux, *prop, *argv;
+    size_t index;
+    int ignore;
+
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:[ssoo]}",
+                             "params", &uname, &mode, &props, &aux) < 0)
+        return NULL;
+    json_array_foreach (props, index, prop) {
+        if (json_unpack (prop,
+                         "[s[s[[sob]]]]",
+                         &pname, &type, &path, &argv, &ignore) == 0
+            && streq (pname, name)
+            && streq (type, "a(sasb)"))
+            return argv;
+    }
+    return NULL;
+}
+
+/* Request the start of 'cmd_o' and return the ExecStart argv as a string.
+ */
+static char *start_argv (flux_t *h, json_t *cmd_o)
+{
+    flux_future_t *f;
+    flux_msg_t *msg;
+    flux_error_t error;
+    json_t *argv;
+    char *s = NULL;
+
+    if (!(f = sdexec_start_transient_unit (h, 0, "fail", cmd_o,
+                                           -1, -1, -1, &error)))
+        return NULL;
+    if ((msg = flux_recv (h, FLUX_MATCH_ANY, 0))
+        && (argv = find_exec (msg, "ExecStart")))
+        s = json_dumps (argv, JSON_COMPACT);
+    flux_msg_destroy (msg);
+    flux_future_destroy (f);
+    return s;
+}
+
+/* SDEXEC_EXEC_WRAP runs a Type=exec command through a shell that waits for
+ * the unit to become active, passing the unit name, command and arguments
+ * as positional parameters, and has no effect on a unit of another type.
+ */
+void test_exec_wrap (void)
+{
+    char *av[] = { "/bin/echo", "a b", "$x", NULL };
+    int ac = 3;
+    flux_t *h;
+    flux_cmd_t *cmd;
+    json_t *cmd_o = NULL;
+    json_t *cmd_o_wrap = NULL;
+    json_t *cmd_o_notify = NULL;
+    char *s;
+
+    if (!(h = flux_open ("loop://", 0)))
+        BAIL_OUT ("could not create loop flux_t handle for testing");
+    if (!(cmd = flux_cmd_create (ac, av, environ))
+        || flux_cmd_setopt (cmd, "SDEXEC_NAME", "foo.service") < 0
+        || !(cmd_o = cmd_tojson (cmd))
+        || !(cmd_o_wrap = json_deep_copy (cmd_o))
+        || jpath_set_new (cmd_o_wrap,
+                          "opts.SDEXEC_EXEC_WRAP",
+                          json_string ("foo.service")) < 0
+        || !(cmd_o_notify = json_deep_copy (cmd_o_wrap))
+        || jpath_set_new (cmd_o_notify,
+                          "opts.SDEXEC_PROP_Type",
+                          json_string ("notify")) < 0)
+        BAIL_OUT ("could not create command objects for testing");
+
+    s = start_argv (h, cmd_o);
+    ok (s && streq (s, "[\"/bin/echo\",\"a b\",\"$x\"]"),
+        "without SDEXEC_EXEC_WRAP, ExecStart is the command");
+    diag ("%s", s ? s : "NULL");
+    free (s);
+
+    s = start_argv (h, cmd_o_wrap);
+    ok (s && strstarts (s, "[\"/bin/sh\",\"-c\",\"")
+        && strends (s, "\",\"foo.service\",\"/bin/echo\",\"a b\",\"$x\"]"),
+        "with SDEXEC_EXEC_WRAP, ExecStart is sh -c SCRIPT UNIT COMMAND");
+    ok (s && strstr (s, "is-active \\\"$0\\\"")
+        && strstr (s, "exec \\\"$@\\\""),
+        "the script waits for the unit to be active, then execs the command");
+    diag ("%s", s ? s : "NULL");
+    free (s);
+
+    s = start_argv (h, cmd_o_notify);
+    ok (s && streq (s, "[\"/bin/echo\",\"a b\",\"$x\"]"),
+        "SDEXEC_EXEC_WRAP has no effect on a Type=notify unit");
+    diag ("%s", s ? s : "NULL");
+    free (s);
+
+    ok (json_array_size (json_object_get (cmd_o_wrap, "cmdline")) == 3,
+        "the caller's command object is not modified");
+
+    json_decref (cmd_o_notify);
+    json_decref (cmd_o_wrap);
+    json_decref (cmd_o);
+    flux_cmd_destroy (cmd);
+    flux_close (h);
+}
+
 int main (int ac, char *av[])
 {
     plan (NO_PLAN);
@@ -341,6 +450,7 @@ int main (int ac, char *av[])
     test_inval ();
     test_deviceallow ();
     test_execstoppost ();
+    test_exec_wrap ();
 
     done_testing ();
 }

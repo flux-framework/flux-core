@@ -93,6 +93,31 @@ flux_future_t *sdexec_property_get (flux_t *h,
     return f;
 }
 
+flux_future_t *sdexec_property_get_manager (flux_t *h,
+                                            const char *service,
+                                            uint32_t rank,
+                                            const char *name)
+{
+    char topic[256];
+
+    if (!h || !service || !name) {
+        errno = EINVAL;
+        return NULL;
+    }
+    snprintf (topic, sizeof (topic), "%s.call", service);
+    return flux_rpc_pack (h,
+                          topic,
+                          rank,
+                          0,
+                          "{s:s s:s s:s s:s s:s s:[ss]}",
+                          "destination", SDEXEC_DESTINATION,
+                          "path", SDEXEC_MANAGER_PATH,
+                          "interface", prop_interface,
+                          "member", "Get",
+                          "signature", "ss",
+                          "params", SDEXEC_MANAGER_IFACE, name);
+}
+
 flux_future_t *sdexec_property_changed (flux_t *h,
                                         const char *service,
                                         uint32_t rank,
