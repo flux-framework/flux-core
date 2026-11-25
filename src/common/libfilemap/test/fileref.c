@@ -68,12 +68,30 @@ const char *mkpath (const char *name)
     snprintf (tmppath, sizeof (tmppath), "%s/%s", testdir, name);
     return tmppath;
 }
+/* Return the path that fileref_create() stores for mkpath (name).
+ * testdir may contain empty or '.' components, e.g. if TMPDIR ends in '/'.
+ */
 const char *mkpath_relative (const char *name)
 {
+    static char tmppath[2048];
     const char *cp = mkpath (name);
-    while (*cp == '/')
-        cp++;
-    return cp;
+    char *out = tmppath;
+
+    while (*cp != '\0') {
+        size_t len = strcspn (cp, "/");
+
+        if (len > 0 && !(len == 1 && *cp == '.')) {
+            if (out > tmppath)
+                *out++ = '/';
+            memcpy (out, cp, len);
+            out += len;
+        }
+        cp += len;
+        if (*cp == '/')
+            cp++;
+    }
+    *out = '\0';
+    return tmppath;
 }
 
 void rmfile (const char *name)

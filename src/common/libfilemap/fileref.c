@@ -19,11 +19,13 @@
 #include <sys/mman.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <string.h>
 #include <errno.h>
 #include <jansson.h>
 #include <assert.h>
 
 #include "ccan/base64/base64.h"
+#include "ccan/str/str.h"
 
 #include "src/common/libutil/blobref.h"
 #include "src/common/libutil/errno_safe.h"
@@ -323,12 +325,56 @@ error:
     return NULL;
 }
 
+/* Convert 'path' to the relative form that RFC 37 requires. Remove empty
+ * and '.' components, which also removes a leading '/'. Fail if a component
+ * is '..'. If no components remain, use ".". Return a new string, or NULL
+ * on error.
+ */
+static char *fileref_path (const char *path, flux_error_t *error)
+{
+    const char *cp = path;
+    char *result;
+    char *out;
+
+    /* The result is never longer than 'path'. The extra byte is for the "."
+     * result when 'path' is empty.
+     */
+    if (!(result = malloc (strlen (path) + 2))) {
+        errprintf (error, "%s: out of memory", path);
+        return NULL;
+    }
+    out = result;
+    while (*cp != '\0') {
+        size_t len = strcspn (cp, "/");
+
+        if (len == 2 && strstarts (cp, "..")) {
+            errprintf (error, "%s: path contains '..'", path);
+            free (result);
+            errno = EINVAL;
+            return NULL;
+        }
+        if (len > 0 && !(len == 1 && *cp == '.')) {
+            if (out > result)
+                *out++ = '/';
+            memcpy (out, cp, len);
+            out += len;
+        }
+        cp += len;
+        if (*cp == '/')
+            cp++;
+    }
+    if (out == result)
+        *out++ = '.';
+    *out = '\0';
+    return result;
+}
+
 json_t *fileref_create_ex (const char *path,
                            struct blobvec_param *param,
                            struct blobvec_mapinfo *mapinfop,
                            flux_error_t *error)
 {
-    const char *relative_path;
+    char *relative_path = NULL;
     json_t *o;
     int fd = -1;
     struct stat sb;
@@ -344,11 +390,8 @@ json_t *fileref_create_ex (const char *path,
     /* Store a relative path in the object so that extraction can specify a
      * destination directory, like tar(1) default behavior.
      */
-    relative_path = path;
-    while (*relative_path == '/')
-        relative_path++;
-    if (strlen (relative_path) == 0)
-        relative_path = ".";
+    if (!(relative_path = fileref_path (path, error)))
+        return NULL;
     /* Avoid TOCTOU in S_ISREG case by opening before checking its type.
      * If open fails due to O_NOFOLLOW (ELOOP), get link info with lstat(2).
      * Avoid open(2) blocking on a FIFO with O_NONBLOCK, but restore blocking
@@ -434,6 +477,7 @@ json_t *fileref_create_ex (const char *path,
         (void)munmap (mapinfo.base, mapinfo.size);
     if (fd >= 0)
         close (fd);
+    free (relative_path);
     return o;
 inval:
     errno = EINVAL;
@@ -443,6 +487,7 @@ error:
         (void)munmap (mapinfo.base, mapinfo.size);
     if (fd >= 0)
         close (fd);
+    free (relative_path);
     errno = saved_errno;
     return NULL;
 }
