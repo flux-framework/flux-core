@@ -46,11 +46,13 @@ unit_loadstate() {
 	systemctl --user show -p LoadState --value "$1" 2>/dev/null
 }
 
-test_expect_success 'enable debug logging' '
+test_expect_success 'enable debug logging and a private record directory' '
+	mkdir -p records &&
 	cat >systemd.toml <<-EOF &&
 	[systemd]
 	sdbus-debug = true
 	sdexec-debug = true
+	sdexec-record-dir = "$(pwd)/records"
 	EOF
 	flux config load <systemd.toml
 '
@@ -269,7 +271,8 @@ test_expect_success 'module unload leaves a waitable unit' '
 	flux exec -r 0 flux module remove sdexec &&
 	test "$(unit_loadstate unload-w:0-${iname}.service)" = "loaded" &&
 	systemctl --user stop unload-w:0-${iname}.service &&
-	flux exec -r 0 flux module load sdexec
+	flux exec -r 0 flux module load sdexec &&
+	test_expect_code 143 $wait -r 0 unload-w
 '
 test_expect_success 'remove sdexec,sdbus modules' '
 	flux exec flux module remove sdexec &&

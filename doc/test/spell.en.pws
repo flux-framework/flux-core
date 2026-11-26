@@ -1126,6 +1126,7 @@ eservice
 ExecMainCode
 ExecMainPID
 ExecMainStatus
+ExecStopPost
 freedesktop
 frominfo
 GetAll

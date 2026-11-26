@@ -37,7 +37,13 @@ if stress=$(which stress); then
 	test_set_prereq STRESS
 fi
 
-mkdir -p config
+# Keep sdexec unit records in a test-private directory rather than the
+# shared XDG_RUNTIME_DIR, so a failed run leaves nothing behind there.
+mkdir -p config records
+cat >config/records.toml <<EOT
+[systemd]
+sdexec-record-dir = "$(pwd)/records"
+EOT
 cat >config/config.toml <<EOT
 [systemd]
 enable = true

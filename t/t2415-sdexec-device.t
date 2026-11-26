@@ -25,6 +25,15 @@ flux_cmd=$(command -v flux)
 # Use --test-nojob to skip J lookup, so we can test device options in isolation
 imp_helper="$flux_cmd imp_exec_helper --test-nojob"
 
+# Keep sdexec unit records in a test-private directory rather than the
+# shared XDG_RUNTIME_DIR, so a failed run leaves nothing behind there.
+test_expect_success 'configure a private record directory' '
+	mkdir -p records &&
+	flux config load <<-EOT
+	[systemd]
+	sdexec-record-dir = "$(pwd)/records"
+	EOT
+'
 test_expect_success 'load sdbus,sdexec modules' '
 	flux exec flux module load sdbus &&
 	flux exec flux module load sdexec
